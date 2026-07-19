@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "commonjs",
+  "description": "Marca este directorio como CommonJS para que Logic.js (código de Apps Script) pueda cargarse también desde los tests de Node."
+}

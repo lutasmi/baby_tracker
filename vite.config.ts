@@ -14,6 +14,6 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts', '../apps-script/test/**/*.test.js'],
+    include: ['src/**/*.test.ts', '../apps-script/test/**/*.test.mjs'],
   },
 })
