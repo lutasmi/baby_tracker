@@ -70,7 +70,11 @@ export function eventDetail(e: BabyEvent): string {
  */
 export function eventTimeLabel(e: BabyEvent, date: string): string {
   const startsToday = dateOf(e.start) === date
-  if (!e.end) return startsToday ? `${timeOf(e.start)} →` : '→'
+  if (!e.end) {
+    // Sin fin: solo el sueño está "en curso"; el resto son eventos puntuales.
+    if (e.type !== 'sleep') return timeOf(e.start)
+    return startsToday ? `${timeOf(e.start)} →` : '→'
+  }
   const endsToday = dateOf(e.end) === date
   if (startsToday && endsToday) {
     return e.end === e.start ? timeOf(e.start) : `${timeOf(e.start)}–${timeOf(e.end)}`

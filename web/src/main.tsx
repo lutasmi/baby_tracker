@@ -1,8 +1,12 @@
 import { render } from 'preact'
+import { initApi } from './api'
 import './styles.css'
 import { App } from './app'
 
-render(<App />, document.getElementById('app')!)
+// La API (real o mock) se resuelve antes de pintar nada.
+void initApi().then(() => {
+  render(<App />, document.getElementById('app')!)
+})
 
 // Service worker solo en producción; en desarrollo interferiría con Vite.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

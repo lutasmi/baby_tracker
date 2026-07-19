@@ -4,8 +4,11 @@ import { useOnline, useRoute } from './hooks'
 import { clearSession, loadSession, saveSession, type Session } from './session'
 import { clearDayCache } from './store'
 import { showToast, subscribeToast, type Toast } from './toast'
+import type { EventType } from './types'
 import { Dashboard } from './views/Dashboard'
+import { EditEvent, NewEvent } from './views/EventForm'
 import { Login } from './views/Login'
+import { Timeline } from './views/Timeline'
 
 export function App() {
   const [session, setSession] = useState<Session | null>(() => loadSession())
@@ -58,9 +61,26 @@ export function App() {
   )
 }
 
+const FORM_KINDS: Record<string, EventType> = {
+  sueno: 'sleep',
+  toma: 'feed',
+  panal: 'diaper',
+  bano: 'bath',
+}
+
 function Screen({ session, onLogout }: { session: Session; onLogout: () => void }) {
   const route = useRoute()
-  void route
+
+  if (route.startsWith('#/nuevo/')) {
+    const kind = FORM_KINDS[route.slice('#/nuevo/'.length)]
+    if (kind) return <NewEvent kind={kind} />
+  }
+  if (route.startsWith('#/editar/')) {
+    return <EditEvent id={decodeURIComponent(route.slice('#/editar/'.length))} />
+  }
+  if (route.startsWith('#/cronologia')) {
+    return <Timeline date={route.split('/')[2]} />
+  }
   return <Dashboard user={session.user} onLogout={onLogout} />
 }
 

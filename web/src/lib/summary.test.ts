@@ -64,6 +64,9 @@ describe('eventTimeLabel', () => {
     expect(eventTimeLabel(ev({ start: '2026-07-15 14:30', end: '2026-07-15 14:30' }), day)).toBe(
       '14:30'
     )
+    expect(
+      eventTimeLabel(ev({ type: 'diaper', subtype: 'pipi', start: '2026-07-15 08:10' }), day)
+    ).toBe('08:10')
   })
 
   it('intervalo dentro del día', () => {

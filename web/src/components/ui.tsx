@@ -54,6 +54,37 @@ export function Seg<T extends string>({
   )
 }
 
+/** Fecha y hora en una fila, con selectores nativos del móvil. */
+export function DateTimeField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: string // 'yyyy-MM-dd HH:mm'
+  onChange: (dt: string) => void
+}) {
+  const date = value.slice(0, 10)
+  const time = value.slice(11, 16)
+  return (
+    <div class="field">
+      <span class="field-label">{label}</span>
+      <div style="display:flex;gap:8px">
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => onChange(`${(e.target as HTMLInputElement).value} ${time}`)}
+        />
+        <input
+          type="time"
+          value={time}
+          onChange={(e) => onChange(`${date} ${(e.target as HTMLInputElement).value}`)}
+        />
+      </div>
+    </div>
+  )
+}
+
 /** Selector numérico con botones grandes (cantidad de biberón, duración...). */
 export function Stepper({
   value,

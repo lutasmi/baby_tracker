@@ -26,6 +26,14 @@ export function goHome(): void {
   location.hash = '#/'
 }
 
+/** Navega sustituyendo la entrada actual del historial (tras guardar un
+ * formulario, el botón atrás no debe volver a él). */
+export function navigateReplace(path: string): void {
+  const url = new URL(location.href)
+  url.hash = path
+  location.replace(url.toString())
+}
+
 // --- Reloj que avanza (para "lleva despierto 2 h 13 min") ------------------
 
 export function useNow(intervalMs = 30000): string {
