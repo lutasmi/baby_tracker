@@ -24,7 +24,8 @@ function doGet() {
 function doPost(e) {
   var body;
   try {
-    var req = JSON.parse(e.postData.contents);
+    var raw = e && e.postData && e.postData.contents ? e.postData.contents : '{}';
+    var req = JSON.parse(raw);
     body = { ok: true, data: route(req) };
   } catch (err) {
     body = {

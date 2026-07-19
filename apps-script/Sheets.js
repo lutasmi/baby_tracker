@@ -125,8 +125,15 @@ function writeEventRecord(record, rowNumber) {
   var sheet = getSheetOrFail(SHEET_EVENTS);
   var lastColumn = sheet.getLastColumn();
   var map = headerMap(sheet.getRange(1, 1, 1, lastColumn).getValues()[0], COLUMNS, SHEET_EVENTS);
-  var row = [];
-  for (var i = 0; i < lastColumn; i++) row.push('');
+  var row;
+  if (rowNumber === -1) {
+    row = [];
+    for (var i = 0; i < lastColumn; i++) row.push('');
+  } else {
+    // Al actualizar se parte de la fila actual para no borrar columnas que
+    // alguien haya añadido a mano en la hoja.
+    row = sheet.getRange(rowNumber, 1, 1, lastColumn).getValues()[0];
+  }
   for (var name in record) {
     if (name in map) row[map[name]] = record[name];
   }

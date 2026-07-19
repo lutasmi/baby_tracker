@@ -22,10 +22,6 @@ export function navigate(path: string): void {
   location.hash = path
 }
 
-export function goHome(): void {
-  location.hash = '#/'
-}
-
 /** Navega sustituyendo la entrada actual del historial (tras guardar un
  * formulario, el botón atrás no debe volver a él). */
 export function navigateReplace(path: string): void {
