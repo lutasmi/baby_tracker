@@ -1,0 +1,727 @@
+/* ============================================================
+   Baby Tracker — hoja de estilos única.
+   Móvil primero: botones grandes, contraste alto, una mano.
+   ============================================================ */
+
+:root {
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --surface-2: #ececf2;
+  --text: #1c1c26;
+  --text-soft: #6b6b7b;
+  --border: #e2e2ea;
+  --primary: #5b5bd6;
+  --primary-soft: #ececfd;
+  --danger: #d64545;
+  --danger-soft: #fdecec;
+  --ok: #2f9e63;
+  --ok-soft: #e7f7ee;
+
+  --sleep: #6366f1;
+  --sleep-soft: #eef0fe;
+  --feed: #d97706;
+  --feed-soft: #fdf1e0;
+  --diaper: #0d9488;
+  --diaper-soft: #e3f6f4;
+  --bath: #0284c7;
+  --bath-soft: #e4f3fb;
+
+  --radius: 16px;
+  --radius-sm: 12px;
+  --shadow: 0 1px 3px rgba(20, 20, 40, 0.08);
+  --tap: 56px; /* altura mínima de zona pulsable */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101016;
+    --surface: #1b1b24;
+    --surface-2: #26262f;
+    --text: #f0f0f5;
+    --text-soft: #9d9dae;
+    --border: #2e2e3a;
+    --primary: #7d7de8;
+    --primary-soft: #26264a;
+    --danger: #e06c6c;
+    --danger-soft: #3a2222;
+    --ok: #4dbb82;
+    --ok-soft: #1c3328;
+
+    --sleep: #8688f4;
+    --sleep-soft: #262848;
+    --feed: #e8a04c;
+    --feed-soft: #3a2d18;
+    --diaper: #3cbdb0;
+    --diaper-soft: #16332f;
+    --bath: #4cb2e8;
+    --bath-soft: #16303f;
+    --shadow: none;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* ---------- Estructura ---------- */
+
+.app {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 10px;
+}
+
+.app-header h1 {
+  font-size: 17px;
+  font-weight: 700;
+  flex: 1;
+}
+
+.app-main {
+  flex: 1;
+  padding: 0 14px calc(24px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.screen-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px 4px;
+}
+
+.screen-title h1 {
+  font-size: 20px;
+  font-weight: 800;
+  flex: 1;
+}
+
+/* ---------- Tarjetas ---------- */
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+/* ---------- Botones ---------- */
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 16px;
+  font-weight: 600;
+  background: var(--surface-2);
+  transition: transform 0.06s ease;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--primary);
+}
+
+.btn-lg {
+  min-height: var(--tap);
+  font-size: 17px;
+  width: 100%;
+}
+
+.btn-back {
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  border-radius: 50%;
+  color: var(--text);
+}
+
+.btn-back:active {
+  background: var(--surface-2);
+}
+
+/* ---------- Rejilla de acciones rápidas ---------- */
+
+.action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.action-btn {
+  min-height: 76px;
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+  transition: transform 0.06s ease;
+}
+
+.action-btn:active {
+  transform: scale(0.96);
+}
+
+.action-btn .icon {
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.action-btn small {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+.action-sleep { background: var(--sleep-soft); color: var(--sleep); }
+.action-feed { background: var(--feed-soft); color: var(--feed); }
+.action-diaper { background: var(--diaper-soft); color: var(--diaper); }
+.action-bath { background: var(--bath-soft); color: var(--bath); }
+
+/* ---------- Estado principal (héroe) ---------- */
+
+.status-hero {
+  text-align: center;
+  padding: 20px 14px;
+}
+
+.status-hero .icon {
+  font-size: 40px;
+}
+
+.status-hero .state {
+  font-size: 22px;
+  font-weight: 800;
+  margin-top: 4px;
+}
+
+.status-hero .elapsed {
+  font-size: 34px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+
+.status-hero .since {
+  color: var(--text-soft);
+  font-size: 14px;
+  margin-top: 2px;
+}
+
+.status-hero .hero-action {
+  margin-top: 14px;
+}
+
+/* ---------- Resumen de estado (última toma, pañal...) ---------- */
+
+.stat-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+}
+
+.stat-item + .stat-item {
+  border-top: 1px solid var(--border);
+}
+
+.stat-item .icon {
+  font-size: 22px;
+  width: 32px;
+  text-align: center;
+}
+
+.stat-item .stat-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.stat-item .stat-label {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.stat-item .stat-value {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.stat-item .stat-ago {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- Formularios ---------- */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+input[type='time'],
+input[type='date'],
+input[type='datetime-local'],
+input[type='number'],
+input[type='text'],
+textarea,
+select {
+  font: inherit;
+  font-size: 16px; /* evita zoom automático en iOS */
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  min-height: 48px;
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 64px;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+}
+
+/* ---------- Control segmentado ---------- */
+
+.seg {
+  display: flex;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  gap: 3px;
+}
+
+.seg button {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.seg button.on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+/* ---------- Stepper numérico ---------- */
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stepper button {
+  width: 52px;
+  min-height: 48px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 22px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.stepper .stepper-value {
+  flex: 1;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.stepper .stepper-value small {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+/* ---------- Chips ---------- */
+
+.chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chips button {
+  min-height: 40px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.chips button.on {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* ---------- Cronología ---------- */
+
+.date-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-nav .nav-arrow {
+  width: 48px;
+  min-height: 48px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.date-nav input[type='date'] {
+  text-align: center;
+  font-weight: 600;
+  background: var(--surface);
+  border: none;
+  box-shadow: var(--shadow);
+}
+
+.tl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tl-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  width: 100%;
+  text-align: left;
+}
+
+.tl-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 21px;
+  flex-shrink: 0;
+}
+
+.tl-icon.sleep { background: var(--sleep-soft); }
+.tl-icon.feed { background: var(--feed-soft); }
+.tl-icon.diaper { background: var(--diaper-soft); }
+.tl-icon.bath { background: var(--bath-soft); }
+
+.tl-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tl-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.tl-detail {
+  font-size: 13px;
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-time {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tl-user {
+  font-size: 11px;
+  color: var(--text-soft);
+  text-align: right;
+}
+
+.tl-summary {
+  display: flex;
+  gap: 14px;
+  justify-content: space-around;
+  flex-wrap: wrap;
+}
+
+.tl-summary .sum-item {
+  text-align: center;
+}
+
+.tl-summary .sum-value {
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-summary .sum-label {
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+/* ---------- Avisos y estados ---------- */
+
+.empty-state {
+  text-align: center;
+  color: var(--text-soft);
+  padding: 32px 16px;
+  font-size: 15px;
+}
+
+.empty-state .icon {
+  font-size: 36px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.banner {
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.banner-offline {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.banner .banner-retry {
+  margin-left: auto;
+  color: inherit;
+  text-decoration: underline;
+  font-weight: 700;
+  min-height: 32px;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--bg);
+  border-radius: 999px;
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  z-index: 50;
+  max-width: 90vw;
+  text-align: center;
+  animation: toast-in 0.18s ease;
+}
+
+.toast.toast-error {
+  background: var(--danger);
+  color: #fff;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--surface-2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-soft);
+  padding: 48px 16px;
+}
+
+/* ---------- Login ---------- */
+
+.login-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.login-screen .logo {
+  font-size: 56px;
+}
+
+.login-screen h2 {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.login-screen p {
+  color: var(--text-soft);
+  font-size: 15px;
+}
+
+.login-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
+/* ---------- Acciones fijas al pie del formulario ---------- */
+
+.form-actions {
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(transparent, var(--bg) 30%);
+  padding: 16px 0 calc(8px + env(safe-area-inset-bottom));
+  display: flex;
+  gap: 10px;
+}
+
+.form-actions .btn {
+  flex: 1;
+}

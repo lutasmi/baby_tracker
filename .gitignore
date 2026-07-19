@@ -1,0 +1,17 @@
+# Dependencias
+node_modules/
+
+# Builds
+dist/
+web/dist/
+
+# Entorno local (contiene URLs/IDs de cada despliegue)
+.env
+.env.local
+
+# Apps Script (vinculación local con clasp, contiene el Script ID)
+apps-script/.clasp.json
+
+# Sistema
+.DS_Store
+*.log
