@@ -1,362 +1,139 @@
 # Baby Tracker
 
-Aplicación web móvil para registrar de forma rápida y compartida la actividad diaria de un bebé.
+Aplicación web móvil (PWA) para registrar de forma rápida y compartida la actividad diaria de un bebé: **sueño, tomas, pañales y baños**, con cronología diaria editable y **Google Sheets como única fuente de verdad**.
+
+Pensada para usarse con una mano y en segundos: las acciones habituales (se ha dormido, se ha despertado, toma, pañal) están a uno o dos toques desde la pantalla principal, con valores por defecto basados en el último registro.
+
+La especificación completa del producto está en [docs/especificacion.md](docs/especificacion.md) y las pautas del proyecto en [AGENTS.md](AGENTS.md).
+
+## Qué incluye la V1
+
+- **Acceso con Google** restringido a los usuarios autorizados en la hoja `Usuarios`.
+- **Pantalla principal**: tiempo dormido/despierto en tiempo real, última toma, último pañal, total dormido hoy y botones grandes de registro.
+- **Sueño**: iniciar/finalizar de un toque, registro manual de sueños pasados, siesta o nocturno, imposible tener dos sueños activos.
+- **Tomas**: biberón (cantidad y tipo de leche) o lactancia (duración y pecho, alternando el último usado). Cada tipo muestra solo sus campos.
+- **Pañales**: pipí/caca/ambos; la consistencia solo aparece cuando hay caca.
+- **Baños**: completo o aseo rápido, con duración opcional.
+- **Cronología diaria** con resumen del día, cambio de fecha, edición y borrado con confirmación.
+- Cada registro guarda **quién lo creó, quién lo modificó y cuándo**.
+- Reintentos seguros: el identificador se genera en el cliente y **repetir una petición nunca duplica** el registro.
+- Errores de red visibles y con reintento manual; nada se marca como guardado si la hoja no confirmó la escritura.
+
+## Arquitectura
 
-El objetivo no es construir una demo ni un prototipo visual. El objetivo es entregar una aplicación funcional, usable y desplegable que pueda utilizarse desde el móvil desde el primer día.
+```
+┌─────────────────┐   POST JSON    ┌──────────────────┐   lee/escribe   ┌───────────────┐
+│  PWA (Preact)   │ ─────────────► │ Google Apps      │ ──────────────► │ Google Sheets │
+│  GitHub Pages   │ ◄───────────── │ Script (Web App) │ ◄────────────── │ Usuarios ·    │
+│  u otro estático│                │ API + sesiones   │                 │ Eventos       │
+└─────────────────┘                └──────────────────┘                 └───────────────┘
+        │
+        └── Inicio de sesión con Google Identity Services (el backend verifica el token)
+```
 
-## Objetivo del producto
+- **Frontend**: Vite + TypeScript + Preact, en [web/](web/). Sin más dependencias de ejecución. Hora local de Madrid en todo el dominio (`Europe/Madrid`).
+- **Backend**: Google Apps Script, en [apps-script/](apps-script/). Cuatro archivos sin build. Verifica el ID token de Google, emite sesiones propias (180 días), valida cada evento y escribe en la hoja bajo bloqueo.
+- **Datos**: una hoja de cálculo con las pestañas `Usuarios` y `Eventos` (una fila por evento, borrado lógico en la columna `Eliminado`). Se puede editar a mano sin romper la aplicación.
+- Todo el hosting utilizado (GitHub Pages, Apps Script, Sheets) es gratuito.
 
-La aplicación debe permitir que varias personas registren y consulten, de forma sencilla, los principales eventos del día del bebé:
+### Estructura del repositorio
 
-- Sueño
-- Tomas
-- Pañales
-- Baños
-- Cronología diaria
+```
+web/                  Frontend PWA (Vite + Preact)
+  src/lib/            Lógica pura (fechas, estado del bebé, resúmenes) con tests
+  src/views/          Pantallas: login, dashboard, formularios, cronología
+  src/api/            Cliente de la API real y mock de desarrollo
+  public/             Manifest, service worker, iconos
+apps-script/          Backend Google Apps Script (Main, Sheets, Logic, Setup)
+  test/               Tests de la lógica del backend (se ejecutan en Node)
+scripts/              Generador de iconos PNG
+docs/especificacion.md  Especificación original del producto
+.github/workflows/    Despliegue automático en GitHub Pages
+```
 
-Cada registro debe guardar automáticamente quién lo creó y cuándo se creó.
+## Instalación y despliegue
 
-La prioridad principal es la velocidad de uso. Registrar un evento habitual debe requerir el menor número posible de pasos y, cuando sea razonable, poder completarse en menos de cinco segundos.
+Necesitas una cuenta de Google y unos 20 minutos. Son tres piezas: la hoja + Apps Script (backend), un Client ID de OAuth (login con Google) y el frontend publicado.
 
-## Principios de diseño
+### 1. Backend en Google Apps Script
 
-1. **Uso móvil primero**  
-   La aplicación debe estar pensada principalmente para utilizarse desde un teléfono móvil.
+1. Entra en [script.google.com](https://script.google.com) → **Nuevo proyecto**. Ponle nombre (p. ej. "Baby Tracker API").
+2. En **Configuración del proyecto** activa **"Mostrar el archivo de manifiesto appsscript.json"**.
+3. Copia el contenido de estos archivos del repositorio al proyecto (mismo nombre, un archivo de script por cada `.js`):
+   - `apps-script/appsscript.json` → `appsscript.json`
+   - `apps-script/Main.js`, `apps-script/Sheets.js`, `apps-script/Logic.js`, `apps-script/Setup.js`
+   > Alternativa con [clasp](https://github.com/google/clasp): copia `apps-script/.clasp.json.example` a `apps-script/.clasp.json`, pon tu `scriptId` y ejecuta `npx clasp push` dentro de `apps-script/`.
+4. Ejecuta la función **`setup`** (selector de funciones → `setup` → Ejecutar) y autoriza los permisos. En el registro verás la URL de la hoja de cálculo creada, con las pestañas `Usuarios` (tú ya estás dado de alta) y `Eventos`.
+   - Si prefieres usar una hoja existente, añade antes la propiedad `SPREADSHEET_ID` (paso 3.2) y ejecuta `setup` después.
 
-2. **Registro inmediato**  
-   Las acciones más frecuentes deben estar disponibles desde la pantalla principal.
+### 2. Client ID de OAuth (login con Google)
 
-3. **Interfaz sencilla**  
-   Evitar menús innecesarios, configuraciones complejas y campos que no aporten valor real.
+1. En [Google Cloud Console](https://console.cloud.google.com) crea un proyecto (gratuito).
+2. **APIs y servicios → Pantalla de consentimiento de OAuth**: tipo **Externo**, rellena los datos mínimos y **publica la aplicación** (con los scopes básicos de email/perfil no requiere verificación). Si la dejas en "Testing", añade como usuarios de prueba los emails que vayan a usar la app.
+3. **APIs y servicios → Credenciales → Crear credenciales → ID de cliente de OAuth**: tipo **Aplicación web**. En **Orígenes de JavaScript autorizados** añade:
+   - `https://TU_USUARIO.github.io` (o el dominio donde publiques el frontend)
+   - `http://localhost:5173` (para desarrollo local)
+4. Copia el **Client ID** (termina en `.apps.googleusercontent.com`).
 
-4. **Datos accesibles**  
-   Google Sheets será la fuente de verdad de la aplicación.
+### 3. Conectar y desplegar el backend
 
-5. **Uso compartido**  
-   Varias personas deben poder utilizar la aplicación y cada evento debe quedar asociado al usuario que lo registra.
+1. En el editor de Apps Script: **Configuración del proyecto → Propiedades de la secuencia de comandos** → añade `GOOGLE_CLIENT_ID` con el Client ID del paso anterior.
+2. (Opcional) `SPREADSHEET_ID` ya estará creado por `setup`; cámbialo si quieres apuntar a otra hoja.
+3. **Implementar → Nueva implementación → Aplicación web**:
+   - **Ejecutar como**: Yo.
+   - **Quién tiene acceso**: Cualquier persona.
+4. Copia la **URL de la aplicación web** (termina en `/exec`). Puedes comprobarla abriéndola en el navegador: debe responder `{"ok":true,...}`.
 
-6. **Evolución incremental**  
-   La primera versión debe ser pequeña y completa. Las funcionalidades futuras deben poder añadirse sin rehacer la aplicación.
+> Tras cambiar el código del backend hay que crear una **nueva implementación** (o actualizar la existente con "Administrar implementaciones → editar → nueva versión"); la URL `/exec` se mantiene si actualizas la misma implementación.
 
-## Alcance de la primera versión
+### 4. Frontend en GitHub Pages
 
-### 1. Autenticación y usuarios
+1. En el repositorio de GitHub: **Settings → Pages → Source: GitHub Actions**.
+2. **Settings → Secrets and variables → Actions → Variables** → añade:
+   - `VITE_API_URL`: la URL `/exec` del paso 3.
+   - `VITE_GOOGLE_CLIENT_ID`: el Client ID del paso 2.
+3. Haz push a `main` (o lanza el workflow **deploy** a mano). La app quedará en `https://TU_USUARIO.github.io/NOMBRE_DEL_REPO/`.
 
-La aplicación debe permitir:
+Para cualquier otro hosting estático: `npm run build` con las dos variables en `.env` y sirve `web/dist/`.
 
-- Inicio de sesión con Google.
-- Acceso únicamente a usuarios autorizados.
-- Identificación del usuario en cada registro.
-- Visualización del nombre del usuario que creó cada evento.
+### 5. Dar de alta a más usuarios
 
-La lista de usuarios autorizados puede mantenerse inicialmente en una pestaña específica de Google Sheets.
+Añade una fila en la pestaña `Usuarios` de la hoja de cálculo:
 
-### 2. Pantalla principal
+| Usuario_ID | Email | Nombre | Activo | Rol | Fecha_Alta |
+|---|---|---|---|---|---|
+| cualquier-texto-único | pareja@gmail.com | Luis | TRUE | editor | 2026-07-19 |
 
-La pantalla principal debe mostrar:
+`Activo = FALSE` revoca el acceso al momento. El `Nombre` es el que se muestra junto a cada registro.
 
-- Tiempo que el bebé lleva despierto o dormido.
-- Última toma.
-- Último pañal.
-- Horas dormidas durante el día.
-- Acceso rápido a registrar:
-  - Sueño
-  - Toma
-  - Pañal
-  - Baño
-- Acceso a la cronología del día.
+### 6. Instalar en el móvil
 
-La pantalla debe priorizar la información útil en el momento actual, no estadísticas históricas complejas.
+Abre la URL en el navegador del teléfono y usa **"Añadir a pantalla de inicio"**. La app se instala como PWA con su icono y arranque instantáneo.
 
-### 3. Registro de sueño
+## Desarrollo local
 
-Debe permitir:
+```bash
+npm install
+cp .env.example .env    # con VITE_USE_MOCK=1 no necesitas nada de Google
+npm run dev             # http://localhost:5173
+npm test                # tests de la lógica crítica (frontend y backend)
+npm run build           # typecheck + build de producción en web/dist
+```
 
-- Iniciar un periodo de sueño.
-- Finalizar un periodo de sueño activo.
-- Registrar manualmente un sueño pasado.
-- Indicar si es siesta o sueño nocturno.
-- Guardar fecha y hora de inicio.
-- Guardar fecha y hora de finalización.
-- Calcular automáticamente la duración.
-- Añadir una nota opcional.
-- Registrar qué usuario creó o cerró el evento.
+Con `VITE_USE_MOCK=1` la app usa una API en memoria con datos de ejemplo (botón "Entrar (modo demo)"): sirve para desarrollar la interfaz sin tocar Google. Para probar contra el backend real, rellena `VITE_API_URL` y `VITE_GOOGLE_CLIENT_ID` en `.env` y quita `VITE_USE_MOCK`.
 
-La aplicación debe impedir que existan dos periodos de sueño activos al mismo tiempo.
+No hay credenciales en el repositorio: la URL de la API y el Client ID (públicos por naturaleza, pero propios de cada despliegue) viven en `.env` local o en las variables de Actions; los secretos reales (sesiones) solo existen en las propiedades del script de Apps Script.
 
-### 4. Registro de tomas
+## Detalles de funcionamiento
 
-Debe permitir registrar:
+- **Zona horaria**: todo se guarda y se muestra en hora de Madrid (`Europe/Madrid`), independientemente del dispositivo. Formato `yyyy-MM-dd HH:mm` en la hoja.
+- **Duplicados**: el cliente genera el `Evento_ID` (UUID) antes de enviar; si un reintento llega dos veces, el backend devuelve el registro ya guardado.
+- **Sueño activo único**: lo garantiza el backend bajo bloqueo global; si dos móviles lo intentan a la vez, el segundo recibe un error claro.
+- **Edición manual de la hoja**: tolerada. Las columnas se localizan por cabecera, las etiquetas admiten variantes sin acentos, las horas sueltas (`HH:mm`) se combinan con la columna `Fecha` y un fin menor que el inicio se interpreta como cruce de medianoche.
+- **Borrado**: lógico (columna `Eliminado`), para que la hoja conserve el histórico.
+- **Latencia**: Apps Script tarda 1–3 s por operación; la interfaz muestra el estado de guardado y solo confirma cuando la hoja ha escrito.
+- **Sin conexión**: la V1 requiere internet. El service worker solo cachea la aplicación (no los datos) para que abra al instante; la arquitectura deja el terreno preparado para una cola local en el futuro.
 
-#### Biberón
+## Funcionalidad futura (fuera de la V1)
 
-- Hora.
-- Cantidad tomada.
-- Tipo de leche:
-  - Materna
-  - Fórmula
-  - Mixta
-- Nota opcional.
-
-#### Lactancia
-
-- Hora de inicio.
-- Hora de fin o duración.
-- Pecho izquierdo, derecho o ambos.
-- Nota opcional.
-
-No deben mostrarse campos de lactancia cuando se registra un biberón ni campos de biberón cuando se registra lactancia.
-
-### 5. Registro de pañales
-
-Debe permitir registrar:
-
-- Hora.
-- Tipo:
-  - Pipí
-  - Caca
-  - Ambos
-- Consistencia opcional:
-  - Líquida
-  - Pastosa
-  - Sólida
-- Nota opcional.
-
-La consistencia solo debe mostrarse cuando el registro incluya caca.
-
-### 6. Registro de baños
-
-Debe permitir registrar:
-
-- Hora.
-- Tipo de baño.
-- Duración opcional.
-- Nota opcional.
-
-La primera versión puede incluir dos tipos:
-
-- Baño completo
-- Aseo rápido
-
-### 7. Cronología diaria
-
-Debe existir una vista cronológica que muestre todos los eventos del día ordenados por hora.
-
-Cada elemento debe mostrar, como mínimo:
-
-- Hora.
-- Tipo de evento.
-- Resumen del registro.
-- Usuario que lo registró.
-
-Debe permitirse:
-
-- Cambiar de fecha.
-- Editar un registro.
-- Eliminar un registro con confirmación.
-
-### 8. Edición y corrección
-
-Todos los registros deben poder editarse posteriormente.
-
-La aplicación debe guardar:
-
-- Fecha de creación.
-- Usuario creador.
-- Fecha de última modificación.
-- Usuario que realizó la última modificación.
-
-No es necesario implementar un historial completo de versiones en la primera versión.
-
-## Google Sheets como fuente de verdad
-
-Google Sheets será el sistema principal de almacenamiento.
-
-La aplicación no debe utilizar Supabase ni otra base de datos como fuente maestra en la primera versión.
-
-La arquitectura puede utilizar Google Apps Script como capa de acceso entre la aplicación y Google Sheets.
-
-### Requisitos
-
-- Toda la información persistente debe almacenarse en Google Sheets.
-- La estructura de datos debe ser tabular, legible y explotable directamente.
-- No deben guardarse datos críticos únicamente en el navegador.
-- Las escrituras deben evitar duplicidades.
-- Cada registro debe tener un identificador único estable.
-- Las fechas deben guardarse en un formato consistente.
-- La zona horaria será `Europe/Madrid`.
-
-### Estructura recomendada del archivo
-
-El agente puede mejorar esta estructura si existe una alternativa más simple y robusta, pero debe mantener Google Sheets como fuente de verdad.
-
-#### Hoja `Usuarios`
-
-- `Usuario_ID`
-- `Email`
-- `Nombre`
-- `Activo`
-- `Rol`
-- `Fecha_Alta`
-
-#### Hoja `Eventos`
-
-- `Evento_ID`
-- `Tipo_Evento`
-- `Fecha`
-- `Hora_Inicio`
-- `Hora_Fin`
-- `Duracion_Minutos`
-- `Subtipo`
-- `Cantidad`
-- `Unidad`
-- `Detalle_1`
-- `Detalle_2`
-- `Notas`
-- `Creado_Por`
-- `Creado_En`
-- `Modificado_Por`
-- `Modificado_En`
-- `Eliminado`
-
-Se prefiere una única tabla de eventos frente a una hoja diferente por cada tipo, siempre que esto no complique de forma significativa la lectura, validación o mantenimiento.
-
-## Arquitectura esperada
-
-La solución debe ser sencilla y mantenible.
-
-Arquitectura recomendada para la primera versión:
-
-- Frontend web responsive o PWA.
-- Autenticación con Google.
-- Google Apps Script como API.
-- Google Sheets como fuente de verdad.
-- Despliegue accesible desde móvil.
-
-El agente tiene autonomía para elegir el framework y las librerías, siempre que:
-
-- No añada complejidad innecesaria.
-- La aplicación pueda desplegarse con instrucciones claras.
-- No requiera infraestructura de pago para funcionar en el uso previsto.
-- Las claves y secretos no se incluyan en el repositorio.
-
-## Funcionamiento con conexión
-
-La primera versión funcionará únicamente con conexión a internet.
-
-No debe implementarse sincronización offline en esta fase.
-
-La interfaz debe gestionar correctamente:
-
-- Pérdida de conexión.
-- Error de escritura.
-- Reintento manual.
-- Confirmación de que el registro se ha guardado.
-
-Nunca debe mostrarse un registro como guardado si la escritura en Google Sheets no ha finalizado correctamente.
-
-## Funcionalidad futura registrada
-
-La arquitectura debe dejar preparado el camino para incorporar en el futuro:
-
-- Funcionamiento sin conexión.
-- Cola local de registros pendientes.
-- Sincronización automática al recuperar conexión.
-- Resolución de conflictos.
-- Recordatorios.
-- Estadísticas semanales y mensuales.
-- Ventanas de sueño.
-- Medicación.
-- Crecimiento.
-- Exportaciones.
-- Registro de hitos.
-
-Estas funcionalidades no forman parte de la primera versión y no deben retrasar su entrega.
-
-## Experiencia de usuario
-
-La aplicación debe utilizar:
-
-- Botones grandes.
-- Acciones principales visibles.
-- Pocos campos por pantalla.
-- Valores predeterminados razonables.
-- Fecha y hora actuales por defecto.
-- Confirmaciones breves y claras.
-- Formularios adaptados al tipo de evento.
-
-Debe evitar:
-
-- Formularios largos.
-- Tablas pensadas para escritorio.
-- Navegación profunda.
-- Configuración técnica visible para el usuario.
-- Estadísticas sin utilidad práctica.
-
-## Requisitos de calidad
-
-Antes de considerar terminada la primera versión, deben cumplirse estos puntos:
-
-- La aplicación funciona correctamente en móvil.
-- Dos usuarios pueden registrar información sobre el mismo bebé.
-- Cada registro identifica al usuario que lo creó.
-- Los datos quedan almacenados correctamente en Google Sheets.
-- Los registros pueden crearse, editarse y eliminarse.
-- La cronología diaria refleja los cambios correctamente.
-- No se generan duplicados al repetir una petición.
-- Los errores de red se muestran de forma comprensible.
-- Las credenciales no están versionadas.
-- Existe documentación suficiente para instalar, configurar y desplegar.
-- Existe un conjunto mínimo de pruebas para la lógica crítica.
-
-## Criterio de terminado
-
-La aplicación no estará terminada cuando simplemente compile o muestre las pantallas.
-
-Se considerará terminada cuando:
-
-1. Pueda desplegarse siguiendo la documentación.
-2. Permita autenticar usuarios autorizados.
-3. Permita registrar todos los eventos incluidos en el alcance.
-4. Guarde los datos en Google Sheets.
-5. Muestre una cronología diaria fiable.
-6. Permita corregir registros.
-7. Sea cómoda de utilizar desde un teléfono móvil.
-8. Gestione errores básicos sin perder información silenciosamente.
-
-## Instrucciones para el agente de desarrollo
-
-Trabaja de forma autónoma hasta completar una primera versión funcional.
-
-No te limites a describir la solución ni a generar una maqueta. Implementa, prueba, documenta y deja la aplicación preparada para desplegar.
-
-Toma decisiones técnicas razonables cuando falte detalle. Prioriza, en este orden:
-
-1. Simplicidad de uso.
-2. Fiabilidad de los datos.
-3. Simplicidad técnica.
-4. Mantenibilidad.
-5. Diseño visual.
-
-No amplíes el alcance con funcionalidades no solicitadas.
-
-Cuando exista una decisión menor no definida, elige la opción más sencilla que permita evolucionar más adelante.
-
-Antes de finalizar:
-
-- Revisa el repositorio completo.
-- Elimina código muerto y archivos temporales.
-- Verifica que no hay secretos.
-- Ejecuta las pruebas.
-- Comprueba el flujo completo desde el registro hasta Google Sheets.
-- Actualiza este README con las instrucciones reales de instalación y despliegue.
-
-## Decisiones ya tomadas
-
-- La primera versión requiere conexión a internet.
-- El soporte offline se implementará más adelante.
-- La aplicación será multiusuario.
-- Cada evento registrará quién lo creó y quién lo modificó.
-- Google Sheets será la fuente única de verdad.
-- No se utilizará Supabase en la primera versión salvo que aparezca una limitación técnica insalvable y quede documentada.
-- La prioridad es una aplicación pequeña, completa y utilizable, no una plataforma extensa.
+Cola local sin conexión con sincronización, recordatorios, estadísticas semanales/mensuales, ventanas de sueño, medicación, crecimiento, hitos y exportaciones. Añadir un nuevo tipo de evento requiere: una entrada en los mapas de etiquetas del backend (`Logic.js`), un formulario y los textos de resumen en el frontend.
