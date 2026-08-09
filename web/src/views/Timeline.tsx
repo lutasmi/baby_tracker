@@ -99,7 +99,8 @@ function DaySummaryCard({ events, day, now }: { events: BabyEvent[]; day: string
       <div class="sum-item">
         <div class="sum-value">
           {s.feeds}
-          {s.bottleMl > 0 && <small> · {s.bottleMl} ml</small>}
+          {s.milkMl > 0 && <small> · {s.milkMl} ml</small>}
+          {s.breastMin > 0 && <small> · {s.breastMin} min</small>}
         </div>
         <div class="sum-label">tomas</div>
       </div>

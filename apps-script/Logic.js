@@ -38,6 +38,7 @@ var SUBTYPE_LABELS = {
   nocturno: 'Nocturno',
   biberon: 'Biberón',
   lactancia: 'Lactancia',
+  mixta: 'Mixta',
   pipi: 'Pipí',
   caca: 'Caca',
   ambos: 'Ambos',
@@ -59,12 +60,14 @@ var DETAIL_LABELS = {
 
 var SUBTYPES_BY_TYPE = {
   sleep: ['siesta', 'nocturno'],
-  feed: ['biberon', 'lactancia'],
+  // El subtipo de una toma es derivado: lo calcula feedSubtypeFor() a partir
+  // de sus componentes. Se conserva porque la hoja lo muestra y porque los
+  // registros anteriores a la v2 lo usaban como dato principal.
+  feed: ['biberon', 'lactancia', 'mixta'],
   diaper: ['pipi', 'caca', 'ambos'],
   bath: ['completo', 'aseo'],
 };
 
-var MILK_TYPES = ['materna', 'formula', 'mixta'];
 var BREASTS = ['izquierdo', 'derecho', 'ambos'];
 var CONSISTENCIES = ['liquida', 'pastosa', 'solida'];
 
@@ -211,6 +214,156 @@ function numOrNull(v) {
 }
 
 // ---------------------------------------------------------------------------
+// Componentes de una toma
+// ---------------------------------------------------------------------------
+//
+// Una toma puede combinar pecho directo (minutos), leche materna extraída (ml)
+// y fórmula (ml). La hoja de cálculo no cambia: el desglose se serializa en
+// 'Detalle_2' —una columna que hasta ahora siempre estaba vacía— con un texto
+// legible y reversible:
+//
+//   pecho 15 min (ambos) · extraída 28 ml · fórmula 37 ml
+//
+// 'Cantidad' guarda el total de ml cuantificables y 'Detalle_1' conserva el
+// significado que tenía en la v1, de modo que la hoja se sigue leyendo igual.
+// Cuando 'Detalle_2' está vacío se interpreta el registro con las reglas
+// antiguas (ver legacyComponents), así que nada de lo ya registrado se pierde.
+//
+// 'mixtaMl' solo aparece en registros de la v1 con tipo de leche "Mixta", donde
+// se conocía el total pero no el reparto. No se genera nunca desde la v2.
+
+function emptyComponents() {
+  return { breastMin: 0, breastSide: null, expressedMl: 0, formulaMl: 0, mixtaMl: 0 };
+}
+
+/** Alias aceptados al leer el desglose escrito a mano en la hoja. */
+var COMPONENT_ALIASES = {
+  pecho: 'pecho',
+  lactancia: 'pecho',
+  teta: 'pecho',
+  extraida: 'extraida',
+  materna: 'extraida',
+  formula: 'formula',
+  biberon: 'formula',
+  mixta: 'mixta',
+};
+
+function componentsAreEmpty(c) {
+  return !c || (!c.breastMin && !c.expressedMl && !c.formulaMl && !c.mixtaMl);
+}
+
+function quantifiableMl(c) {
+  return (c.expressedMl || 0) + (c.formulaMl || 0) + (c.mixtaMl || 0);
+}
+
+/** Subtipo derivado: solo ml -> biberón, solo pecho -> lactancia, ambos -> mixta. */
+function feedSubtypeFor(c) {
+  var hasMl = quantifiableMl(c) > 0;
+  var hasBreast = (c.breastMin || 0) > 0;
+  if (hasBreast && hasMl) return 'mixta';
+  if (hasBreast) return 'lactancia';
+  return 'biberon';
+}
+
+/** Texto de 'Detalle_2': legible para una persona y reversible para la app. */
+function serializeComponents(c) {
+  var parts = [];
+  if (c.breastMin > 0) {
+    var side = c.breastSide ? ' (' + (DETAIL_LABELS[c.breastSide] || c.breastSide) + ')' : '';
+    parts.push('pecho ' + c.breastMin + ' min' + side);
+  }
+  if (c.expressedMl > 0) parts.push('extraída ' + c.expressedMl + ' ml');
+  if (c.formulaMl > 0) parts.push('fórmula ' + c.formulaMl + ' ml');
+  if (c.mixtaMl > 0) parts.push('mixta ' + c.mixtaMl + ' ml');
+  return parts.join(' · ');
+}
+
+/**
+ * Interpreta el texto de 'Detalle_2'. Tolerante con la edición manual: acepta
+ * '·', ';' o ',' como separador, mayúsculas, acentos y unidades ausentes.
+ * Devuelve null si no reconoce ningún componente.
+ */
+function parseComponents(text) {
+  var raw = String(text == null ? '' : text).trim();
+  if (!raw) return null;
+  var out = emptyComponents();
+  var found = false;
+  var parts = raw.split(/[·;,]/);
+  for (var i = 0; i < parts.length; i++) {
+    var m = normText(parts[i]).match(/^([a-z]+)\s*(\d+)\s*(min|ml)?\s*(?:\(([a-z]+)\))?$/);
+    if (!m) continue;
+    var key = COMPONENT_ALIASES[m[1]];
+    if (!key) continue;
+    var value = Number(m[2]);
+    if (!isFinite(value) || value < 0) continue;
+    if (key === 'pecho') {
+      out.breastMin = value;
+      if (m[4] && BREASTS.indexOf(m[4]) !== -1) out.breastSide = m[4];
+    } else if (key === 'extraida') {
+      out.expressedMl = value;
+    } else if (key === 'formula') {
+      out.formulaMl = value;
+    } else {
+      out.mixtaMl = value;
+    }
+    found = true;
+  }
+  return found ? out : null;
+}
+
+/**
+ * Componentes de un registro anterior a la v2, que no tiene 'Detalle_2':
+ *   - Lactancia: los minutos eran la duración del propio evento.
+ *   - Biberón: 'Cantidad' con el tipo de leche en 'Detalle_1'.
+ */
+function legacyComponents(subtype, quantityMl, durationMin, detail) {
+  var c = emptyComponents();
+  if (subtype === 'lactancia') {
+    c.breastMin = durationMin > 0 ? durationMin : 0;
+    if (detail && BREASTS.indexOf(detail) !== -1) c.breastSide = detail;
+    return c;
+  }
+  var ml = quantityMl > 0 ? quantityMl : 0;
+  if (detail === 'materna') c.expressedMl = ml;
+  else if (detail === 'mixta') c.mixtaMl = ml;
+  else c.formulaMl = ml;
+  return c;
+}
+
+/** 'Detalle_1' equivalente al de la v1, para que la hoja se lea igual. */
+function feedDetailLabel(c) {
+  if (quantifiableMl(c) === 0) return c.breastSide || null;
+  if (c.mixtaMl > 0) return 'mixta';
+  var kinds = 0;
+  if (c.expressedMl > 0) kinds++;
+  if (c.formulaMl > 0) kinds++;
+  if (c.breastMin > 0 || kinds > 1) return 'mixta';
+  return c.expressedMl > 0 ? 'materna' : 'formula';
+}
+
+function normalizeComponents(input) {
+  var c = emptyComponents();
+  var src = input && typeof input === 'object' ? input : {};
+  c.breastMin = boundedInt(src.breastMin, 0, 600, 'los minutos de pecho');
+  c.expressedMl = boundedInt(src.expressedMl, 0, 1000, 'los ml de leche extraída');
+  c.formulaMl = boundedInt(src.formulaMl, 0, 1000, 'los ml de fórmula');
+  c.mixtaMl = boundedInt(src.mixtaMl, 0, 1000, 'los ml de leche mixta');
+  if (c.breastMin > 0 && src.breastSide) {
+    c.breastSide = requireIn(src.breastSide, BREASTS, 'el pecho');
+  }
+  return c;
+}
+
+function boundedInt(value, min, max, what) {
+  if (value == null || value === '' || value === false) return 0;
+  var n = numOrNull(value);
+  if (n == null || n < min || n > max) {
+    throw apiError('VALIDATION', 'Valor no válido para ' + what + '.');
+  }
+  return n;
+}
+
+// ---------------------------------------------------------------------------
 // Validación y normalización de eventos entrantes
 // ---------------------------------------------------------------------------
 
@@ -236,7 +389,8 @@ function normalizeAndValidate(input, now) {
 
   var type = SUBTYPES_BY_TYPE[input.type] ? input.type : null;
   if (!type) throw apiError('VALIDATION', 'Tipo de evento no válido.');
-  var subtype = requireIn(input.subtype, SUBTYPES_BY_TYPE[type], 'el subtipo');
+  // En las tomas el subtipo lo decide el desglose, no el cliente.
+  var subtype = type === 'feed' ? null : requireIn(input.subtype, SUBTYPES_BY_TYPE[type], 'el subtipo');
 
   var start = String(input.start == null ? '' : input.start).trim();
   if (!isValidDt(start)) throw apiError('VALIDATION', 'La fecha y hora de inicio no son válidas.');
@@ -253,7 +407,10 @@ function normalizeAndValidate(input, now) {
   }
   if (end) {
     var dur = diffMinutes(start, end);
-    if (dur <= 0) throw apiError('VALIDATION', 'El fin debe ser posterior al inicio.');
+    // Una toma puntual (un biberón que se anota a una hora) puede durar 0.
+    if (dur < 0 || (dur === 0 && type !== 'feed')) {
+      throw apiError('VALIDATION', 'El fin debe ser posterior al inicio.');
+    }
     if (dur > 24 * 60) throw apiError('VALIDATION', 'Un evento no puede durar más de 24 horas.');
   }
 
@@ -264,20 +421,25 @@ function normalizeAndValidate(input, now) {
   var quantityMl = null;
   var detail = null;
   var durationMin = null;
+  var components = null;
 
   if (type === 'sleep') {
     durationMin = end ? diffMinutes(start, end) : null;
-  } else if (type === 'feed' && subtype === 'biberon') {
-    end = null;
-    quantityMl = numOrNull(input.quantityMl);
-    if (quantityMl == null || quantityMl < 1 || quantityMl > 1000) {
-      throw apiError('VALIDATION', 'La cantidad del biberón debe estar entre 1 y 1000 ml.');
+  } else if (type === 'feed') {
+    components = normalizeComponents(input.components);
+    if (componentsAreEmpty(components)) {
+      throw apiError(
+        'VALIDATION',
+        'La toma necesita al menos un componente: pecho, leche extraída o fórmula.'
+      );
     }
-    detail = requireIn(input.detail, MILK_TYPES, 'el tipo de leche');
-  } else if (type === 'feed' && subtype === 'lactancia') {
-    if (!end) throw apiError('VALIDATION', 'La lactancia necesita hora de fin o duración.');
-    durationMin = diffMinutes(start, end);
-    detail = requireIn(input.detail, BREASTS, 'el pecho');
+    if (components.breastMin > 0 && end && components.breastMin > diffMinutes(start, end) + margin) {
+      throw apiError('VALIDATION', 'Los minutos de pecho no pueden superar la duración de la toma.');
+    }
+    subtype = feedSubtypeFor(components);
+    detail = feedDetailLabel(components);
+    quantityMl = quantifiableMl(components) || null;
+    durationMin = end ? diffMinutes(start, end) : null;
   } else if (type === 'diaper') {
     end = null;
     // La consistencia solo aplica cuando hay caca; en pipí se descarta.
@@ -303,6 +465,7 @@ function normalizeAndValidate(input, now) {
     durationMin: durationMin,
     quantityMl: quantityMl,
     detail: detail,
+    components: components,
     notes: notes,
   };
 }
@@ -327,7 +490,7 @@ function eventToRecord(event, deleted) {
     Cantidad: event.quantityMl == null ? '' : event.quantityMl,
     Unidad: event.quantityMl == null ? '' : 'ml',
     Detalle_1: event.detail ? DETAIL_LABELS[event.detail] || event.detail : '',
-    Detalle_2: '',
+    Detalle_2: event.components ? serializeComponents(event.components) : '',
     Notas: event.notes || '',
     Creado_Por: event.createdBy || '',
     Creado_En: event.createdAt || '',
@@ -364,6 +527,19 @@ function recordToEvent(rec) {
   var durationMin = numOrNull(rec.Duracion_Minutos);
   if (end) durationMin = diffMinutes(start, end); // recalcular siempre: la hoja manda
 
+  var quantityMl = numOrNull(rec.Cantidad);
+  var components = null;
+  if (type === 'feed') {
+    // El desglose de 'Detalle_2' manda; si falta, es un registro de la v1 y se
+    // interpreta con las reglas antiguas.
+    components = parseComponents(rec.Detalle_2);
+    if (!components) {
+      components = legacyComponents(subtype, quantityMl || 0, durationMin || 0, detail);
+    }
+    subtype = feedSubtypeFor(components);
+    quantityMl = quantifiableMl(components) || null;
+  }
+
   return {
     event: {
       id: String(rec.Evento_ID == null ? '' : rec.Evento_ID).trim(),
@@ -372,8 +548,9 @@ function recordToEvent(rec) {
       start: start,
       end: end,
       durationMin: durationMin,
-      quantityMl: numOrNull(rec.Cantidad),
+      quantityMl: quantityMl,
       detail: detail,
+      components: components,
       notes: String(rec.Notas == null ? '' : rec.Notas).trim(),
       createdBy: String(rec.Creado_Por == null ? '' : rec.Creado_Por).trim(),
       createdAt: parseDtCell(rec.Creado_En, '') || String(rec.Creado_En == null ? '' : rec.Creado_En).trim(),
@@ -388,13 +565,114 @@ function isOpenSleep(event) {
   return event.type === 'sleep' && !event.end;
 }
 
+/**
+ * A partir de aquí, un sueño sin cerrar deja de tratarse como "en curso": es
+ * casi seguro un cronómetro que alguien olvidó detener. El frontend usa el
+ * mismo umbral (STALE_SLEEP_MIN en lib/derive.ts).
+ */
+var OPEN_SLEEP_MAX_MIN = 14 * 60;
+
 /** ¿El intervalo del evento toca el día `date`? */
 function eventTouchesDay(event, date, now) {
   var dayStart = date + ' 00:00';
   var dayEnd = addDaysDate(date, 1) + ' 00:00';
-  var effectiveEnd = event.end || (isOpenSleep(event) ? now : event.start);
+  var effectiveEnd = event.end || event.start;
+  if (isOpenSleep(event)) {
+    // Sin el tope, un sueño olvidado hace tres días aparecería en la
+    // cronología de todos los días transcurridos desde entonces.
+    var cap = addMinutesDt(event.start, OPEN_SLEEP_MAX_MIN);
+    effectiveEnd = now < cap ? now : cap;
+  }
   if (effectiveEnd < event.start) effectiveEnd = event.start;
   return event.start < dayEnd && effectiveEnd >= dayStart && !(event.start < dayStart && effectiveEnd === dayStart);
+}
+
+// ---------------------------------------------------------------------------
+// Día de vida
+// ---------------------------------------------------------------------------
+//
+// El día natural (00:00–23:59) se mantiene para la cronología y el histórico.
+// El día de vida son periodos de 24 h contados desde el instante exacto del
+// nacimiento: con un nacimiento a las 09:17, el día de vida 1 va de las 09:17
+// del día del parto a las 09:16 del día siguiente. Ambos conceptos conviven.
+
+/** Día de vida (1 = las primeras 24 h) al que pertenece el instante `dt`. */
+function lifeDayNumber(birth, dt) {
+  var minutes = diffMinutes(birth, dt);
+  if (minutes < 0) return 0; // antes de nacer
+  return Math.floor(minutes / 1440) + 1;
+}
+
+/** Rango [inicio, fin) del día de vida `n`. El fin es exclusivo. */
+function lifeDayRange(birth, n) {
+  var offset = (n - 1) * 1440;
+  return { start: addMinutesDt(birth, offset), end: addMinutesDt(birth, offset + 1440) };
+}
+
+/**
+ * Totales de un día de vida. Un evento cuenta en el día de vida en el que
+ * empieza, de modo que una toma que cruza el aniversario horario no se parte.
+ */
+function lifeDayTotals(events, rangeStart, rangeEnd) {
+  var t = {
+    pees: 0,
+    poops: 0,
+    diapers: 0,
+    feeds: 0,
+    breastMin: 0,
+    expressedMl: 0,
+    formulaMl: 0,
+    mixtaMl: 0,
+    milkMl: 0,
+  };
+  for (var i = 0; i < events.length; i++) {
+    var e = events[i];
+    if (e.start < rangeStart || e.start >= rangeEnd) continue;
+    if (e.type === 'diaper') {
+      t.diapers++;
+      if (e.subtype === 'pipi' || e.subtype === 'ambos') t.pees++;
+      if (e.subtype === 'caca' || e.subtype === 'ambos') t.poops++;
+    } else if (e.type === 'feed') {
+      t.feeds++;
+      var c = e.components || emptyComponents();
+      t.breastMin += c.breastMin || 0;
+      t.expressedMl += c.expressedMl || 0;
+      t.formulaMl += c.formulaMl || 0;
+      t.mixtaMl += c.mixtaMl || 0;
+    }
+  }
+  // Leche cuantificable: no incluye el pecho directo porque no sabemos los ml.
+  t.milkMl = t.expressedMl + t.formulaMl + t.mixtaMl;
+  return t;
+}
+
+// ---------------------------------------------------------------------------
+// Ajustes (nacimiento y objetivos)
+// ---------------------------------------------------------------------------
+//
+// Viven en las propiedades del script, no en la hoja de cálculo: son
+// configuración del despliegue, como SPREADSHEET_ID, y así esta fase no
+// modifica la estructura de Sheets. Un objetivo a 0 significa "sin objetivo".
+
+function defaultSettings() {
+  return { birth: null, goals: { pees: 0, poops: 0, milkMl: 0 } };
+}
+
+function normalizeSettings(raw) {
+  var s = raw && typeof raw === 'object' ? raw : {};
+  var birth = String(s.birth == null ? '' : s.birth).trim();
+  if (birth && !isValidDt(birth)) {
+    throw apiError('VALIDATION', 'La fecha y hora de nacimiento no son válidas.');
+  }
+  var goals = s.goals && typeof s.goals === 'object' ? s.goals : {};
+  return {
+    birth: birth || null,
+    goals: {
+      pees: boundedInt(goals.pees, 0, 50, 'el objetivo de pises'),
+      poops: boundedInt(goals.poops, 0, 50, 'el objetivo de cacas'),
+      milkMl: boundedInt(goals.milkMl, 0, 5000, 'el objetivo de leche'),
+    },
+  };
 }
 
 // Permite ejecutar este archivo en Node para los tests. En Apps Script
@@ -421,5 +699,17 @@ if (typeof module !== 'undefined' && module.exports) {
     recordToEvent: recordToEvent,
     isOpenSleep: isOpenSleep,
     eventTouchesDay: eventTouchesDay,
+    emptyComponents: emptyComponents,
+    serializeComponents: serializeComponents,
+    parseComponents: parseComponents,
+    legacyComponents: legacyComponents,
+    feedSubtypeFor: feedSubtypeFor,
+    feedDetailLabel: feedDetailLabel,
+    quantifiableMl: quantifiableMl,
+    lifeDayNumber: lifeDayNumber,
+    lifeDayRange: lifeDayRange,
+    lifeDayTotals: lifeDayTotals,
+    defaultSettings: defaultSettings,
+    normalizeSettings: normalizeSettings,
   };
 }

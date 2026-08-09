@@ -2,22 +2,27 @@
 
 Aplicación web móvil (PWA) para registrar de forma rápida y compartida la actividad diaria de un bebé: **sueño, tomas, pañales y baños**, con cronología diaria editable y **Google Sheets como única fuente de verdad**.
 
-Pensada para usarse con una mano y en segundos: las acciones habituales (se ha dormido, se ha despertado, toma, pañal) están a uno o dos toques desde la pantalla principal, con valores por defecto basados en el último registro.
+Es un **diario estructurado**, no un conjunto de cronómetros: da igual que un evento se anote en el momento, tres horas después o que se olvide. Lo que la aplicación muestra es siempre *lo que se ha registrado que ocurrió*, nunca una deducción sobre lo que está pasando ahora.
 
-La especificación completa del producto está en [docs/especificacion.md](docs/especificacion.md) y las pautas del proyecto en [AGENTS.md](AGENTS.md).
+Pensada para usarse con una mano y en segundos, con valores por defecto tomados del último registro.
 
-## Qué incluye la V1
+La especificación original está en [docs/especificacion.md](docs/especificacion.md) y las pautas del proyecto en [AGENTS.md](AGENTS.md).
+
+## Qué incluye
 
 - **Acceso con Google** restringido a los usuarios autorizados en la hoja `Usuarios`.
-- **Pantalla principal**: tiempo dormido/despierto en tiempo real, última toma, último pañal, total dormido hoy y botones grandes de registro.
-- **Sueño**: iniciar/finalizar de un toque, registro manual de sueños pasados, siesta o nocturno, imposible tener dos sueños activos.
-- **Tomas**: biberón (cantidad y tipo de leche) o lactancia (duración y pecho, alternando el último usado). Cada tipo muestra solo sus campos.
+- **Día de vida**: periodos de 24 h contados desde la hora exacta de nacimiento, con el recuento de pises, cacas, fórmula y leche materna extraída, y progreso frente a los objetivos que pongan los padres. Convive con el día natural, que sigue rigiendo la cronología.
+- **Tomas con inicio y fin reales**, duración derivada y precisión de un minuto. Una misma toma puede combinar **pecho directo (min), leche materna extraída (ml) y fórmula (ml)**; los minutos y los mililitros nunca se mezclan.
+- **Sueño** con inicio y fin, registrable después de que haya ocurrido. El cronómetro de un toque sigue estando, pero es auxiliar: la aplicación no da por hecho que el bebé sigue dormido porque nadie cerró un sueño.
 - **Pañales**: pipí/caca/ambos; la consistencia solo aparece cuando hay caca.
 - **Baños**: completo o aseo rápido, con duración opcional.
 - **Cronología diaria** con resumen del día, cambio de fecha, edición y borrado con confirmación.
+- **Todo es corregible después**: horas, cantidades, componentes de una toma y contenido del pañal, con la misma pantalla con la que se creó.
 - Cada registro guarda **quién lo creó, quién lo modificó y cuándo**.
 - Reintentos seguros: el identificador se genera en el cliente y **repetir una petición nunca duplica** el registro.
 - Errores de red visibles y con reintento manual; nada se marca como guardado si la hoja no confirmó la escritura.
+
+Los registros creados con la primera versión se siguen leyendo, mostrando y contabilizando sin conversión previa.
 
 ## Arquitectura
 
@@ -40,14 +45,16 @@ La especificación completa del producto está en [docs/especificacion.md](docs/
 
 ```
 web/                  Frontend PWA (Vite + Preact)
-  src/lib/            Lógica pura (fechas, estado del bebé, resúmenes) con tests
-  src/views/          Pantallas: login, dashboard, formularios, cronología
+  src/lib/            Lógica pura con tests: fechas, componentes de la toma,
+                      día de vida, estado derivado, formularios y resúmenes
+  src/views/          Pantallas: login, dashboard, formularios, cronología, ajustes
   src/api/            Cliente de la API real y mock de desarrollo
   public/             Manifest, service worker, iconos
 apps-script/          Backend Google Apps Script (Main, Sheets, Logic, Setup)
   test/               Tests de la lógica del backend (se ejecutan en Node)
 scripts/              Generador de iconos PNG
-docs/especificacion.md  Especificación original del producto
+docs/especificacion.md  Especificación original del producto (contrato de la V1)
+docs/perfil-y-peso.md   Dependencia pendiente: peso y perfil del bebé
 .github/workflows/    Despliegue automático en GitHub Pages
 ```
 
@@ -130,12 +137,25 @@ No hay credenciales en el repositorio: la URL de la API y el Client ID (público
 
 - **Zona horaria**: todo se guarda y se muestra en hora de Madrid (`Europe/Madrid`), independientemente del dispositivo. Formato `yyyy-MM-dd HH:mm` en la hoja.
 - **Duplicados**: el cliente genera el `Evento_ID` (UUID) antes de enviar; si un reintento llega dos veces, el backend devuelve el registro ya guardado.
-- **Sueño activo único**: lo garantiza el backend bajo bloqueo global; si dos móviles lo intentan a la vez, el segundo recibe un error claro.
-- **Edición manual de la hoja**: tolerada. Las columnas se localizan por cabecera, las etiquetas admiten variantes sin acentos, las horas sueltas (`HH:mm`) se combinan con la columna `Fecha` y un fin menor que el inicio se interpreta como cruce de medianoche.
+- **Un solo sueño abierto**: lo garantiza el backend bajo bloqueo global. Un sueño sin cerrar **no** significa que el bebé siga dormido: pasadas 14 horas se considera un cronómetro olvidado, deja de contar en las horas dormidas y la pantalla principal ofrece corregirlo.
+- **Componentes de la toma**: el desglose se guarda en `Detalle_2` —la única columna que la V1 dejaba siempre vacía— con un texto legible y reversible, `pecho 15 min (Ambos) · extraída 28 ml · fórmula 37 ml`. `Cantidad` conserva el total de mililitros cuantificables y `Detalle_1`, el significado que tenía antes. **La estructura de la hoja no cambia**. Si `Detalle_2` está vacío, el registro se interpreta con las reglas de la V1.
+- **Día de vida**: periodos de 24 h desde el instante del nacimiento. Un evento cuenta en el periodo en el que empieza, así que una toma que cruza el aniversario horario no se parte en dos.
+- **Ajustes** (nacimiento y objetivos): viven en la propiedad `SETTINGS` del proyecto de Apps Script, junto a `SPREADSHEET_ID`. Son comunes a todos los usuarios y se editan desde la pantalla de Ajustes. Los objetivos los ponen los padres; la aplicación no propone ninguno ni da recomendaciones de alimentación.
+- **Edición manual de la hoja**: tolerada. Las columnas se localizan por cabecera, las etiquetas admiten variantes sin acentos, las horas sueltas (`HH:mm`) se combinan con la columna `Fecha` y un fin menor que el inicio se interpreta como cruce de medianoche. En las tomas manda `Detalle_2`: si lo editas a mano, `Cantidad` y `Subtipo` se recalculan a partir de él.
 - **Borrado**: lógico (columna `Eliminado`), para que la hoja conserve el histórico.
 - **Latencia**: Apps Script tarda 1–3 s por operación; la interfaz muestra el estado de guardado y solo confirma cuando la hoja ha escrito.
-- **Sin conexión**: la V1 requiere internet. El service worker solo cachea la aplicación (no los datos) para que abra al instante; la arquitectura deja el terreno preparado para una cola local en el futuro.
+- **Sin conexión**: se requiere internet. El service worker solo cachea la aplicación (no los datos) para que abra al instante; la arquitectura deja el terreno preparado para una cola local en el futuro.
 
-## Funcionalidad futura (fuera de la V1)
+## Actualizar desde la primera versión
 
-Cola local sin conexión con sincronización, recordatorios, estadísticas semanales/mensuales, ventanas de sueño, medicación, crecimiento, hitos y exportaciones. Añadir un nuevo tipo de evento requiere: una entrada en los mapas de etiquetas del backend (`Logic.js`), un formulario y los textos de resumen en el frontend.
+El frontend se publica solo al hacer push a `main`, pero **el backend hay que volver a implementarlo a mano** (*Implementar → Administrar implementaciones → editar → nueva versión*). Entre ambos momentos la aplicación sigue funcionando: si el backend todavía es el antiguo, no aparece el bloque de día de vida y los ajustes no se pueden guardar, pero el registro y la cronología funcionan con normalidad.
+
+No hay que migrar la hoja de cálculo ni tocar sus columnas.
+
+## Funcionalidad futura
+
+Cola local sin conexión con sincronización, recordatorios, estadísticas semanales/mensuales, ventanas de sueño ([diseño](docs/prediccion-sueno-tomas.md)), medicación, hitos y exportaciones.
+
+**Peso y perfil del bebé** son la siguiente fase y sí requieren cambiar la hoja: la dependencia está analizada en [docs/perfil-y-peso.md](docs/perfil-y-peso.md).
+
+Añadir un tipo de evento nuevo requiere: una entrada en los mapas de etiquetas del backend (`Logic.js`), un formulario y los textos de resumen en el frontend.

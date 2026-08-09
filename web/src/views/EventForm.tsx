@@ -1,15 +1,21 @@
 import { useMemo, useRef, useState } from 'preact/hooks'
 import { getApi } from '../api'
 import { ApiError } from '../api/types'
-import { DateTimeField, ScreenTitle, Seg, Stepper } from '../components/ui'
+import { AmountField, MomentField, ScreenTitle, Seg } from '../components/ui'
 import { handleAuthError, navigateReplace, useDay, useNow } from '../hooks'
-import { addMinutes, dateOf, diffMinutes, formatDuration, nowMadrid } from '../lib/dates'
-import { feedDefaults, guessSleepSubtype } from '../lib/derive'
+import { dateOf, diffMinutes, formatDuration, nowMadrid } from '../lib/dates'
 import { newId } from '../lib/events'
+import {
+  buildInput,
+  initialState,
+  validate,
+  type ComponentKey,
+  type FormState,
+} from '../lib/eventform'
 import { eventTitle } from '../lib/summary'
 import { findCachedEvent } from '../store'
 import { showToast } from '../toast'
-import type { BabyEvent, EventInput, EventType } from '../types'
+import type { BabyEvent, EventType, FeedComponents } from '../types'
 
 const NEW_TITLES: Record<EventType, string> = {
   sleep: 'Registrar sueño',
@@ -17,6 +23,12 @@ const NEW_TITLES: Record<EventType, string> = {
   diaper: 'Registrar pañal',
   bath: 'Registrar baño',
 }
+
+const COMPONENT_CHIPS: { key: ComponentKey; label: string }[] = [
+  { key: 'breast', label: '🤱 Pecho' },
+  { key: 'expressed', label: '🥛 Extraída' },
+  { key: 'formula', label: '🍼 Fórmula' },
+]
 
 export function NewEvent({ kind }: { kind: EventType }) {
   return <EventForm kind={kind} existing={null} />
@@ -40,106 +52,6 @@ export function EditEvent({ id }: { id: string }) {
   return <EventForm kind={existing.type} existing={existing} />
 }
 
-interface FormState {
-  subtype: string
-  start: string
-  end: string
-  sleepDone: boolean
-  durationMin: number
-  quantityMl: number
-  milkType: string
-  breast: string
-  consistency: string
-  notes: string
-}
-
-function initialState(kind: EventType, existing: BabyEvent | null, lastFeed: BabyEvent | null): FormState {
-  const now = nowMadrid()
-  const feed = feedDefaults(lastFeed)
-  const base: FormState = {
-    subtype: '',
-    start: now,
-    end: now,
-    sleepDone: true,
-    durationMin: 15,
-    quantityMl: feed.quantityMl,
-    milkType: feed.milkType,
-    breast: feed.breast,
-    consistency: '',
-    notes: '',
-  }
-
-  if (!existing) {
-    switch (kind) {
-      case 'sleep': {
-        const start = addMinutes(now, -60)
-        return { ...base, subtype: guessSleepSubtype(start), start, end: now }
-      }
-      case 'feed':
-        return { ...base, subtype: feed.subtype }
-      case 'diaper':
-        return { ...base, subtype: 'pipi' }
-      case 'bath':
-        return { ...base, subtype: 'completo', durationMin: 0 }
-    }
-  }
-
-  const e = existing
-  const state: FormState = {
-    ...base,
-    subtype: e.subtype,
-    start: e.start,
-    end: e.end ?? now,
-    sleepDone: e.type !== 'sleep' || !!e.end,
-    notes: e.notes,
-  }
-  if (e.type === 'feed' && e.subtype === 'biberon') {
-    state.quantityMl = e.quantityMl ?? state.quantityMl
-    state.milkType = e.detail ?? state.milkType
-  }
-  if (e.type === 'feed' && e.subtype === 'lactancia') {
-    state.durationMin = e.durationMin ?? 15
-    state.breast = e.detail ?? state.breast
-  }
-  if (e.type === 'diaper') state.consistency = e.detail ?? ''
-  if (e.type === 'bath') state.durationMin = e.durationMin ?? 0
-  return state
-}
-
-/** Traduce el estado del formulario al evento que viaja a la API. */
-function buildInput(id: string, kind: EventType, s: FormState): EventInput {
-  const base = {
-    id,
-    type: kind,
-    subtype: s.subtype,
-    start: s.start,
-    end: null as string | null,
-    durationMin: null as number | null,
-    quantityMl: null as number | null,
-    detail: null as string | null,
-    notes: s.notes.trim(),
-  }
-  switch (kind) {
-    case 'sleep':
-      return { ...base, end: s.sleepDone ? s.end : null }
-    case 'feed':
-      if (s.subtype === 'biberon') {
-        return { ...base, quantityMl: s.quantityMl, detail: s.milkType }
-      }
-      // Lactancia: se registra la hora de fin; el inicio se deduce.
-      return {
-        ...base,
-        start: addMinutes(s.end, -s.durationMin),
-        end: s.end,
-        detail: s.breast,
-      }
-    case 'diaper':
-      return { ...base, detail: s.subtype !== 'pipi' && s.consistency ? s.consistency : null }
-    case 'bath':
-      return { ...base, durationMin: s.durationMin > 0 ? s.durationMin : null }
-  }
-}
-
 function EventForm({ kind, existing }: { kind: EventType; existing: BabyEvent | null }) {
   const now = useNow()
   const today = now.slice(0, 10)
@@ -149,13 +61,22 @@ function EventForm({ kind, existing }: { kind: EventType; existing: BabyEvent | 
   const [state, setState] = useState<FormState | null>(null)
   const [saving, setSaving] = useState(false)
   const idRef = useRef(existing?.id ?? newId())
+  // El instante en que se abrió el formulario. Fijarlo evita que las horas
+  // propuestas se muevan solas mientras se está mirando la pantalla.
+  const openedAt = useRef(nowMadrid())
 
-  // Con datos del día (o sin ellos si la red falla) se inicializa una vez.
-  const ready = state ?? initialState(kind, existing, data?.last.feed ?? null)
-  const s = ready
-  const set = (patch: Partial<FormState>) => setState({ ...ready, ...patch })
+  const s = state ?? initialState(kind, existing, data?.last.feed ?? null, openedAt.current)
+  const set = (patch: Partial<FormState>) => setState({ ...s, ...patch })
+  const setComponents = (patch: Partial<FeedComponents>) =>
+    set({ components: { ...s.components, ...patch } })
 
   const problem = useMemo(() => validate(kind, s, now), [kind, s, now])
+
+  function toggleComponent(key: ComponentKey) {
+    set({
+      active: s.active.includes(key) ? s.active.filter((k) => k !== key) : [...s.active, key],
+    })
+  }
 
   async function save() {
     if (problem) return
@@ -171,7 +92,10 @@ function EventForm({ kind, existing }: { kind: EventType; existing: BabyEvent | 
       navigateReplace(existing ? `#/cronologia/${dateOf(input.start)}` : '#/')
     } catch (err) {
       if (!handleAuthError(err)) {
-        showToast(err instanceof ApiError ? err.message : 'No se pudo guardar. Reinténtalo.', 'error')
+        showToast(
+          err instanceof ApiError ? err.message : 'No se pudo guardar. Reinténtalo.',
+          'error'
+        )
       }
     } finally {
       setSaving(false)
@@ -206,10 +130,18 @@ function EventForm({ kind, existing }: { kind: EventType; existing: BabyEvent | 
             void save()
           }}
         >
-          {kind === 'sleep' && <SleepFields s={s} set={set} />}
-          {kind === 'feed' && <FeedFields s={s} set={set} isNew={!existing} />}
-          {kind === 'diaper' && <DiaperFields s={s} set={set} />}
-          {kind === 'bath' && <BathFields s={s} set={set} />}
+          {kind === 'sleep' && <SleepFields s={s} set={set} now={now} />}
+          {kind === 'feed' && (
+            <FeedFields
+              s={s}
+              set={set}
+              setComponents={setComponents}
+              toggle={toggleComponent}
+              now={now}
+            />
+          )}
+          {kind === 'diaper' && <DiaperFields s={s} set={set} now={now} />}
+          {kind === 'bath' && <BathFields s={s} set={set} now={now} />}
 
           <div class="field">
             <span class="field-label">Nota (opcional)</span>
@@ -221,11 +153,16 @@ function EventForm({ kind, existing }: { kind: EventType; existing: BabyEvent | 
             />
           </div>
 
-          {problem && <div class="banner banner-offline">{problem}</div>}
+          {problem && <div class="banner banner-warn">{problem}</div>}
 
           <div class="form-actions">
             {existing && (
-              <button type="button" class="btn btn-danger" disabled={saving} onClick={() => void remove()}>
+              <button
+                type="button"
+                class="btn btn-danger"
+                disabled={saving}
+                onClick={() => void remove()}
+              >
                 Eliminar
               </button>
             )}
@@ -239,27 +176,18 @@ function EventForm({ kind, existing }: { kind: EventType; existing: BabyEvent | 
   )
 }
 
-function validate(kind: EventType, s: FormState, now: string): string | null {
-  const margin = 5
-  if (diffMinutes(now, s.start) > margin && !(kind === 'feed' && s.subtype === 'lactancia')) {
-    return 'La hora de inicio no puede estar en el futuro.'
-  }
-  if (kind === 'sleep' && s.sleepDone) {
-    const dur = diffMinutes(s.start, s.end)
-    if (dur <= 0) return 'El fin debe ser posterior al inicio.'
-    if (dur > 24 * 60) return 'Un sueño no puede durar más de 24 horas.'
-    if (diffMinutes(now, s.end) > margin) return 'La hora de fin no puede estar en el futuro.'
-  }
-  if (kind === 'feed' && s.subtype === 'lactancia' && diffMinutes(now, s.end) > margin) {
-    return 'La hora de fin no puede estar en el futuro.'
-  }
-  return null
-}
-
 // ---------------------------------------------------------------------------
 
-function SleepFields({ s, set }: { s: FormState; set: (p: Partial<FormState>) => void }) {
-  const duration = s.sleepDone ? diffMinutes(s.start, s.end) : null
+function SleepFields({
+  s,
+  set,
+  now,
+}: {
+  s: FormState
+  set: (p: Partial<FormState>) => void
+  now: string
+}) {
+  const duration = s.sleepOpen ? null : diffMinutes(s.start, s.end)
   return (
     <>
       <Seg
@@ -270,21 +198,29 @@ function SleepFields({ s, set }: { s: FormState; set: (p: Partial<FormState>) =>
         value={s.subtype}
         onChange={(subtype) => set({ subtype })}
       />
-      <DateTimeField label="Se durmió" value={s.start} onChange={(start) => set({ start })} />
+      <MomentField label="Se durmió" value={s.start} now={now} onChange={(start) => set({ start })} />
       <Seg
         options={[
           { value: 'done', label: 'Ya despertó' },
           { value: 'open', label: 'Sigue durmiendo' },
         ]}
-        value={s.sleepDone ? 'done' : 'open'}
-        onChange={(v) => set({ sleepDone: v === 'done' })}
+        value={s.sleepOpen ? 'open' : 'done'}
+        onChange={(v) => set({ sleepOpen: v === 'open' })}
       />
-      {s.sleepDone && (
+      {s.sleepOpen ? (
+        <p class="field-hint">
+          Se guardará sin hora de fin. Puedes cerrarlo más tarde desde la pantalla principal o
+          editando el registro.
+        </p>
+      ) : (
         <>
-          <DateTimeField label="Se despertó" value={s.end} onChange={(end) => set({ end })} />
-          {duration != null && duration > 0 && (
-            <div class="field-label">Duración: {formatDuration(duration)}</div>
-          )}
+          <MomentField
+            label="Se despertó"
+            value={s.end}
+            now={now}
+            onChange={(end) => set({ end })}
+          />
+          {duration != null && duration > 0 && <DurationLine minutes={duration} />}
         </>
       )}
     </>
@@ -294,84 +230,119 @@ function SleepFields({ s, set }: { s: FormState; set: (p: Partial<FormState>) =>
 function FeedFields({
   s,
   set,
-  isNew,
+  setComponents,
+  toggle,
+  now,
 }: {
   s: FormState
   set: (p: Partial<FormState>) => void
-  isNew: boolean
+  setComponents: (p: Partial<FeedComponents>) => void
+  toggle: (key: ComponentKey) => void
+  now: string
 }) {
+  const duration = diffMinutes(s.start, s.end)
   return (
     <>
-      {isNew && (
-        <Seg
-          options={[
-            { value: 'biberon', label: '🍼 Biberón' },
-            { value: 'lactancia', label: '🤱 Lactancia' },
-          ]}
-          value={s.subtype}
-          onChange={(subtype) => set({ subtype })}
-        />
+      <MomentField label="Inicio" value={s.start} now={now} onChange={(start) => set({ start })} />
+      <MomentField label="Fin" value={s.end} now={now} onChange={(end) => set({ end })} />
+      {duration >= 0 && <DurationLine minutes={duration} />}
+
+      <div class="field">
+        <span class="field-label">Qué ha tomado</span>
+        <div class="chips">
+          {COMPONENT_CHIPS.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              class={s.active.includes(c.key) ? 'on' : ''}
+              onClick={() => toggle(c.key)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {s.active.includes('breast') && (
+        <div class="field component-block">
+          <span class="field-label">🤱 Pecho directo</span>
+          <AmountField
+            value={s.components.breastMin}
+            onChange={(breastMin) => setComponents({ breastMin })}
+            unit="min"
+            presets={[5, 10, 15, 20, 30]}
+            max={600}
+          />
+          <Seg
+            options={[
+              { value: 'izquierdo', label: 'Izq.' },
+              { value: 'derecho', label: 'Der.' },
+              { value: 'ambos', label: 'Ambos' },
+            ]}
+            value={s.components.breastSide ?? ''}
+            onChange={(breastSide) => setComponents({ breastSide })}
+          />
+        </div>
       )}
-      {s.subtype === 'biberon' ? (
-        <>
-          <DateTimeField label="Hora" value={s.start} onChange={(start) => set({ start })} />
-          <div class="field">
-            <span class="field-label">Cantidad</span>
-            <Stepper
-              value={s.quantityMl}
-              onChange={(quantityMl) => set({ quantityMl })}
-              step={10}
-              min={10}
-              max={500}
-              unit="ml"
-            />
-          </div>
-          <div class="field">
-            <span class="field-label">Tipo de leche</span>
-            <Seg
-              options={[
-                { value: 'materna', label: 'Materna' },
-                { value: 'formula', label: 'Fórmula' },
-                { value: 'mixta', label: 'Mixta' },
-              ]}
-              value={s.milkType}
-              onChange={(milkType) => set({ milkType })}
-            />
-          </div>
-        </>
-      ) : (
-        <>
-          <DateTimeField label="Hora de fin" value={s.end} onChange={(end) => set({ end })} />
-          <div class="field">
-            <span class="field-label">Duración</span>
-            <DurationChips
-              value={s.durationMin}
-              options={[5, 10, 15, 20, 30, 45]}
-              onChange={(durationMin) => set({ durationMin })}
-            />
-          </div>
-          <div class="field">
-            <span class="field-label">Pecho</span>
-            <Seg
-              options={[
-                { value: 'izquierdo', label: 'Izquierdo' },
-                { value: 'derecho', label: 'Derecho' },
-                { value: 'ambos', label: 'Ambos' },
-              ]}
-              value={s.breast}
-              onChange={(breast) => set({ breast })}
-            />
-          </div>
-        </>
+
+      {s.active.includes('expressed') && (
+        <div class="field component-block">
+          <span class="field-label">🥛 Leche materna extraída</span>
+          <AmountField
+            value={s.components.expressedMl}
+            onChange={(expressedMl) => setComponents({ expressedMl })}
+            unit="ml"
+            presets={[20, 40, 60, 90, 120]}
+            max={1000}
+          />
+        </div>
+      )}
+
+      {s.active.includes('formula') && (
+        <div class="field component-block">
+          <span class="field-label">🍼 Fórmula</span>
+          <AmountField
+            value={s.components.formulaMl}
+            onChange={(formulaMl) => setComponents({ formulaMl })}
+            unit="ml"
+            presets={[20, 40, 60, 90, 120]}
+            max={1000}
+          />
+        </div>
+      )}
+
+      {s.active.includes('mixta') && (
+        <div class="field component-block">
+          <span class="field-label">🍼 Mixta (registro antiguo)</span>
+          <p class="field-hint">
+            Se guardó sin distinguir fórmula de leche extraída. Puedes repartirlo con los botones
+            de arriba y quitar este.
+          </p>
+          <AmountField
+            value={s.components.mixtaMl}
+            onChange={(mixtaMl) => setComponents({ mixtaMl })}
+            unit="ml"
+            presets={[20, 40, 60, 90, 120]}
+            max={1000}
+          />
+        </div>
       )}
     </>
   )
 }
 
-function DiaperFields({ s, set }: { s: FormState; set: (p: Partial<FormState>) => void }) {
+function DiaperFields({
+  s,
+  set,
+  now,
+}: {
+  s: FormState
+  set: (p: Partial<FormState>) => void
+  now: string
+}) {
   return (
     <>
-      <DateTimeField label="Hora" value={s.start} onChange={(start) => set({ start })} />
+      <MomentField label="Hora" value={s.start} now={now} onChange={(start) => set({ start })} />
       <div class="field">
         <span class="field-label">Contenido</span>
         <Seg
@@ -403,10 +374,18 @@ function DiaperFields({ s, set }: { s: FormState; set: (p: Partial<FormState>) =
   )
 }
 
-function BathFields({ s, set }: { s: FormState; set: (p: Partial<FormState>) => void }) {
+function BathFields({
+  s,
+  set,
+  now,
+}: {
+  s: FormState
+  set: (p: Partial<FormState>) => void
+  now: string
+}) {
   return (
     <>
-      <DateTimeField label="Hora" value={s.start} onChange={(start) => set({ start })} />
+      <MomentField label="Hora" value={s.start} now={now} onChange={(start) => set({ start })} />
       <div class="field">
         <span class="field-label">Tipo</span>
         <Seg
@@ -420,42 +399,22 @@ function BathFields({ s, set }: { s: FormState; set: (p: Partial<FormState>) => 
       </div>
       <div class="field">
         <span class="field-label">Duración (opcional)</span>
-        <DurationChips
+        <AmountField
           value={s.durationMin}
-          options={[5, 10, 15, 20, 30]}
           onChange={(durationMin) => set({ durationMin })}
-          allowNone
+          unit="min"
+          presets={[5, 10, 15, 20, 30]}
+          max={240}
         />
       </div>
     </>
   )
 }
 
-function DurationChips({
-  value,
-  options,
-  onChange,
-  allowNone = false,
-}: {
-  value: number
-  options: number[]
-  onChange: (v: number) => void
-  allowNone?: boolean
-}) {
-  // Si el valor viene de una edición y no está entre las opciones, se añade.
-  const all = options.includes(value) || value === 0 ? options : [...options, value].sort((a, b) => a - b)
+function DurationLine({ minutes }: { minutes: number }) {
   return (
-    <div class="chips">
-      {all.map((min) => (
-        <button
-          key={min}
-          type="button"
-          class={value === min ? 'on' : ''}
-          onClick={() => onChange(allowNone && value === min ? 0 : min)}
-        >
-          {min} min
-        </button>
-      ))}
+    <div class="duration-line">
+      Duración <strong>{minutes === 0 ? 'puntual' : formatDuration(minutes)}</strong>
     </div>
   )
 }

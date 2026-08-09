@@ -2,12 +2,14 @@
 
 import type { BabyEvent } from '../types'
 import { dateOf, formatDuration, timeOf } from './dates'
+import { componentParts, componentsOf } from './feed'
 
 export const SUBTYPE_LABELS: Record<string, string> = {
   siesta: 'Siesta',
   nocturno: 'Sueño nocturno',
   biberon: 'Biberón',
   lactancia: 'Lactancia',
+  mixta: 'Mixta',
   pipi: 'Pipí',
   caca: 'Caca',
   ambos: 'Pipí y caca',
@@ -33,6 +35,7 @@ export function eventIcon(e: BabyEvent): string {
     case 'feed':
       return e.subtype === 'lactancia' ? '🤱' : '🍼'
     case 'diaper':
+      if (e.subtype === 'ambos') return '💩💧'
       return e.subtype === 'pipi' ? '💧' : '💩'
     case 'bath':
       return '🛁'
@@ -40,19 +43,21 @@ export function eventIcon(e: BabyEvent): string {
 }
 
 export function eventTitle(e: BabyEvent): string {
-  if (e.type === 'diaper') {
-    return `Pañal · ${SUBTYPE_LABELS[e.subtype] ?? e.subtype}`
-  }
+  // Una toma puede combinar pecho, leche extraída y fórmula, así que el título
+  // es siempre "Toma" y el desglose va en la línea de detalle.
+  if (e.type === 'feed') return 'Toma'
+  if (e.type === 'diaper') return `Pañal · ${SUBTYPE_LABELS[e.subtype] ?? e.subtype}`
   return SUBTYPE_LABELS[e.subtype] ?? e.subtype
 }
 
-/** Línea secundaria del evento: '120 ml · Fórmula', '25 min · Pecho izquierdo'… */
+/** Línea secundaria: '29 min · 35 ml fórmula', '1 h 21 min', 'Consistencia líquida'… */
 export function eventDetail(e: BabyEvent): string {
   const parts: string[] = []
-  if (e.type === 'sleep' && !e.end) parts.push('En curso')
+  if (e.type === 'sleep' && !e.end) parts.push('Sin cerrar')
   if (e.durationMin != null && e.durationMin > 0) parts.push(formatDuration(e.durationMin))
-  if (e.quantityMl != null) parts.push(`${e.quantityMl} ml`)
-  if (e.detail) {
+  if (e.type === 'feed') {
+    parts.push(...componentParts(componentsOf(e)))
+  } else if (e.detail) {
     const label = DETAIL_LABELS[e.detail] ?? e.detail
     parts.push(e.type === 'diaper' ? `Consistencia ${label.toLowerCase()}` : label)
   }
@@ -64,14 +69,13 @@ export function eventDetail(e: BabyEvent): string {
  * Hora que se muestra en la cronología del día `date`:
  *  - evento puntual: '14:30'
  *  - con fin el mismo día: '14:30–15:45'
- *  - empezó otro día: '(ayer) → 07:00'
- *  - termina otro día: '21:30 →'
- *  - sueño en curso: '14:30 →'
+ *  - empezó otro día: '→ 07:00'
+ *  - termina otro día o sigue sin cerrar: '21:30 →'
  */
 export function eventTimeLabel(e: BabyEvent, date: string): string {
   const startsToday = dateOf(e.start) === date
   if (!e.end) {
-    // Sin fin: solo el sueño está "en curso"; el resto son eventos puntuales.
+    // Sin fin: solo el sueño queda abierto; el resto son eventos puntuales.
     if (e.type !== 'sleep') return timeOf(e.start)
     return startsToday ? `${timeOf(e.start)} →` : '→'
   }

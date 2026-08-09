@@ -253,38 +253,134 @@ button {
 .action-diaper { background: var(--diaper-soft); color: var(--diaper); }
 .action-bath { background: var(--bath-soft); color: var(--bath); }
 
-/* ---------- Estado principal (héroe) ---------- */
+/* ---------- Día de vida (bloque principal) ---------- */
 
-.status-hero {
-  text-align: center;
-  padding: 20px 14px;
+.lifeday-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 0 10px;
+  margin-bottom: 12px;
 }
 
-.status-hero .icon {
+.lifeday-number {
+  grid-row: 1 / 3;
+  grid-column: 1;
   font-size: 40px;
-}
-
-.status-hero .state {
-  font-size: 22px;
   font-weight: 800;
-  margin-top: 4px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--primary);
 }
 
-.status-hero .elapsed {
-  font-size: 34px;
+.lifeday-head .card-title {
+  grid-column: 2;
+}
+
+.lifeday-range {
+  grid-column: 2;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.lifeday-empty {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: 15px;
+  color: var(--text-soft);
+}
+
+.lifeday-cta {
+  margin-top: 8px;
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.kpi-tile {
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.kpi-label {
+  font-size: 13px;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.kpi-value {
+  font-size: 26px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  margin-top: 2px;
+  line-height: 1.2;
 }
 
-.status-hero .since {
+.kpi-goal {
+  font-size: 16px;
+  font-weight: 600;
   color: var(--text-soft);
-  font-size: 14px;
-  margin-top: 2px;
 }
 
-.status-hero .hero-action {
-  margin-top: 14px;
+.kpi-milk {
+  margin-top: 10px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.kpi-milk-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.kpi-milk-head strong {
+  font-size: 20px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.kpi-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.kpi-feeds {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.goal-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.goal-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  transition: width 0.2s ease;
 }
 
 /* ---------- Resumen de estado (última toma, pañal...) ---------- */
@@ -352,6 +448,39 @@ button {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-soft);
+}
+
+.field-hint {
+  font-size: 13px;
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
+.dt-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* Bloque de un componente de la toma (pecho, extraída, fórmula). */
+.component-block {
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 12px;
+  gap: 10px;
+}
+
+.duration-line {
+  font-size: 14px;
+  color: var(--text-soft);
+  text-align: center;
+  padding: 2px 0;
+}
+
+.duration-line strong {
+  color: var(--text);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
 }
 
 input[type='time'],
@@ -429,15 +558,50 @@ select:focus {
   flex-shrink: 0;
 }
 
-.stepper .stepper-value {
+/* Campo editable dentro del stepper: permite teclear el valor exacto. */
+.stepper .stepper-input {
   flex: 1;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding-right: 12px;
+  min-height: 48px;
+}
+
+.stepper .stepper-input input {
+  text-align: right;
   font-size: 22px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  border: none;
+  background: none;
+  padding: 0;
+  min-height: 46px;
+  /* Los botones ± ya cubren el ajuste fino; las flechas nativas estorban. */
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
-.stepper .stepper-value small {
+.stepper .stepper-input input::-webkit-outer-spin-button,
+.stepper .stepper-input input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.stepper .stepper-input input:focus {
+  outline: none;
+}
+
+.stepper .stepper-input:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+}
+
+.stepper .stepper-input small {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-soft);
@@ -463,6 +627,25 @@ select:focus {
 .chips button.on {
   background: var(--primary);
   color: #fff;
+}
+
+/* Atajos (horas relativas, cantidades habituales): secundarios, no una elección. */
+.chips-quick {
+  margin-top: 8px;
+}
+
+.chips-quick button {
+  min-height: 38px;
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-soft);
+}
+
+.chips-quick button.on {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 /* ---------- Cronología ---------- */
@@ -605,6 +788,20 @@ select:focus {
 .banner-offline {
   background: var(--danger-soft);
   color: var(--danger);
+}
+
+/* Impide guardar: hay algo que corregir en el formulario. */
+.banner-warn {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Informativo: algo que quizá quieras revisar, pero nada está mal. */
+.banner-note {
+  background: var(--surface-2);
+  color: var(--text-soft);
+  margin-top: 12px;
+  font-weight: 500;
 }
 
 .banner .banner-retry {

@@ -1,8 +1,19 @@
 // Cliente de la API real (Google Apps Script).
 
 import { loadSession } from '../session'
-import type { BabyEvent, DayData, EventInput, User } from '../types'
+import type { BabyEvent, DayData, EventInput, Settings, User } from '../types'
 import { ApiError, type Api, type ApiErrorCode } from './types'
+
+const DEFAULT_SETTINGS: Settings = { birth: null, goals: { pees: 0, poops: 0, milkMl: 0 } }
+
+/**
+ * Rellena lo que un backend anterior a la v2 no envía. El frontend se publica
+ * solo al fusionar en main, pero el Apps Script se implementa a mano: entre
+ * ambos momentos la aplicación tiene que seguir funcionando.
+ */
+function withDefaults(d: DayData): DayData {
+  return { ...d, settings: d.settings ?? DEFAULT_SETTINGS, lifeDay: d.lifeDay ?? null }
+}
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
 const TIMEOUT_MS = 30000
@@ -57,8 +68,8 @@ export const realApi: Api = {
   async logout() {
     await call('logout')
   },
-  getDay(date: string) {
-    return call<DayData>('getDay', { date })
+  async getDay(date: string) {
+    return withDefaults(await call<DayData>('getDay', { date }))
   },
   createEvent(input: EventInput) {
     return call<BabyEvent>('createEvent', { event: input })
@@ -68,5 +79,8 @@ export const realApi: Api = {
   },
   async deleteEvent(id: string) {
     await call('deleteEvent', { id })
+  },
+  updateSettings(settings: Settings) {
+    return call<Settings>('updateSettings', { settings })
   },
 }

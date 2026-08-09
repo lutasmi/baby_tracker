@@ -3,7 +3,7 @@
  *
  * Se despliega como aplicación web ("Ejecutar como: yo", acceso: "Cualquier
  * usuario"). El frontend envía POST con JSON y recibe JSON:
- *   petición:  { action, token?, idToken?, date?, event?, id? }
+ *   petición:  { action, token?, idToken?, date?, event?, id?, settings? }
  *   respuesta: { ok: true, data } | { ok: false, error: { code, message } }
  *
  * Códigos de error: AUTH (volver a iniciar sesión), FORBIDDEN (usuario no
@@ -58,6 +58,8 @@ function route(req) {
       return updateEvent(req, session);
     case 'deleteEvent':
       return deleteEvent(req, session);
+    case 'updateSettings':
+      return writeSettings(req.settings);
     case 'logout':
       return logout(req.token);
     default:
@@ -155,6 +157,31 @@ function cleanExpiredSessions() {
 }
 
 // ---------------------------------------------------------------------------
+// Ajustes (nacimiento y objetivos del día de vida)
+// ---------------------------------------------------------------------------
+//
+// Se guardan en las propiedades del script, junto a SPREADSHEET_ID y
+// GOOGLE_CLIENT_ID. Son compartidos por todos los usuarios de la aplicación,
+// que es lo correcto: los dos padres siguen al mismo bebé.
+
+function readSettings() {
+  var raw = PropertiesService.getScriptProperties().getProperty('SETTINGS');
+  if (!raw) return defaultSettings();
+  try {
+    return normalizeSettings(JSON.parse(raw));
+  } catch (err) {
+    // Un valor corrupto no debe dejar la aplicación inservible.
+    return defaultSettings();
+  }
+}
+
+function writeSettings(input) {
+  var settings = normalizeSettings(input);
+  PropertiesService.getScriptProperties().setProperty('SETTINGS', JSON.stringify(settings));
+  return settings;
+}
+
+// ---------------------------------------------------------------------------
 // Lecturas
 // ---------------------------------------------------------------------------
 
@@ -192,6 +219,8 @@ function getDay(req) {
     }
   }
 
+  var settings = readSettings();
+
   return {
     date: date,
     events: events,
@@ -199,6 +228,24 @@ function getDay(req) {
     last: { feed: lastFeed, diaper: lastDiaper, sleepEnd: lastSleepEnd },
     users: usersDisplayMap(),
     serverNow: now,
+    settings: settings,
+    // Siempre el día de vida en curso (según `now`), con independencia de la
+    // fecha consultada: es lo que necesita la pantalla principal.
+    lifeDay: currentLifeDay(settings, all, now),
+  };
+}
+
+/** Día de vida actual con sus totales, o null si no hay fecha de nacimiento. */
+function currentLifeDay(settings, allEvents, now) {
+  if (!settings.birth) return null;
+  var number = lifeDayNumber(settings.birth, now);
+  if (number < 1) return null; // la fecha de nacimiento aún no ha llegado
+  var range = lifeDayRange(settings.birth, number);
+  return {
+    number: number,
+    start: range.start,
+    end: range.end,
+    totals: lifeDayTotals(allEvents, range.start, range.end),
   };
 }
 

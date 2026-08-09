@@ -1,4 +1,5 @@
 import type { BabyEvent, EventInput } from '../types'
+import { componentsOf } from './feed'
 
 /** Identificador único generado en el cliente: reintentar nunca duplica. */
 export function newId(): string {
@@ -17,6 +18,9 @@ export function toInput(e: BabyEvent): EventInput {
     durationMin: e.durationMin,
     quantityMl: e.quantityMl,
     detail: e.detail,
+    // Los registros de la v1 no traen componentes: se derivan para que una
+    // edición no los pierda.
+    components: e.type === 'feed' ? componentsOf(e) : null,
     notes: e.notes,
   }
 }

@@ -1,4 +1,4 @@
-import type { BabyEvent, DayData, EventInput, User } from '../types'
+import type { BabyEvent, DayData, EventInput, Settings, User } from '../types'
 
 export type ApiErrorCode =
   | 'NETWORK'
@@ -26,4 +26,5 @@ export interface Api {
   createEvent(input: EventInput): Promise<BabyEvent>
   updateEvent(input: EventInput): Promise<BabyEvent>
   deleteEvent(id: string): Promise<void>
+  updateSettings(settings: Settings): Promise<Settings>
 }

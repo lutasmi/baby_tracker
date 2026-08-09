@@ -8,6 +8,7 @@ import type { EventType } from './types'
 import { Dashboard } from './views/Dashboard'
 import { EditEvent, NewEvent } from './views/EventForm'
 import { Login } from './views/Login'
+import { SettingsView } from './views/Settings'
 import { Timeline } from './views/Timeline'
 
 export function App() {
@@ -80,6 +81,9 @@ function Screen({ session, onLogout }: { session: Session; onLogout: () => void 
   }
   if (route.startsWith('#/cronologia')) {
     return <Timeline date={route.split('/')[2]} />
+  }
+  if (route.startsWith('#/ajustes')) {
+    return <SettingsView />
   }
   return <Dashboard user={session.user} onLogout={onLogout} />
 }

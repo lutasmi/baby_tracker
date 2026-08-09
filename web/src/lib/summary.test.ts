@@ -12,6 +12,7 @@ function ev(partial: Partial<BabyEvent>): BabyEvent {
     durationMin: null,
     quantityMl: null,
     detail: null,
+    components: null,
     notes: '',
     createdBy: 'ana@example.com',
     createdAt: '2026-07-15 10:00',
@@ -24,27 +25,52 @@ function ev(partial: Partial<BabyEvent>): BabyEvent {
 describe('eventTitle', () => {
   it('titula cada tipo de evento', () => {
     expect(eventTitle(ev({ type: 'sleep', subtype: 'nocturno' }))).toBe('Sueño nocturno')
-    expect(eventTitle(ev({ type: 'feed', subtype: 'biberon' }))).toBe('Biberón')
+    // Una toma puede combinar componentes: el título es siempre el mismo.
+    expect(eventTitle(ev({ type: 'feed', subtype: 'biberon' }))).toBe('Toma')
+    expect(eventTitle(ev({ type: 'feed', subtype: 'mixta' }))).toBe('Toma')
     expect(eventTitle(ev({ type: 'diaper', subtype: 'caca' }))).toBe('Pañal · Caca')
     expect(eventTitle(ev({ type: 'bath', subtype: 'aseo' }))).toBe('Aseo rápido')
   })
 })
 
 describe('eventDetail', () => {
-  it('describe un biberón', () => {
-    const e = ev({ type: 'feed', subtype: 'biberon', quantityMl: 120, detail: 'formula' })
-    expect(eventDetail(e)).toBe('120 ml · Fórmula')
+  const comps = (p: Partial<BabyEvent['components'] & object>) => ({
+    breastMin: 0,
+    breastSide: null,
+    expressedMl: 0,
+    formulaMl: 0,
+    mixtaMl: 0,
+    ...p,
   })
 
-  it('describe una lactancia con duración y pecho', () => {
+  it('describe una toma con su duración y su desglose', () => {
     const e = ev({
       type: 'feed',
-      subtype: 'lactancia',
-      end: '2026-07-15 10:25',
-      durationMin: 25,
-      detail: 'izquierdo',
+      subtype: 'biberon',
+      start: '2026-07-15 09:12',
+      end: '2026-07-15 09:41',
+      durationMin: 29,
+      quantityMl: 35,
+      components: comps({ formulaMl: 35 }),
     })
-    expect(eventDetail(e)).toBe('25 min · Pecho izquierdo')
+    expect(eventDetail(e)).toBe('29 min · 35 ml fórmula')
+  })
+
+  it('describe una toma mixta sin mezclar minutos y ml', () => {
+    const e = ev({
+      type: 'feed',
+      subtype: 'mixta',
+      start: '2026-07-15 09:00',
+      end: '2026-07-15 09:30',
+      durationMin: 30,
+      components: comps({ breastMin: 17, expressedMl: 28, formulaMl: 37 }),
+    })
+    expect(eventDetail(e)).toBe('30 min · 17 min pecho · 28 ml extraída · 37 ml fórmula')
+  })
+
+  it('describe una toma registrada con la v1', () => {
+    const e = ev({ type: 'feed', subtype: 'biberon', quantityMl: 120, detail: 'materna' })
+    expect(eventDetail(e)).toBe('120 ml extraída')
   })
 
   it('describe un pañal con consistencia y nota', () => {
@@ -52,8 +78,8 @@ describe('eventDetail', () => {
     expect(eventDetail(e)).toBe('Consistencia líquida · poca cantidad')
   })
 
-  it('marca el sueño en curso', () => {
-    expect(eventDetail(ev({ type: 'sleep', end: null }))).toBe('En curso')
+  it('marca el sueño sin cerrar sin afirmar que siga durmiendo', () => {
+    expect(eventDetail(ev({ type: 'sleep', end: null }))).toBe('Sin cerrar')
   })
 })
 

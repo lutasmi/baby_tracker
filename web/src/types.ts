@@ -5,22 +5,39 @@ export type EventType = 'sleep' | 'feed' | 'diaper' | 'bath'
 
 // Subtipos por tipo:
 //   sleep:  'siesta' | 'nocturno'
-//   feed:   'biberon' | 'lactancia'
+//   feed:   'biberon' | 'lactancia' | 'mixta'   (derivado de los componentes)
 //   diaper: 'pipi' | 'caca' | 'ambos'
 //   bath:   'completo' | 'aseo'
 // Detalle (detail) por tipo:
-//   feed biberon:   'materna' | 'formula' | 'mixta'   (tipo de leche)
-//   feed lactancia: 'izquierdo' | 'derecho' | 'ambos' (pecho)
-//   diaper:         'liquida' | 'pastosa' | 'solida'  (consistencia, solo con caca)
+//   feed:   'materna' | 'formula' | 'mixta' | lado del pecho (compatibilidad)
+//   diaper: 'liquida' | 'pastosa' | 'solida'  (consistencia, solo con caca)
+
+/**
+ * Desglose de una toma. Una misma toma puede combinar pecho directo, leche
+ * materna extraída y fórmula. Los minutos de pecho y los ml son magnitudes
+ * distintas y nunca se convierten entre sí.
+ *
+ * `mixtaMl` solo existe en registros creados con la v1, donde el biberón
+ * "mixto" guardaba el total sin decir cuánto era de cada tipo.
+ */
+export interface FeedComponents {
+  breastMin: number
+  breastSide: string | null
+  expressedMl: number
+  formulaMl: number
+  mixtaMl: number
+}
+
 export interface BabyEvent {
   id: string
   type: EventType
   subtype: string
   start: string // 'yyyy-MM-dd HH:mm'
-  end: string | null // sueño y lactancia; null en sueño activo
-  durationMin: number | null // calculada si hay fin; manual en baños
-  quantityMl: number | null // solo biberón
+  end: string | null // null en un sueño sin cerrar
+  durationMin: number | null // derivada de inicio y fin; manual en baños
+  quantityMl: number | null // total de ml cuantificables de una toma
   detail: string | null
+  components: FeedComponents | null // solo en las tomas
   notes: string
   createdBy: string // email
   createdAt: string
@@ -33,12 +50,49 @@ export interface User {
   name: string
 }
 
+// --- Ajustes compartidos ----------------------------------------------------
+
+/** Un objetivo a 0 significa "sin objetivo": no se muestra progreso. */
+export interface Goals {
+  pees: number
+  poops: number
+  milkMl: number
+}
+
+export interface Settings {
+  birth: string | null // 'yyyy-MM-dd HH:mm'
+  goals: Goals
+}
+
+// --- Día de vida ------------------------------------------------------------
+
+export interface LifeDayTotals {
+  pees: number
+  poops: number
+  diapers: number
+  feeds: number
+  breastMin: number
+  expressedMl: number
+  formulaMl: number
+  mixtaMl: number
+  milkMl: number // fórmula + extraída + mixta; el pecho directo no es cuantificable
+}
+
+/** Periodo de 24 h contado desde la hora exacta de nacimiento. */
+export interface LifeDay {
+  number: number
+  start: string
+  end: string // exclusivo
+  totals: LifeDayTotals
+}
+
 // Respuesta de la API para un día concreto.
 export interface DayData {
   date: string // 'yyyy-MM-dd'
   // Eventos cuyo intervalo toca el día (incluye el sueño nocturno que empezó ayer).
   events: BabyEvent[]
-  // Sueño sin finalizar, sea del día que sea. Null si el bebé está despierto.
+  // Sueño sin cerrar, sea del día que sea. No implica que el bebé siga dormido:
+  // puede ser un cronómetro que se olvidó de detener.
   activeSleep: BabyEvent | null
   // Últimos eventos globales, independientes del día consultado.
   last: {
@@ -48,6 +102,8 @@ export interface DayData {
   }
   users: Record<string, string> // email -> nombre visible
   serverNow: string // 'yyyy-MM-dd HH:mm' hora de Madrid del servidor
+  settings: Settings
+  lifeDay: LifeDay | null // null mientras no haya fecha de nacimiento
 }
 
 // Datos que viajan al crear o editar un evento. El cliente genera el id
@@ -61,5 +117,6 @@ export interface EventInput {
   durationMin: number | null
   quantityMl: number | null
   detail: string | null
+  components: FeedComponents | null
   notes: string
 }
