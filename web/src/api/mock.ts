@@ -263,11 +263,12 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
 
     async getHistory(days: number): Promise<History> {
       await wait()
-      if (!settings.birth) return { birth: null, days: [] }
+      const all = [...records.values()].sort((a, b) => (a.start < b.start ? -1 : 1))
+      const weights = all.filter((r): r is WeightRecord => r.type === 'weight')
+      if (!settings.birth) return { birth: null, days: [], weights }
       const now = nowMadrid()
       const current = lifeDayNumber(settings.birth, now)
-      if (current < 1) return { birth: settings.birth, days: [] }
-      const all = [...records.values()]
+      if (current < 1) return { birth: settings.birth, days: [], weights }
       const wanted = Math.min(60, Math.max(1, days || 14))
       const out: HistoryDay[] = []
       for (let n = current; n > 0 && out.length < wanted; n--) {
@@ -286,7 +287,7 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
               : null,
         })
       }
-      return { birth: settings.birth, days: out }
+      return { birth: settings.birth, days: out, weights }
     },
 
     async createRecord(input: RecordInput): Promise<BabyRecord> {

@@ -158,6 +158,13 @@ describe('edición y borrado', () => {
 })
 
 describe('evolución', () => {
+  it('devuelve las pesadas con su hora para la gráfica', async () => {
+    const { weights } = await api.getHistory(7)
+    expect(weights.length).toBeGreaterThan(0)
+    expect(weights[0]).toMatchObject({ type: 'weight' })
+    expect(weights[0].start).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
+  })
+
   it('agrupa los totales por día de vida', async () => {
     await api.createRecord(diaper('h1', `${TODAY} 09:00`, true, true))
     await api.createRecord(feed('h2', `${TODAY} 10:00`, `${TODAY} 10:20`, { formulaMl: 90 }))
@@ -171,6 +178,8 @@ describe('evolución', () => {
 
   it('sin fecha de nacimiento devuelve una evolución vacía', async () => {
     await api.updateSettings({ birth: null, birthWeightG: 0 })
-    expect(await api.getHistory(7)).toEqual({ birth: null, days: [] })
+    const { birth, days } = await api.getHistory(7)
+    expect(birth).toBeNull()
+    expect(days).toEqual([])
   })
 })

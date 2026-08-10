@@ -393,7 +393,7 @@ describe('evolución por días de vida', () => {
   })
 
   it('sin fecha de nacimiento no hay evolución que mostrar', () => {
-    expect(backend.call('getHistory', {})).toEqual({ birth: null, days: [] })
+    expect(backend.call('getHistory', {})).toEqual({ birth: null, days: [], weights: [] })
   })
 })
 

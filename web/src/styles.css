@@ -923,6 +923,23 @@ select:focus {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------- Sueño sin cerrar ---------- */
+
+.open-sleep {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--sleep-soft);
+}
+
+.open-sleep-stale {
+  background: var(--surface-2);
+}
+
+.open-sleep .btn {
+  flex-shrink: 0;
+}
+
 /* ---------- Franja del día ---------- */
 
 .strip {
@@ -1010,6 +1027,22 @@ select:focus {
 .strip-poop { background: var(--diaper); }
 .strip-other { background: var(--text-soft); }
 
+/* Pie de la franja: desde cuándo está despierto o dormido. */
+.strip-caption {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-top: 10px;
+  padding: 6px 2px;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.strip-caption:active {
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
 /* ---------- Gráficas ---------- */
 
 .chart-svg {
@@ -1020,15 +1053,21 @@ select:focus {
 
 .chart-line {
   fill: none;
-  stroke: var(--primary);
   stroke-width: 2.5;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
 
-.chart-point {
-  fill: var(--primary);
-}
+/* Verde por encima del peso al nacer, rojo por debajo. */
+.chart-line-up { stroke: var(--ok); }
+.chart-line-down { stroke: var(--danger); }
+.chart-point-up { fill: var(--ok); }
+.chart-point-down { fill: var(--danger); }
+.chart-bar-up { fill: var(--ok); opacity: 0.25; }
+.chart-bar-down { fill: var(--danger); opacity: 0.25; }
+
+.chart-up { color: var(--ok); font-weight: 600; }
+.chart-down { color: var(--danger); font-weight: 600; }
 
 .chart-birth {
   stroke: var(--text-soft);
@@ -1074,6 +1113,16 @@ select:focus {
 
 .hist-row + .hist-row {
   border-top: 1px solid var(--border);
+}
+
+.hist-row-link {
+  width: 100%;
+  text-align: left;
+  min-height: var(--tap);
+}
+
+.hist-row-link:active {
+  background: var(--surface-2);
 }
 
 .hist-day {

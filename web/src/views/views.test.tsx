@@ -10,6 +10,7 @@ import { cacheDay, clearDayCache } from '../store'
 import { aDay, aDiaper, aFeed, aHistoryDay, aSleep, aWeight, someTotals } from '../test-fixtures'
 import type { DayData } from '../types'
 import { Dashboard } from './Dashboard'
+import { WeightChart } from '../components/WeightChart'
 import { BarList, WeightList } from './History'
 import { SettingsView } from './Settings'
 import { Timeline } from './Timeline'
@@ -160,40 +161,53 @@ describe('Dashboard · lo registrado', () => {
     expect(html).not.toContain('Último pañal')
   })
 
-  it('el estado del bebé es lo único que habla de ahora mismo', () => {
+  it('un sueño abierto reciente se cierra de un toque, sin cuadro permanente', () => {
     const dormido = aSleep({ start: `${TODAY} 11:00` })
     const html = renderDashboard(day({ records: [dormido], openSleep: dormido }))
+    expect(html).toContain('Durmiendo')
     expect(html).toContain('desde las 11:00')
-    expect(html).toContain('Se ha despertado')
+    expect(html).toContain('Despertó')
   })
 
-  it('un cronómetro olvidado no afirma que el bebé siga dormido', () => {
-    // Sueño abierto desde ayer: es un olvido, no un bebé durmiendo 30 horas.
+  it('sin sueño abierto no hay barra que ocupe sitio', () => {
+    const html = renderDashboard(day())
+    expect(html).not.toContain('open-sleep')
+    expect(html).not.toContain('Despertó')
+  })
+
+  it('un cronómetro olvidado no se cierra de un toque: lleva a corregirlo', () => {
+    // Cerrarlo con la hora de ahora guardaría un sueño de treinta horas.
     const abierto = aSleep({ start: `${addDays(TODAY, -1)} 00:05`, kind: 'nocturno' })
-    const html = renderDashboard(
-      day({
-        records: [abierto],
-        openSleep: abierto,
-        last: {
-          ...day().last,
-          sleepEnd: aSleep({ start: `${TODAY} 01:00`, end: `${TODAY} 02:00`, durationMin: 60 }),
-        },
-      })
-    )
-    expect(html).toContain('Despierto')
-    expect(html).toContain('🌙 Se ha dormido')
-    expect(html).not.toContain('Se ha despertado')
-    // Se ofrece corregirlo, sin tono de error…
-    expect(html).toContain('sueño abierto desde las 00:05')
-    expect(html).toContain('banner-note')
+    const html = renderDashboard(day({ records: [abierto], openSleep: abierto }))
+    expect(html).toContain('Sueño sin cerrar')
+    expect(html).toContain('Corregir')
+    expect(html).not.toContain('Despertó')
+    // Sin tono de error: es un olvido, no un fallo.
     expect(html).not.toContain('banner-warn')
   })
 
   it('sin registros no muestra huecos raros', () => {
     const html = renderDashboard(day({ records: [], lifeDay: { ...day().lifeDay!, totals: someTotals() } }))
     expect(html).toContain('sin registros')
-    expect(html).toContain('sin sueños registrados todavía')
+    expect(html).toContain('Sin sueños registrados todavía')
     expect(html).toContain('Sin registros en este periodo todavía')
+  })
+
+  it('el pie de la franja dice desde cuándo está despierto', () => {
+    const siesta = aSleep({
+      start: `${TODAY} 10:00`,
+      end: `${TODAY} 11:00`,
+      durationMin: 60,
+    })
+    const html = renderDashboard(
+      day({ records: [siesta], last: { ...day().last, sleepEnd: siesta } })
+    )
+    expect(html).toContain('Despierto desde las 11:00')
+  })
+
+  it('un solo acceso a la evolución, no dos', () => {
+    const html = renderDashboard(day())
+    expect((html.match(/Evoluci/g) ?? []).length).toBe(1)
   })
 })
 
@@ -320,12 +334,68 @@ describe('Evolución', () => {
     expect(html).toContain('380 ml')
   })
 
-  it('el peso se lista con su variación, sin barras engañosas', () => {
-    const html = render(<WeightList days={days} />)
+  it('lista las pesadas con lo que cambian y su porcentaje', () => {
+    const pesadas = [
+      aWeight({ start: '2026-08-06 10:00', grams: 3250 }),
+      aWeight({ start: '2026-08-07 10:00', grams: 3300 }),
+    ]
+    const html = render(<WeightList weights={pesadas} birthWeightG={3420} />)
     expect(html).toContain('3,300 kg')
     expect(html).toContain('3,250 kg')
-    expect(html).toContain('+50 g') // del día 5 al 6
-    expect(html).toContain('sin pesada') // el día 4 no tuvo
-    expect(html).not.toContain('hist-bar')
+    expect(html).toContain('+50 g') // respecto a la pesada anterior
+    expect(html).toContain('−3,5 %') // respecto al nacimiento
+  })
+
+  it('sin pesadas no dibuja una lista vacía', () => {
+    expect(render(<WeightList weights={[]} birthWeightG={3420} />)).toContain('Todavía no hay pesadas')
+  })
+})
+
+describe('Gráfica de peso', () => {
+  const pesadas = [
+    aWeight({ id: 'p1', start: '2026-08-06 10:00', grams: 3200 }),
+    aWeight({ id: 'p2', start: '2026-08-09 10:00', grams: 3500 }),
+  ]
+
+  it('pinta la línea en dos colores, según esté por debajo o por encima', () => {
+    const html = render(<WeightChart weights={pesadas} birthWeightG={3420} today={TODAY} />)
+    expect(html).toContain('chart-line-up')
+    expect(html).toContain('chart-line-down')
+    // Un punto a cada lado de la referencia.
+    expect(html).toContain('chart-point-down')
+    expect(html).toContain('chart-point-up')
+  })
+
+  it('las barras miden la diferencia y el eje derecho la expresa en %', () => {
+    const html = render(<WeightChart weights={pesadas} birthWeightG={3420} today={TODAY} />)
+    expect(html).toContain('chart-bar-down')
+    expect(html).toContain('chart-bar-up')
+    expect(html).toContain('0 %')
+    expect(html).toContain('%')
+  })
+
+  it('el eje horizontal es tiempo real, no una pesada por posición', () => {
+    const html = render(<WeightChart weights={pesadas} birthWeightG={3420} today={TODAY} />)
+    // Tres días de separación, así que los puntos no están equiespaciados
+    // respecto a una tercera pesada intermedia.
+    const conIntermedia = render(
+      <WeightChart
+        weights={[...pesadas, aWeight({ id: 'p3', start: '2026-08-07 10:00', grams: 3300 })]}
+        birthWeightG={3420}
+        today={TODAY}
+      />
+    )
+    expect(conIntermedia).not.toBe(html)
+  })
+
+  it('sin peso al nacer no inventa porcentajes', () => {
+    const html = render(<WeightChart weights={pesadas} birthWeightG={0} today={TODAY} />)
+    expect(html).not.toContain('chart-bar-up')
+    expect(html).not.toContain('desde el nacimiento')
+  })
+
+  it('sin pesadas lo dice y no dibuja nada', () => {
+    const html = render(<WeightChart weights={[]} birthWeightG={3420} today={TODAY} />)
+    expect(html).toContain('Todavía no hay pesadas que dibujar')
   })
 })

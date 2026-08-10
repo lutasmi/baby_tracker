@@ -21,7 +21,7 @@ La especificación original está en [docs/especificacion.md](docs/especificacio
 - **Tiempo desde la toma anterior**, al registrar una toma y en cada toma de la cronología, para no tener que restar.
 - **Peso**: cada pesada con su hora, y la variación en gramos y en porcentaje respecto al peso al nacer. Se muestra el dato, sin interpretarlo.
 - **Cronología** como línea de tiempo, con la hora a la izquierda y cabecera pegajosa por tramo. "Ver anteriores" encadena el tramo previo debajo sin perder de vista el actual, y los huecos entre tomas se calculan de un tramo al siguiente.
-- **Evolución** por días de vida: pises, cacas y leche en barras comparables, y el peso en una gráfica temporal con la referencia del nacimiento y su variación en porcentaje.
+- **Evolución** por días de vida: pises, cacas y leche en barras comparables, y el peso en una gráfica de eje temporal real, verde por encima del peso al nacer y roja por debajo, con la diferencia en porcentaje en barras y en el eje derecho.
 - **Lo último registrado se corrige desde la pantalla principal**: cada contador y cada casilla abren su registro.
 - **Todo es corregible después**: horas, cantidades, componentes de una toma y contenido del pañal, con la misma pantalla con la que se creó.
 - Cada registro guarda **quién lo creó, quién lo modificó y cuándo**.
@@ -150,7 +150,8 @@ No hay credenciales en el repositorio: la URL de la API y el Client ID (público
 - **Nada de recomendaciones**: la aplicación no propone objetivos de alimentación, no dice si un peso es normal ni avisa de que lleváis mucho sin registrar. Muestra lo registrado y deja el juicio a los padres y al pediatra.
 - **Hueco entre tomas**: se mide de inicio a inicio, que es como se cuenta lo de "cada tres horas".
 - **Días naturales y días de vida conviven**: la pantalla principal y la evolución van por días de vida; la cronología, por días naturales, y lo dice en su cabecera para que no haya duda.
-- **El peso no se dibuja con barras**: como no empezarían en cero, un cambio de 50 g parecería enorme. Va en una gráfica de línea con la escala ajustada y la referencia del nacimiento siempre dibujada, que es contra lo que se compara.
+- **La escala de kilos no empieza en cero**: con pesos de recién nacido la línea saldría plana. La referencia del nacimiento está siempre dibujada y el pie de la gráfica lo advierte.
+- **El cronómetro de sueño se inicia y se cierra donde corresponde**: la barra para cerrarlo solo aparece mientras hay un sueño abierto, y si lleva demasiado tiempo abierto lleva a corregirlo en vez de ofrecer cerrarlo de un toque, porque poner el fin "ahora" guardaría un sueño que no ocurrió.
 - **Un registro pertenece al periodo en el que empieza**, tanto en días naturales como en días de vida. Así no aparece dos veces al encadenar periodos, y los totales cuadran con lo que se ve.
 - **Edición manual de la hoja**: tolerada. Las columnas se localizan por cabecera —puedes reordenarlas o añadir las tuyas—, las etiquetas admiten variantes sin acentos, las fechas aceptan `dd/MM/yyyy`, las horas sueltas (`HH:mm`) se combinan con la columna `Fecha`, un fin menor que el inicio se interpreta como cruce de medianoche y una casilla marcada con `x` cuenta como `TRUE`. La duración se recalcula siempre desde el intervalo.
 - **Borrado**: lógico (columna `Eliminado`), para que la hoja conserve el histórico.

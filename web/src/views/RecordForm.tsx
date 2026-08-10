@@ -129,7 +129,7 @@ function RecordForm({ type, existing }: { type: RecordType; existing: BabyRecord
             void save()
           }}
         >
-          {type === 'sleep' && <SleepFields s={s} set={set} now={now} />}
+          {type === 'sleep' && <SleepFields s={s} set={set} now={now} isNew={!existing} />}
           {type === 'feed' && (
             <FeedFields
               s={s}
@@ -184,7 +184,7 @@ type FieldProps = {
   now: string
 }
 
-function SleepFields({ s, set, now }: FieldProps) {
+function SleepFields({ s, set, now, isNew }: FieldProps & { isNew: boolean }) {
   const duration = s.sleepOpen ? null : diffMinutes(s.start, s.end)
   return (
     <>
@@ -203,7 +203,11 @@ function SleepFields({ s, set, now }: FieldProps) {
           { value: 'open', label: 'Sigue durmiendo' },
         ]}
         value={s.sleepOpen ? 'open' : 'done'}
-        onChange={(v) => set({ sleepOpen: v === 'open' })}
+        onChange={(v) =>
+          // Empezar un cronómetro es decir "se acaba de dormir": la hora de
+          // inicio pasa a ser ahora en lugar de la propuesta hacia atrás.
+          set(v === 'open' ? { sleepOpen: true, ...(isNew ? { start: now } : {}) } : { sleepOpen: false })
+        }
       />
       {s.sleepOpen ? (
         <p class="field-hint">

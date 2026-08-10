@@ -151,6 +151,8 @@ export interface History {
   birth: string | null
   /** Del día de vida más reciente al más antiguo. */
   days: HistoryDay[]
+  /** Todas las pesadas, de la más antigua a la más reciente. */
+  weights: WeightRecord[]
 }
 
 // --- Respuesta de la API para un día -----------------------------------------

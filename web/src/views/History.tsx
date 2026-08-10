@@ -10,9 +10,9 @@ import { ApiError } from '../api/types'
 import { ErrorCard, ScreenTitle, Seg } from '../components/ui'
 import { WeightChart } from '../components/WeightChart'
 import { handleAuthError, navigate } from '../hooks'
-import { nowMadrid } from '../lib/dates'
-import { formatGrams, formatKg } from '../lib/records'
-import type { History, HistoryDay, Settings } from '../types'
+import { nowMadrid, timeOf } from '../lib/dates'
+import { formatGrams, formatKg, formatPercent, weightChange } from '../lib/records'
+import type { History, HistoryDay, Settings, WeightRecord } from '../types'
 
 export type Metric = 'pees' | 'poops' | 'milk' | 'weight'
 
@@ -24,6 +24,7 @@ const METRICS: { value: Metric; label: string }[] = [
 ]
 
 const DAYS = 14
+const editRoute = (id: string) => `#/editar/${encodeURIComponent(id)}`
 
 export function HistoryView() {
   const [history, setHistory] = useState<History | null>(null)
@@ -87,18 +88,24 @@ export function HistoryView() {
 
         {history && history.days.length > 0 && (
           <>
-            {metric === 'weight' && (
+            {metric === 'weight' ? (
+              <>
+                <div class="card">
+                  <WeightChart
+                    weights={history.weights}
+                    birthWeightG={settings?.birthWeightG ?? 0}
+                    today={nowMadrid().slice(0, 10)}
+                  />
+                </div>
+                <div class="card">
+                  <WeightList weights={history.weights} birthWeightG={settings?.birthWeightG ?? 0} />
+                </div>
+              </>
+            ) : (
               <div class="card">
-                <WeightChart days={history.days} birthWeightG={settings?.birthWeightG ?? 0} />
+                <BarList days={history.days} metric={metric} />
               </div>
             )}
-            <div class="card">
-              {metric === 'weight' ? (
-                <WeightList days={history.days} />
-              ) : (
-                <BarList days={history.days} metric={metric} />
-              )}
-            </div>
             <p class="field-hint">
               Cada día de vida son 24 h desde la hora de nacimiento. El de arriba está en curso, así
               que su cifra todavía no está completa.
@@ -146,44 +153,40 @@ export function BarList({ days, metric }: { days: HistoryDay[]; metric: Metric }
   )
 }
 
-/**
- * El peso no se dibuja con barras: como no empiezan en cero, la diferencia
- * entre 3,2 y 3,4 kg parecería enorme. Se muestra la cifra y lo que cambió
- * respecto a la pesada anterior.
- */
-export function WeightList({ days }: { days: HistoryDay[] }) {
-  // De más antiguo a más reciente para poder comparar con la pesada previa.
-  const chronological = [...days].reverse()
-  const deltas = new Map<number, number>()
-  let previous: number | null = null
-  for (const day of chronological) {
-    if (day.weightG == null) continue
-    if (previous != null) deltas.set(day.number, day.weightG - previous)
-    previous = day.weightG
-  }
+/** Las pesadas, de la más reciente a la más antigua, con lo que cambió. */
+export function WeightList({
+  weights,
+  birthWeightG,
+}: {
+  weights: WeightRecord[]
+  birthWeightG: number
+}) {
+  if (weights.length === 0) return <p class="field-hint">Todavía no hay pesadas.</p>
 
+  const chronological = [...weights].sort((a, b) => (a.start < b.start ? -1 : 1))
   return (
     <div class="hist-list">
-      {days.map((day, index) => (
-        <div class="hist-row" key={day.number}>
-          <div class="hist-day">
-            <span class="hist-number">Día {day.number}</span>
-            {index === 0 && <span class="hist-current">en curso</span>}
-          </div>
-          <div class="hist-weight">
-            {day.weightG == null ? (
-              <span class="hist-none">sin pesada</span>
-            ) : (
-              <>
-                <strong>{formatKg(day.weightG)}</strong>
-                {deltas.has(day.number) && (
-                  <span class="hist-delta">{formatGrams(deltas.get(day.number)!)}</span>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      ))}
+      {[...chronological].reverse().map((w, index) => {
+        const previous = chronological[chronological.length - 2 - index]
+        const change = weightChange(w.grams, birthWeightG)
+        return (
+          <button class="hist-row hist-row-link" key={w.id} onClick={() => navigate(editRoute(w.id))}>
+            <div class="hist-day">
+              <span class="hist-number">{w.start.slice(8, 10)}/{w.start.slice(5, 7)}</span>
+              <span class="hist-current">{timeOf(w.start)}</span>
+            </div>
+            <div class="hist-weight">
+              <strong>{formatKg(w.grams)}</strong>
+              {previous && <span class="hist-delta">{formatGrams(w.grams - previous.grams)}</span>}
+              {change && (
+                <span class={change.diffG >= 0 ? 'chart-up' : 'chart-down'}>
+                  {formatPercent(change.percent)}
+                </span>
+              )}
+            </div>
+          </button>
+        )
+      })}
     </div>
   )
 }

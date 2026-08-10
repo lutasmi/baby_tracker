@@ -5,9 +5,9 @@ import { DayStrip } from '../components/DayStrip'
 import { ErrorCard, Seg, StatTile } from '../components/ui'
 import { handleAuthError, navigate, useDay, useDayMode, useNow } from '../hooks'
 import { addDays, diffMinutes, formatAgo, formatDuration, nowMadrid, timeOf } from '../lib/dates'
-import { babyStatus, guessSleepKind } from '../lib/derive'
+import { babyStatus, isStaleSleep } from '../lib/derive'
 import { lifeDayTotals } from '../lib/lifeday'
-import { formatGrams, formatKg, formatPercent, newId, weightChange } from '../lib/records'
+import { formatGrams, formatKg, formatPercent, weightChange } from '../lib/records'
 import type { DayMode } from '../prefs'
 import { showToast } from '../toast'
 import type { BabyRecord, DayData, LifeDayTotals, SleepRecord, User } from '../types'
@@ -46,23 +46,6 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
     } finally {
       setSaving(false)
     }
-  }
-
-  function startSleep() {
-    const start = nowMadrid()
-    void quickSleepAction(
-      () =>
-        getApi().createRecord({
-          id: newId(),
-          type: 'sleep',
-          start,
-          end: null,
-          durationMin: null,
-          kind: guessSleepKind(start),
-          notes: '',
-        }),
-      'Sueño iniciado 🌙'
-    )
   }
 
   function endSleep(open: SleepRecord) {
@@ -137,6 +120,17 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
 
             <PeriodCard period={period} last={data.last} now={now} />
 
+            {/* Solo aparece cuando hay un sueño sin cerrar: el resto del tiempo
+                no ocupa sitio. Registrar un sueño se hace con su botón. */}
+            {data.openSleep && (
+              <OpenSleepBar
+                sleep={data.openSleep}
+                now={now}
+                saving={saving}
+                onEnd={() => endSleep(data.openSleep!)}
+              />
+            )}
+
             <div class="action-grid">
               <button class="action-btn action-feed" onClick={() => navigate('#/nuevo/toma')}>
                 <span class="icon">🍼</span>Toma
@@ -152,14 +146,6 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
               </button>
             </div>
 
-            <StatusCard
-              data={data}
-              now={now}
-              saving={saving}
-              onStartSleep={startSleep}
-              onEndSleep={endSleep}
-            />
-
             <div class="card">
               <div class="card-title">{period.title} de un vistazo</div>
               <DayStrip
@@ -169,6 +155,7 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
                 now={now}
                 onSelect={goEdit}
               />
+              <SleepCaption data={data} now={now} />
             </div>
 
             <WeightCard data={data} />
@@ -291,71 +278,65 @@ function PeriodCard({
 }
 
 // ---------------------------------------------------------------------------
-// Estado del bebé: lo único de la pantalla que habla de ahora mismo
+// Sueño sin cerrar
 // ---------------------------------------------------------------------------
 
-function StatusCard({
-  data,
+/**
+ * Barra que solo existe mientras haya un sueño abierto.
+ *
+ * Si lleva demasiado tiempo abierto no ofrece cerrarlo de un toque: poner el
+ * fin "ahora" guardaría un sueño de veinte horas que no ocurrió. En ese caso
+ * lleva a corregirlo a mano.
+ */
+function OpenSleepBar({
+  sleep,
   now,
   saving,
-  onStartSleep,
-  onEndSleep,
+  onEnd,
 }: {
-  data: DayData
+  sleep: SleepRecord
   now: string
   saving: boolean
-  onStartSleep: () => void
-  onEndSleep: (open: SleepRecord) => void
+  onEnd: () => void
 }) {
-  const status = babyStatus(data.openSleep, data.last.sleepEnd, now)
-  const asleep = status.state === 'asleep' && data.openSleep
-  const sleepRecord = asleep ? data.openSleep : data.last.sleepEnd
-  const elapsed = status.since ? formatDuration(diffMinutes(status.since, now)) : null
-  const state = asleep ? 'Dormido' : status.state === 'awake' ? 'Despierto' : 'Sin sueños aún'
-  const icon = asleep ? '😴' : status.state === 'awake' ? '☀️' : '👶'
-
-  const stateBody = (
-    <>
-      <span class="state-icon">{icon}</span>
+  const stale = isStaleSleep(sleep, now)
+  return (
+    <div class={stale ? 'card open-sleep open-sleep-stale' : 'card open-sleep'}>
+      <span class="state-icon">{stale ? '⏱️' : '😴'}</span>
       <span class="state-main">
-        <span class="state-name">{state}</span>
+        <span class="state-name">{stale ? 'Sueño sin cerrar' : 'Durmiendo'}</span>
         <span class="state-since">
-          {status.since ? `desde las ${timeOf(status.since)}` : 'sin sueños registrados todavía'}
-          {elapsed && ` · ${elapsed}`}
+          desde las {timeOf(sleep.start)} · {formatDuration(diffMinutes(sleep.start, now))}
         </span>
       </span>
-      {sleepRecord && <span class="stat-edit">›</span>}
-    </>
-  )
-
-  return (
-    <div class="card">
-      {sleepRecord ? (
-        <button class="state-row state-row-link" onClick={() => goEdit(sleepRecord.id)}>
-          {stateBody}
+      {stale ? (
+        <button class="btn" onClick={() => goEdit(sleep.id)}>
+          Corregir
         </button>
       ) : (
-        <div class="state-row">{stateBody}</div>
+        <button class="btn btn-primary" disabled={saving} onClick={onEnd}>
+          ☀️ Despertó
+        </button>
       )}
-
-      {status.staleTimer && data.openSleep && (
-        <div class="banner banner-note">
-          <span>Hay un sueño abierto desde las {timeOf(data.openSleep.start)} sin hora de fin.</span>
-          <button class="banner-retry" onClick={() => goEdit(data.openSleep!.id)}>
-            Corregir
-          </button>
-        </div>
-      )}
-
-      <button
-        class="btn btn-primary btn-lg"
-        style="margin-top:12px"
-        disabled={saving}
-        onClick={() => (asleep ? onEndSleep(data.openSleep!) : onStartSleep())}
-      >
-        {asleep ? '☀️ Se ha despertado' : '🌙 Se ha dormido'}
-      </button>
     </div>
+  )
+}
+
+/** Pie de la franja: desde cuándo está despierto o dormido. */
+function SleepCaption({ data, now }: { data: DayData; now: string }) {
+  const status = babyStatus(data.openSleep, data.last.sleepEnd, now)
+  if (!status.since) return <p class="field-hint">Sin sueños registrados todavía.</p>
+
+  const record = status.state === 'asleep' ? data.openSleep : data.last.sleepEnd
+  const text = `${status.state === 'asleep' ? '😴 Dormido' : '☀️ Despierto'} desde las ${timeOf(
+    status.since
+  )} · ${formatDuration(diffMinutes(status.since, now))}`
+
+  if (!record) return <p class="field-hint">{text}</p>
+  return (
+    <button class="strip-caption" onClick={() => goEdit(record.id)}>
+      {text} <span class="stat-edit">›</span>
+    </button>
   )
 }
 
@@ -398,14 +379,9 @@ function WeightCard({ data }: { data: DayData }) {
             : 'Todavía no hay ninguna pesada. El peso al nacer se indica en Ajustes.'}
         </div>
       )}
-      <div class="nav-pair" style="margin-top:12px">
-        <button class="btn" onClick={() => navigate('#/nuevo/peso')}>
-          ⚖️ Añadir pesada
-        </button>
-        <button class="btn" onClick={() => navigate('#/evolucion')}>
-          📈 Ver evolución
-        </button>
-      </div>
+      <button class="btn" style="margin-top:12px" onClick={() => navigate('#/nuevo/peso')}>
+        ⚖️ Añadir pesada
+      </button>
     </div>
   )
 }

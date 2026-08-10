@@ -240,14 +240,22 @@ function getDay(req) {
  */
 function getHistory(req) {
   var settings = readSettings();
-  if (!settings.birth) return { birth: null, days: [] };
+  if (!settings.birth) return { birth: null, days: [], weights: [] };
 
   var now = nowMadrid();
   var current = lifeDayNumber(settings.birth, now);
-  if (current < 1) return { birth: settings.birth, days: [] };
+  if (current < 1) return { birth: settings.birth, days: [], weights: weightsOf(readAllRecords()) };
 
   var wanted = Math.min(60, Math.max(1, Number(req.days) || 14));
   var all = readAllRecords();
+
+  // Las pesadas van enteras, con su hora: la gráfica necesita un eje temporal
+  // de verdad, no un valor por día.
+  var weights = [];
+  for (var w = 0; w < all.length; w++) {
+    if (all[w].type === 'weight') weights.push(all[w]);
+  }
+
   var days = [];
   for (var n = current; n > 0 && days.length < wanted; n--) {
     var range = lifeDayRange(settings.birth, n);
@@ -260,7 +268,15 @@ function getHistory(req) {
       weightG: lastWeightIn(all, range.start, range.end),
     });
   }
-  return { birth: settings.birth, days: days };
+  return { birth: settings.birth, days: days, weights: weights };
+}
+
+function weightsOf(records) {
+  var out = [];
+  for (var i = 0; i < records.length; i++) {
+    if (records[i].type === 'weight') out.push(records[i]);
+  }
+  return out;
 }
 
 function lastWeightIn(records, rangeStart, rangeEnd) {
