@@ -1,4 +1,4 @@
-import type { BabyEvent, DayData, EventInput, Settings, User } from '../types'
+import type { BabyRecord, DayData, RecordInput, RecordType, Settings, User } from '../types'
 
 export type ApiErrorCode =
   | 'NETWORK'
@@ -23,8 +23,9 @@ export interface Api {
   login(idToken: string): Promise<{ token: string; user: User }>
   logout(): Promise<void>
   getDay(date: string): Promise<DayData>
-  createEvent(input: EventInput): Promise<BabyEvent>
-  updateEvent(input: EventInput): Promise<BabyEvent>
-  deleteEvent(id: string): Promise<void>
+  createRecord(input: RecordInput): Promise<BabyRecord>
+  updateRecord(input: RecordInput): Promise<BabyRecord>
+  /** El tipo indica en qué pestaña está el registro. */
+  deleteRecord(type: RecordType, id: string): Promise<void>
   updateSettings(settings: Settings): Promise<Settings>
 }

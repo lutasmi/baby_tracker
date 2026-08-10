@@ -3,12 +3,12 @@
 // va de ese momento a las 09:16 del día 6.
 //
 // Convive con el día natural (00:00–23:59), que es el que usan la cronología y
-// la navegación por fechas. El backend calcula los totales; aquí solo se
-// necesita la aritmética para etiquetar y para la vista previa de los ajustes.
+// la navegación por fechas. El backend calcula los totales sobre el histórico
+// completo; aquí está la aritmética para etiquetar, para la vista previa de los
+// ajustes y para el modo demo.
 
-import type { BabyEvent, LifeDayTotals } from '../types'
+import type { BabyRecord, LifeDayTotals } from '../types'
 import { addMinutes, diffMinutes } from './dates'
-import { componentsOf } from './feed'
 
 const DAY_MIN = 24 * 60
 
@@ -34,36 +34,30 @@ export function emptyTotals(): LifeDayTotals {
     breastMin: 0,
     expressedMl: 0,
     formulaMl: 0,
-    mixtaMl: 0,
     milkMl: 0,
   }
 }
 
 /**
- * Totales de un día de vida. Un evento cuenta en el periodo en el que empieza,
- * de modo que una toma que cruza el aniversario horario no se parte en dos.
- *
- * El backend calcula estos mismos totales sobre el histórico completo; esta
- * versión existe para el modo demo y para poder probar la regla de reparto.
+ * Totales de un día de vida. Un registro cuenta en el periodo en el que
+ * empieza, de modo que una toma que cruza el aniversario horario no se parte.
  */
-export function lifeDayTotals(events: BabyEvent[], start: string, end: string): LifeDayTotals {
+export function lifeDayTotals(records: BabyRecord[], start: string, end: string): LifeDayTotals {
   const t = emptyTotals()
-  for (const e of events) {
-    if (e.start < start || e.start >= end) continue
-    if (e.type === 'diaper') {
+  for (const r of records) {
+    if (r.start < start || r.start >= end) continue
+    if (r.type === 'diaper') {
       t.diapers++
-      if (e.subtype === 'pipi' || e.subtype === 'ambos') t.pees++
-      if (e.subtype === 'caca' || e.subtype === 'ambos') t.poops++
-    } else if (e.type === 'feed') {
+      if (r.pee) t.pees++
+      if (r.poop) t.poops++
+    } else if (r.type === 'feed') {
       t.feeds++
-      const c = componentsOf(e)
-      t.breastMin += c.breastMin
-      t.expressedMl += c.expressedMl
-      t.formulaMl += c.formulaMl
-      t.mixtaMl += c.mixtaMl
+      t.breastMin += r.breastMin
+      t.expressedMl += r.expressedMl
+      t.formulaMl += r.formulaMl
     }
   }
   // Leche cuantificable: el pecho directo no entra porque no sabemos los ml.
-  t.milkMl = t.expressedMl + t.formulaMl + t.mixtaMl
+  t.milkMl = t.expressedMl + t.formulaMl
   return t
 }

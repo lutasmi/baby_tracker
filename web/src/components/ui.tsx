@@ -86,6 +86,31 @@ export function DateTimeField({
   )
 }
 
+/**
+ * Interruptor independiente. A diferencia de `Seg`, varios pueden estar
+ * activos a la vez: un pañal puede llevar pis y caca.
+ */
+export function Toggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string
+  checked: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      class={checked ? 'toggle on' : 'toggle'}
+      aria-pressed={checked}
+      onClick={() => onChange(!checked)}
+    >
+      {label}
+    </button>
+  )
+}
+
 const QUICK_OFFSETS = [5, 15, 30, 60]
 
 /**

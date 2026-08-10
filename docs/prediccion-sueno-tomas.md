@@ -72,7 +72,7 @@ Script Properties). Es lo primero que habría que añadir:
 - Exponerla en la respuesta de `getDay` (o en un `getConfig` nuevo) para que
   el frontend pueda calcular la edad en semanas.
 
-Todo lo demás (eventos de sueño y tomas) ya existe en la hoja `Eventos`.
+Todo lo demás (registros de sueño y tomas) ya existe en las pestañas `Sueno` y `Tomas`.
 
 ## 5. Diseño técnico
 

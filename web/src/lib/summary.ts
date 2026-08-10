@@ -1,88 +1,105 @@
-// Textos e iconos con los que se muestra cada evento en la interfaz.
+// Textos e iconos con los que se muestra cada registro en la interfaz.
 
-import type { BabyEvent } from '../types'
+import type { BabyRecord, FeedRecord } from '../types'
+import { durationOf, endOf } from '../types'
 import { dateOf, formatDuration, timeOf } from './dates'
-import { componentParts, componentsOf } from './feed'
 
-export const SUBTYPE_LABELS: Record<string, string> = {
-  siesta: 'Siesta',
-  nocturno: 'Sueño nocturno',
-  biberon: 'Biberón',
-  lactancia: 'Lactancia',
-  mixta: 'Mixta',
-  pipi: 'Pipí',
-  caca: 'Caca',
-  ambos: 'Pipí y caca',
-  completo: 'Baño completo',
-  aseo: 'Aseo rápido',
+const SLEEP_LABELS: Record<string, string> = { siesta: 'Siesta', nocturno: 'Sueño nocturno' }
+const BATH_LABELS: Record<string, string> = { completo: 'Baño completo', aseo: 'Aseo rápido' }
+const SIDE_LABELS: Record<string, string> = {
+  izquierdo: 'izq.',
+  derecho: 'der.',
+  ambos: 'ambos',
+}
+const CONSISTENCY_LABELS: Record<string, string> = {
+  liquida: 'líquida',
+  pastosa: 'pastosa',
+  solida: 'sólida',
 }
 
-export const DETAIL_LABELS: Record<string, string> = {
-  materna: 'Leche materna',
-  formula: 'Fórmula',
-  mixta: 'Mixta',
-  izquierdo: 'Pecho izquierdo',
-  derecho: 'Pecho derecho',
-  liquida: 'Líquida',
-  pastosa: 'Pastosa',
-  solida: 'Sólida',
-}
-
-export function eventIcon(e: BabyEvent): string {
-  switch (e.type) {
+export function recordIcon(r: BabyRecord): string {
+  switch (r.type) {
     case 'sleep':
-      return e.subtype === 'nocturno' ? '🌙' : '😴'
+      return r.kind === 'nocturno' ? '🌙' : '😴'
     case 'feed':
-      return e.subtype === 'lactancia' ? '🤱' : '🍼'
+      // Solo pecho: el icono lo dice antes de leer nada.
+      return r.breastMin > 0 && r.expressedMl === 0 && r.formulaMl === 0 ? '🤱' : '🍼'
     case 'diaper':
-      if (e.subtype === 'ambos') return '💩💧'
-      return e.subtype === 'pipi' ? '💧' : '💩'
+      if (r.pee && r.poop) return '💩💧'
+      return r.poop ? '💩' : '💧'
     case 'bath':
       return '🛁'
   }
 }
 
-export function eventTitle(e: BabyEvent): string {
-  // Una toma puede combinar pecho, leche extraída y fórmula, así que el título
-  // es siempre "Toma" y el desglose va en la línea de detalle.
-  if (e.type === 'feed') return 'Toma'
-  if (e.type === 'diaper') return `Pañal · ${SUBTYPE_LABELS[e.subtype] ?? e.subtype}`
-  return SUBTYPE_LABELS[e.subtype] ?? e.subtype
+export function recordTitle(r: BabyRecord): string {
+  switch (r.type) {
+    case 'sleep':
+      return SLEEP_LABELS[r.kind] ?? 'Sueño'
+    case 'feed':
+      // Una toma puede combinar componentes: el desglose va en el detalle.
+      return 'Toma'
+    case 'diaper':
+      return `Pañal · ${diaperContent(r.pee, r.poop)}`
+    case 'bath':
+      return BATH_LABELS[r.kind] ?? 'Baño'
+  }
 }
 
-/** Línea secundaria: '29 min · 35 ml fórmula', '1 h 21 min', 'Consistencia líquida'… */
-export function eventDetail(e: BabyEvent): string {
+function diaperContent(pee: boolean, poop: boolean): string {
+  if (pee && poop) return 'pis y caca'
+  return poop ? 'caca' : 'pis'
+}
+
+/** Partes legibles del desglose de una toma: ['17 min pecho', '28 ml extraída']. */
+export function feedParts(r: Pick<FeedRecord, 'breastMin' | 'breastSide' | 'expressedMl' | 'formulaMl'>): string[] {
   const parts: string[] = []
-  if (e.type === 'sleep' && !e.end) parts.push('Sin cerrar')
-  if (e.durationMin != null && e.durationMin > 0) parts.push(formatDuration(e.durationMin))
-  if (e.type === 'feed') {
-    parts.push(...componentParts(componentsOf(e)))
-  } else if (e.detail) {
-    const label = DETAIL_LABELS[e.detail] ?? e.detail
-    parts.push(e.type === 'diaper' ? `Consistencia ${label.toLowerCase()}` : label)
+  if (r.breastMin > 0) {
+    const side = r.breastSide ? ` ${SIDE_LABELS[r.breastSide] ?? r.breastSide}` : ''
+    parts.push(`${r.breastMin} min pecho${side}`)
   }
-  if (e.notes) parts.push(e.notes)
+  if (r.expressedMl > 0) parts.push(`${r.expressedMl} ml extraída`)
+  if (r.formulaMl > 0) parts.push(`${r.formulaMl} ml fórmula`)
+  return parts
+}
+
+/** Línea secundaria: '29 min · 35 ml fórmula', '1 h 21 min', 'consistencia líquida'… */
+export function recordDetail(r: BabyRecord): string {
+  const parts: string[] = []
+  if (r.type === 'sleep' && !r.end) parts.push('Sin cerrar')
+
+  const duration = durationOf(r)
+  if (duration != null && duration > 0) parts.push(formatDuration(duration))
+
+  if (r.type === 'feed') {
+    parts.push(...feedParts(r))
+  } else if (r.type === 'diaper' && r.consistency) {
+    parts.push(`consistencia ${CONSISTENCY_LABELS[r.consistency] ?? r.consistency}`)
+  }
+
+  if (r.notes) parts.push(r.notes)
   return parts.join(' · ')
 }
 
 /**
  * Hora que se muestra en la cronología del día `date`:
- *  - evento puntual: '14:30'
+ *  - registro puntual: '14:30'
  *  - con fin el mismo día: '14:30–15:45'
  *  - empezó otro día: '→ 07:00'
  *  - termina otro día o sigue sin cerrar: '21:30 →'
  */
-export function eventTimeLabel(e: BabyEvent, date: string): string {
-  const startsToday = dateOf(e.start) === date
-  if (!e.end) {
-    // Sin fin: solo el sueño queda abierto; el resto son eventos puntuales.
-    if (e.type !== 'sleep') return timeOf(e.start)
-    return startsToday ? `${timeOf(e.start)} →` : '→'
+export function recordTimeLabel(r: BabyRecord, date: string): string {
+  const startsToday = dateOf(r.start) === date
+  const end = endOf(r)
+  if (!end) {
+    // Sin fin: solo el sueño queda abierto; el resto son registros puntuales.
+    if (r.type !== 'sleep') return timeOf(r.start)
+    return startsToday ? `${timeOf(r.start)} →` : '→'
   }
-  const endsToday = dateOf(e.end) === date
+  const endsToday = dateOf(end) === date
   if (startsToday && endsToday) {
-    return e.end === e.start ? timeOf(e.start) : `${timeOf(e.start)}–${timeOf(e.end)}`
+    return end === r.start ? timeOf(r.start) : `${timeOf(r.start)}–${timeOf(end)}`
   }
-  if (startsToday) return `${timeOf(e.start)} →`
-  return `→ ${timeOf(e.end)}`
+  if (startsToday) return `${timeOf(r.start)} →`
+  return `→ ${timeOf(end)}`
 }

@@ -3,7 +3,7 @@
  *
  * Se despliega como aplicación web ("Ejecutar como: yo", acceso: "Cualquier
  * usuario"). El frontend envía POST con JSON y recibe JSON:
- *   petición:  { action, token?, idToken?, date?, event?, id?, settings? }
+ *   petición:  { action, token?, idToken?, date?, record?, type?, id?, settings? }
  *   respuesta: { ok: true, data } | { ok: false, error: { code, message } }
  *
  * Códigos de error: AUTH (volver a iniciar sesión), FORBIDDEN (usuario no
@@ -23,6 +23,7 @@ function doGet() {
 
 function doPost(e) {
   var body;
+  resetSheetCache();
   try {
     var raw = e && e.postData && e.postData.contents ? e.postData.contents : '{}';
     var req = JSON.parse(raw);
@@ -52,12 +53,12 @@ function route(req) {
   switch (req.action) {
     case 'getDay':
       return getDay(req);
-    case 'createEvent':
-      return createEvent(req, session);
-    case 'updateEvent':
-      return updateEvent(req, session);
-    case 'deleteEvent':
-      return deleteEvent(req, session);
+    case 'createRecord':
+      return createRecord(req, session);
+    case 'updateRecord':
+      return updateRecord(req, session);
+    case 'deleteRecord':
+      return deleteRecord(req, session);
     case 'updateSettings':
       return writeSettings(req.settings);
     case 'logout':
@@ -104,7 +105,9 @@ function login(req) {
   if (!user || !user.active) {
     throw apiError(
       'FORBIDDEN',
-      'La cuenta ' + identity.email + ' no está autorizada. Pide acceso a quien administra la aplicación.'
+      'La cuenta ' +
+        identity.email +
+        ' no está autorizada. Pide acceso a quien administra la aplicación.'
     );
   }
 
@@ -128,7 +131,7 @@ function requireSession(token) {
     throw apiError('AUTH', 'La sesión ha caducado. Vuelve a iniciar sesión.');
   }
   // Comprobar el usuario en cada petición permite revocar el acceso
-  // desactivándolo en la hoja Usuarios.
+  // desactivándolo en la pestaña Usuarios.
   var user = findUser(data.email);
   if (!user || !user.active) {
     throw apiError('FORBIDDEN', 'Esta cuenta ya no está autorizada.');
@@ -157,65 +160,34 @@ function cleanExpiredSessions() {
 }
 
 // ---------------------------------------------------------------------------
-// Ajustes (nacimiento y objetivos del día de vida)
-// ---------------------------------------------------------------------------
-//
-// Se guardan en las propiedades del script, junto a SPREADSHEET_ID y
-// GOOGLE_CLIENT_ID. Son compartidos por todos los usuarios de la aplicación,
-// que es lo correcto: los dos padres siguen al mismo bebé.
-
-function readSettings() {
-  var raw = PropertiesService.getScriptProperties().getProperty('SETTINGS');
-  if (!raw) return defaultSettings();
-  try {
-    return normalizeSettings(JSON.parse(raw));
-  } catch (err) {
-    // Un valor corrupto no debe dejar la aplicación inservible.
-    return defaultSettings();
-  }
-}
-
-function writeSettings(input) {
-  var settings = normalizeSettings(input);
-  PropertiesService.getScriptProperties().setProperty('SETTINGS', JSON.stringify(settings));
-  return settings;
-}
-
-// ---------------------------------------------------------------------------
 // Lecturas
 // ---------------------------------------------------------------------------
 
 /**
- * Datos de un día: eventos cuyo intervalo toca la fecha, el sueño activo, y
- * los últimos toma/pañal/sueño globales (para la pantalla principal).
+ * Datos de un día: los registros de todas las pestañas cuyo intervalo toca la
+ * fecha, el sueño sin cerrar, los últimos toma/pañal globales y el día de vida
+ * en curso con sus totales.
  */
 function getDay(req) {
   var date = String(req.date || '').trim();
   if (!isValidDate(date)) throw apiError('VALIDATION', 'Fecha no válida.');
   var now = nowMadrid();
 
-  var all = [];
-  var rows = readAllEvents();
-  for (var i = 0; i < rows.length; i++) {
-    if (!rows[i].deleted) all.push(rows[i].event);
-  }
-  all.sort(function (a, b) {
-    return a.start < b.start ? -1 : a.start > b.start ? 1 : 0;
-  });
-
-  var events = [];
-  var activeSleep = null;
+  var all = readAllRecords();
+  var records = [];
+  var openSleep = null;
   var lastFeed = null;
   var lastDiaper = null;
   var lastSleepEnd = null;
-  for (var j = 0; j < all.length; j++) {
-    var e = all[j];
-    if (eventTouchesDay(e, date, now)) events.push(e);
-    if (isOpenSleep(e)) activeSleep = e; // el de inicio más tardío prevalece
-    if (e.type === 'feed' && (!lastFeed || e.start > lastFeed.start)) lastFeed = e;
-    if (e.type === 'diaper' && (!lastDiaper || e.start > lastDiaper.start)) lastDiaper = e;
-    if (e.type === 'sleep' && e.end && (!lastSleepEnd || e.end > lastSleepEnd.end)) {
-      lastSleepEnd = e;
+
+  for (var i = 0; i < all.length; i++) {
+    var r = all[i];
+    if (recordTouchesDay(r, date, now)) records.push(r);
+    if (isOpenSleep(r)) openSleep = r; // el de inicio más tardío prevalece
+    if (r.type === 'feed' && (!lastFeed || r.start > lastFeed.start)) lastFeed = r;
+    if (r.type === 'diaper' && (!lastDiaper || r.start > lastDiaper.start)) lastDiaper = r;
+    if (r.type === 'sleep' && r.end && (!lastSleepEnd || r.end > lastSleepEnd.end)) {
+      lastSleepEnd = r;
     }
   }
 
@@ -223,8 +195,8 @@ function getDay(req) {
 
   return {
     date: date,
-    events: events,
-    activeSleep: activeSleep,
+    records: records,
+    openSleep: openSleep,
     last: { feed: lastFeed, diaper: lastDiaper, sleepEnd: lastSleepEnd },
     users: usersDisplayMap(),
     serverNow: now,
@@ -236,7 +208,7 @@ function getDay(req) {
 }
 
 /** Día de vida actual con sus totales, o null si no hay fecha de nacimiento. */
-function currentLifeDay(settings, allEvents, now) {
+function currentLifeDay(settings, allRecords, now) {
   if (!settings.birth) return null;
   var number = lifeDayNumber(settings.birth, now);
   if (number < 1) return null; // la fecha de nacimiento aún no ha llegado
@@ -245,7 +217,7 @@ function currentLifeDay(settings, allEvents, now) {
     number: number,
     start: range.start,
     end: range.end,
-    totals: lifeDayTotals(allEvents, range.start, range.end),
+    totals: lifeDayTotals(allRecords, range.start, range.end),
   };
 }
 
@@ -265,66 +237,66 @@ function withLock(fn) {
 
 /** Lanza ACTIVE_SLEEP si existe un sueño abierto distinto de `exceptId`. */
 function assertNoOtherOpenSleep(exceptId) {
-  var rows = readAllEvents();
+  var rows = readRecordsOfType('sleep');
   for (var i = 0; i < rows.length; i++) {
     if (rows[i].deleted) continue;
-    if (isOpenSleep(rows[i].event) && rows[i].event.id !== exceptId) {
+    if (isOpenSleep(rows[i].record) && rows[i].record.id !== exceptId) {
       throw apiError('ACTIVE_SLEEP', 'Ya hay un sueño en curso. Finalízalo antes de empezar otro.');
     }
   }
 }
 
-function createEvent(req, session) {
+function createRecord(req, session) {
   var now = nowMadrid();
-  var event = normalizeAndValidate(req.event, now);
+  var record = normalizeAndValidate(req.record, now);
   return withLock(function () {
-    var existing = findEventRowNumber(event.id);
+    var existing = findRecordRow(record.type, record.id);
     if (existing !== -1) {
       // Reintento de una petición ya aplicada: no duplicar.
-      return readEventAtRow(existing).event;
+      return readRecordAtRow(record.type, existing).record;
     }
-    if (isOpenSleep(event)) assertNoOtherOpenSleep(event.id);
-    event.createdBy = session.email;
-    event.createdAt = now;
-    event.updatedBy = null;
-    event.updatedAt = null;
-    writeEventRecord(eventToRecord(event, false), -1);
-    return event;
+    if (isOpenSleep(record)) assertNoOtherOpenSleep(record.id);
+    record.createdBy = session.email;
+    record.createdAt = now;
+    record.updatedBy = null;
+    record.updatedAt = null;
+    writeRecordRow(record.type, recordToRow(record, false), -1);
+    return record;
   });
 }
 
-function updateEvent(req, session) {
+function updateRecord(req, session) {
   var now = nowMadrid();
-  var event = normalizeAndValidate(req.event, now);
+  var record = normalizeAndValidate(req.record, now);
   return withLock(function () {
-    var rowNumber = findEventRowNumber(event.id);
+    var rowNumber = findRecordRow(record.type, record.id);
     if (rowNumber === -1) throw apiError('NOT_FOUND', 'El registro ya no existe.');
-    var current = readEventAtRow(rowNumber);
-    if (!current || current.deleted) {
-      throw apiError('NOT_FOUND', 'El registro fue eliminado.');
-    }
-    if (isOpenSleep(event)) assertNoOtherOpenSleep(event.id);
-    event.createdBy = current.event.createdBy;
-    event.createdAt = current.event.createdAt;
-    event.updatedBy = session.email;
-    event.updatedAt = now;
-    writeEventRecord(eventToRecord(event, false), rowNumber);
-    return event;
+    var current = readRecordAtRow(record.type, rowNumber);
+    if (!current || current.deleted) throw apiError('NOT_FOUND', 'El registro fue eliminado.');
+    if (isOpenSleep(record)) assertNoOtherOpenSleep(record.id);
+    record.createdBy = current.record.createdBy;
+    record.createdAt = current.record.createdAt;
+    record.updatedBy = session.email;
+    record.updatedAt = now;
+    writeRecordRow(record.type, recordToRow(record, false), rowNumber);
+    return record;
   });
 }
 
-function deleteEvent(req, session) {
+function deleteRecord(req, session) {
   var id = String(req.id == null ? '' : req.id).trim();
   if (!id) throw apiError('VALIDATION', 'Falta el identificador.');
+  var type = req.type;
+  if (!RECORD_TYPES[type]) throw apiError('VALIDATION', 'Tipo de registro no válido.');
   return withLock(function () {
-    var rowNumber = findEventRowNumber(id);
+    var rowNumber = findRecordRow(type, id);
     if (rowNumber === -1) return { deleted: true }; // ya no existe: idempotente
-    var current = readEventAtRow(rowNumber);
+    var current = readRecordAtRow(type, rowNumber);
     if (current && !current.deleted) {
-      var event = current.event;
-      event.updatedBy = session.email;
-      event.updatedAt = nowMadrid();
-      writeEventRecord(eventToRecord(event, true), rowNumber);
+      var record = current.record;
+      record.updatedBy = session.email;
+      record.updatedAt = nowMadrid();
+      writeRecordRow(type, recordToRow(record, true), rowNumber);
     }
     return { deleted: true };
   });

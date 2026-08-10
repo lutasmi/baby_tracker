@@ -37,7 +37,7 @@ Vuelve al **Editor** (menú izquierdo). Tienes que dejar el proyecto con 5 archi
 - [ ] En la barra del editor, selecciona la función **`setup`** en el desplegable y pulsa **Ejecutar**.
 - [ ] La primera vez Google pedirá permisos: **Revisar permisos** → elige tu cuenta → aparecerá "Google no ha verificado esta aplicación" → **Configuración avanzada** → **Ir a Baby Tracker API (no seguro)** → **Permitir**. (Es tu propio script; el aviso es normal.)
 - [ ] Mira el **Registro de ejecución**: debe decir `✔ Hoja de cálculo lista: https://docs.google.com/...` y avisar de que falta `GOOGLE_CLIENT_ID` (lo pondremos en la fase 3).
-- [ ] Abre esa URL y comprueba que la hoja **Baby Tracker** tiene las pestañas **Usuarios** (con tu email ya dado de alta) y **Eventos** (solo cabeceras). Guárdala en marcadores: es tu base de datos.
+- [ ] Abre esa URL y comprueba que la hoja **Baby Tracker** tiene una pestaña por tipo de registro (**Sueno**, **Tomas**, **Panales**, **Banos**, solo con cabeceras), más **Usuarios** (con tu email ya dado de alta) y **Bebe**. Guárdala en marcadores: es tu base de datos.
 
 > Si quieres usar una hoja ya existente en lugar de crear una nueva: antes de ejecutar `setup`, añade la propiedad `SPREADSHEET_ID` (ver fase 3.1) con el ID de tu hoja y ejecuta `setup` después; solo añadirá las pestañas/cabeceras que falten.
 
@@ -95,7 +95,8 @@ Vuelve al **Editor** (menú izquierdo). Tienes que dejar el proyecto con 5 archi
   - `VITE_GOOGLE_CLIENT_ID` = el ID de cliente de la fase 2.2
 - [ ] Lanza el despliegue: pestaña **Actions → deploy → Run workflow** (o simplemente haz push a `main`).
 - [ ] Espera a que el workflow acabe en verde y abre `https://TU_USUARIO.github.io/NOMBRE_DEL_REPO/`.
-- [ ] Comprobación final: pulsa **Continuar con Google**, entra con tu cuenta y registra un evento de prueba. Abre la hoja de cálculo y comprueba que aparece la fila en **Eventos**. Después bórralo desde la cronología de la app.
+- [ ] Comprobación final: pulsa **Continuar con Google**, entra con tu cuenta y registra una toma de prueba. Abre la hoja de cálculo y comprueba que aparece la fila en **Tomas**, con la cantidad en su columna. Después bórrala desde la cronología de la app.
+- [ ] En **Ajustes** (rueda dentada de la pantalla principal) pon la fecha y la hora de nacimiento: es lo que activa el bloque de día de vida. Se guarda en la pestaña **Bebe**.
 
 ---
 

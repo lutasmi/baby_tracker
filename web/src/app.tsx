@@ -4,9 +4,9 @@ import { useOnline, useRoute } from './hooks'
 import { clearSession, loadSession, saveSession, type Session } from './session'
 import { clearDayCache } from './store'
 import { showToast, subscribeToast, type Toast } from './toast'
-import type { EventType } from './types'
+import type { RecordType } from './types'
 import { Dashboard } from './views/Dashboard'
-import { EditEvent, NewEvent } from './views/EventForm'
+import { EditRecord, NewRecord } from './views/RecordForm'
 import { Login } from './views/Login'
 import { SettingsView } from './views/Settings'
 import { Timeline } from './views/Timeline'
@@ -62,7 +62,7 @@ export function App() {
   )
 }
 
-const FORM_KINDS: Record<string, EventType> = {
+const FORM_TYPES: Record<string, RecordType> = {
   sueno: 'sleep',
   toma: 'feed',
   panal: 'diaper',
@@ -73,11 +73,11 @@ function Screen({ session, onLogout }: { session: Session; onLogout: () => void 
   const route = useRoute()
 
   if (route.startsWith('#/nuevo/')) {
-    const kind = FORM_KINDS[route.slice('#/nuevo/'.length)]
-    if (kind) return <NewEvent kind={kind} />
+    const type = FORM_TYPES[route.slice('#/nuevo/'.length)]
+    if (type) return <NewRecord type={type} />
   }
   if (route.startsWith('#/editar/')) {
-    return <EditEvent id={decodeURIComponent(route.slice('#/editar/'.length))} />
+    return <EditRecord id={decodeURIComponent(route.slice('#/editar/'.length))} />
   }
   if (route.startsWith('#/cronologia')) {
     return <Timeline date={route.split('/')[2]} />

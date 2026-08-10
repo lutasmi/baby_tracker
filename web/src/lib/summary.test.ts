@@ -1,113 +1,100 @@
 import { describe, expect, it } from 'vitest'
-import type { BabyEvent } from '../types'
-import { eventDetail, eventTimeLabel, eventTitle } from './summary'
+import { aBath, aDiaper, aFeed, aSleep } from '../test-fixtures'
+import { recordDetail, recordIcon, recordTimeLabel, recordTitle } from './summary'
 
-function ev(partial: Partial<BabyEvent>): BabyEvent {
-  return {
-    id: 'test',
-    type: 'sleep',
-    subtype: 'siesta',
-    start: '2026-07-15 10:00',
-    end: null,
-    durationMin: null,
-    quantityMl: null,
-    detail: null,
-    components: null,
-    notes: '',
-    createdBy: 'ana@example.com',
-    createdAt: '2026-07-15 10:00',
-    updatedBy: null,
-    updatedAt: null,
-    ...partial,
-  }
-}
-
-describe('eventTitle', () => {
-  it('titula cada tipo de evento', () => {
-    expect(eventTitle(ev({ type: 'sleep', subtype: 'nocturno' }))).toBe('Sueño nocturno')
+describe('recordTitle', () => {
+  it('titula cada tipo de registro', () => {
+    expect(recordTitle(aSleep({ kind: 'nocturno' }))).toBe('Sueño nocturno')
+    expect(recordTitle(aSleep({ kind: 'siesta' }))).toBe('Siesta')
     // Una toma puede combinar componentes: el título es siempre el mismo.
-    expect(eventTitle(ev({ type: 'feed', subtype: 'biberon' }))).toBe('Toma')
-    expect(eventTitle(ev({ type: 'feed', subtype: 'mixta' }))).toBe('Toma')
-    expect(eventTitle(ev({ type: 'diaper', subtype: 'caca' }))).toBe('Pañal · Caca')
-    expect(eventTitle(ev({ type: 'bath', subtype: 'aseo' }))).toBe('Aseo rápido')
+    expect(recordTitle(aFeed({ formulaMl: 60 }))).toBe('Toma')
+    expect(recordTitle(aBath({ kind: 'aseo' }))).toBe('Aseo rápido')
+  })
+
+  it('el pañal dice en el título lo que llevaba', () => {
+    expect(recordTitle(aDiaper({ pee: true, poop: false }))).toBe('Pañal · pis')
+    expect(recordTitle(aDiaper({ pee: false, poop: true }))).toBe('Pañal · caca')
+    expect(recordTitle(aDiaper({ pee: true, poop: true }))).toBe('Pañal · pis y caca')
   })
 })
 
-describe('eventDetail', () => {
-  const comps = (p: Partial<BabyEvent['components'] & object>) => ({
-    breastMin: 0,
-    breastSide: null,
-    expressedMl: 0,
-    formulaMl: 0,
-    mixtaMl: 0,
-    ...p,
+describe('recordIcon', () => {
+  it('distingue la lactancia directa del biberón', () => {
+    expect(recordIcon(aFeed({ breastMin: 20 }))).toBe('🤱')
+    expect(recordIcon(aFeed({ formulaMl: 60 }))).toBe('🍼')
+    expect(recordIcon(aFeed({ breastMin: 10, formulaMl: 60 }))).toBe('🍼')
   })
 
+  it('el pañal con las dos cosas lleva los dos iconos', () => {
+    expect(recordIcon(aDiaper({ pee: true, poop: true }))).toBe('💩💧')
+    expect(recordIcon(aDiaper({ pee: true, poop: false }))).toBe('💧')
+    expect(recordIcon(aDiaper({ pee: false, poop: true }))).toBe('💩')
+  })
+})
+
+describe('recordDetail', () => {
   it('describe una toma con su duración y su desglose', () => {
-    const e = ev({
-      type: 'feed',
-      subtype: 'biberon',
-      start: '2026-07-15 09:12',
-      end: '2026-07-15 09:41',
+    const r = aFeed({
+      start: '2026-08-07 09:12',
+      end: '2026-08-07 09:41',
       durationMin: 29,
-      quantityMl: 35,
-      components: comps({ formulaMl: 35 }),
+      formulaMl: 35,
     })
-    expect(eventDetail(e)).toBe('29 min · 35 ml fórmula')
+    expect(recordDetail(r)).toBe('29 min · 35 ml fórmula')
   })
 
   it('describe una toma mixta sin mezclar minutos y ml', () => {
-    const e = ev({
-      type: 'feed',
-      subtype: 'mixta',
-      start: '2026-07-15 09:00',
-      end: '2026-07-15 09:30',
+    const r = aFeed({
+      start: '2026-08-07 09:00',
+      end: '2026-08-07 09:30',
       durationMin: 30,
-      components: comps({ breastMin: 17, expressedMl: 28, formulaMl: 37 }),
+      breastMin: 17,
+      breastSide: 'izquierdo',
+      expressedMl: 28,
+      formulaMl: 37,
     })
-    expect(eventDetail(e)).toBe('30 min · 17 min pecho · 28 ml extraída · 37 ml fórmula')
-  })
-
-  it('describe una toma registrada con la v1', () => {
-    const e = ev({ type: 'feed', subtype: 'biberon', quantityMl: 120, detail: 'materna' })
-    expect(eventDetail(e)).toBe('120 ml extraída')
+    expect(recordDetail(r)).toBe('30 min · 17 min pecho izq. · 28 ml extraída · 37 ml fórmula')
   })
 
   it('describe un pañal con consistencia y nota', () => {
-    const e = ev({ type: 'diaper', subtype: 'caca', detail: 'liquida', notes: 'poca cantidad' })
-    expect(eventDetail(e)).toBe('Consistencia líquida · poca cantidad')
+    const r = aDiaper({ poop: true, consistency: 'liquida', notes: 'poca cantidad' })
+    expect(recordDetail(r)).toBe('consistencia líquida · poca cantidad')
   })
 
   it('marca el sueño sin cerrar sin afirmar que siga durmiendo', () => {
-    expect(eventDetail(ev({ type: 'sleep', end: null }))).toBe('Sin cerrar')
+    expect(recordDetail(aSleep({ end: null }))).toBe('Sin cerrar')
+  })
+
+  it('muestra la duración opcional del baño', () => {
+    expect(recordDetail(aBath({ durationMin: 12 }))).toBe('12 min')
+    expect(recordDetail(aBath({ durationMin: 0 }))).toBe('')
   })
 })
 
-describe('eventTimeLabel', () => {
-  const day = '2026-07-15'
+describe('recordTimeLabel', () => {
+  const day = '2026-08-07'
 
-  it('evento puntual: solo la hora', () => {
-    expect(eventTimeLabel(ev({ start: '2026-07-15 14:30', end: '2026-07-15 14:30' }), day)).toBe(
-      '14:30'
-    )
-    expect(
-      eventTimeLabel(ev({ type: 'diaper', subtype: 'pipi', start: '2026-07-15 08:10' }), day)
-    ).toBe('08:10')
+  it('registro puntual: solo la hora', () => {
+    expect(recordTimeLabel(aDiaper({ start: '2026-08-07 08:10' }), day)).toBe('08:10')
+    expect(recordTimeLabel(aBath({ start: '2026-08-07 19:30' }), day)).toBe('19:30')
   })
 
   it('intervalo dentro del día', () => {
-    expect(eventTimeLabel(ev({ start: '2026-07-15 14:30', end: '2026-07-15 15:45' }), day)).toBe(
-      '14:30–15:45'
-    )
+    const r = aFeed({ start: '2026-08-07 14:30', end: '2026-08-07 15:45' })
+    expect(recordTimeLabel(r, day)).toBe('14:30–15:45')
+  })
+
+  it('una toma puntual no muestra un rango vacío', () => {
+    const r = aFeed({ start: '2026-08-07 14:30', end: '2026-08-07 14:30' })
+    expect(recordTimeLabel(r, day)).toBe('14:30')
   })
 
   it('sueño que empezó ayer: muestra solo el despertar', () => {
-    expect(eventTimeLabel(ev({ start: '2026-07-14 21:30', end: '2026-07-15 07:00' }), day)).toBe(
-      '→ 07:00'
-    )
+    const r = aSleep({ start: '2026-08-06 21:30', end: '2026-08-07 07:00' })
+    expect(recordTimeLabel(r, day)).toBe('→ 07:00')
   })
 
-  it('sueño que sigue en curso', () => {
-    expect(eventTimeLabel(ev({ start: '2026-07-15 21:30', end: null }), day)).toBe('21:30 →')
+  it('sueño que sigue sin cerrar', () => {
+    expect(recordTimeLabel(aSleep({ start: '2026-08-07 21:30' }), day)).toBe('21:30 →')
   })
 })

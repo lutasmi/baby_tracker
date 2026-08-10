@@ -1,12 +1,9 @@
 // Recorrido completo contra la API simulada: registrar, corregir y ver cómo
-// cambian los totales del día de vida. Reproduce los casos de uso reales que
-// motivaron esta versión.
+// cambian los totales del día de vida.
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import { addMinutes, nowMadrid } from '../lib/dates'
-import { buildInput, type FormState } from '../lib/eventform'
-import { emptyComponents } from '../lib/feed'
-import type { EventInput, FeedComponents } from '../types'
+import type { RecordInput } from '../types'
 import { createMockApi } from './mock'
 import type { Api } from './types'
 
@@ -14,24 +11,40 @@ const TODAY = nowMadrid().slice(0, 10)
 
 let api: Api
 
-/** Construye la toma tal y como la enviaría el formulario. */
-function feedInput(id: string, start: string, end: string, c: Partial<FeedComponents>): EventInput {
-  const components = { ...emptyComponents(), ...c }
-  const state = {
-    subtype: '',
+const feed = (id: string, start: string, end: string, p: Partial<RecordInput> = {}): RecordInput =>
+  ({
+    id,
+    type: 'feed',
     start,
     end,
-    sleepOpen: false,
-    components,
-    active: (['breast', 'expressed', 'formula'] as const).filter((k) =>
-      k === 'breast' ? components.breastMin > 0 : true
-    ),
-    durationMin: 0,
-    consistency: '',
+    durationMin: null,
+    breastMin: 0,
+    breastSide: null,
+    expressedMl: 0,
+    formulaMl: 0,
     notes: '',
-  } as unknown as FormState
-  return buildInput(id, 'feed', state)
-}
+    ...p,
+  }) as RecordInput
+
+const diaper = (id: string, start: string, pee: boolean, poop: boolean): RecordInput => ({
+  id,
+  type: 'diaper',
+  start,
+  pee,
+  poop,
+  consistency: null,
+  notes: '',
+})
+
+const sleep = (id: string, start: string, end: string | null): RecordInput => ({
+  id,
+  type: 'sleep',
+  start,
+  end,
+  durationMin: null,
+  kind: 'siesta',
+  notes: '',
+})
 
 beforeEach(async () => {
   api = createMockApi({ latencyMs: 0 })
@@ -44,30 +57,27 @@ beforeEach(async () => {
 describe('registro y totales del día de vida', () => {
   it('una toma de fórmula suma a la leche cuantificable', async () => {
     const antes = (await api.getDay(TODAY)).lifeDay!.totals
+    await api.createRecord(feed('t1', `${TODAY} 10:13`, `${TODAY} 10:31`, { formulaMl: 63 }))
 
-    await api.createEvent(
-      feedInput('t1', `${TODAY} 10:13`, `${TODAY} 10:31`, { formulaMl: 63 })
-    )
-
-    const despues = (await api.getDay(TODAY)).lifeDay!.totals
-    expect(despues.formulaMl - antes.formulaMl).toBe(63)
-    expect(despues.milkMl - antes.milkMl).toBe(63)
-    expect(despues.feeds - antes.feeds).toBe(1)
+    const t = (await api.getDay(TODAY)).lifeDay!.totals
+    expect(t.formulaMl - antes.formulaMl).toBe(63)
+    expect(t.milkMl - antes.milkMl).toBe(63)
+    expect(t.feeds - antes.feeds).toBe(1)
   })
 
   it('una toma mixta reparte cada componente en su sitio', async () => {
     const antes = (await api.getDay(TODAY)).lifeDay!.totals
-
-    const guardada = await api.createEvent(
-      feedInput('t2', `${TODAY} 13:12`, `${TODAY} 13:43`, {
+    const guardada = await api.createRecord(
+      feed('t2', `${TODAY} 13:12`, `${TODAY} 13:43`, {
         breastMin: 17,
         expressedMl: 28,
         formulaMl: 37,
       })
     )
-    expect(guardada.subtype).toBe('mixta')
+    expect(guardada.type).toBe('feed')
+    if (guardada.type !== 'feed') throw new Error('tipo inesperado')
     expect(guardada.durationMin).toBe(31)
-    expect(guardada.quantityMl).toBe(65)
+    expect(guardada.breastMin).toBe(17)
 
     const t = (await api.getDay(TODAY)).lifeDay!.totals
     expect(t.breastMin - antes.breastMin).toBe(17)
@@ -79,16 +89,8 @@ describe('registro y totales del día de vida', () => {
 
   it('los pañales actualizan pises y cacas por separado', async () => {
     const antes = (await api.getDay(TODAY)).lifeDay!.totals
-    const base = {
-      type: 'diaper' as const,
-      end: null,
-      durationMin: null,
-      quantityMl: null,
-      components: null,
-      notes: '',
-    }
-    await api.createEvent({ ...base, id: 'p1', subtype: 'caca', start: `${TODAY} 09:00`, detail: 'pastosa' })
-    await api.createEvent({ ...base, id: 'p2', subtype: 'ambos', start: `${TODAY} 11:00`, detail: null })
+    await api.createRecord(diaper('p1', `${TODAY} 09:00`, false, true))
+    await api.createRecord(diaper('p2', `${TODAY} 11:00`, true, true))
 
     const t = (await api.getDay(TODAY)).lifeDay!.totals
     expect(t.poops - antes.poops).toBe(2)
@@ -96,104 +98,64 @@ describe('registro y totales del día de vida', () => {
     expect(t.diapers - antes.diapers).toBe(2)
   })
 
-  it('rechaza una toma sin componentes', async () => {
-    await expect(
-      api.createEvent(feedInput('t3', `${TODAY} 10:00`, `${TODAY} 10:10`, {}))
-    ).rejects.toThrow(/al menos un componente/)
+  it('rechaza una toma sin componentes y un pañal vacío', async () => {
+    await expect(api.createRecord(feed('t3', `${TODAY} 10:00`, `${TODAY} 10:10`))).rejects.toThrow(
+      /al menos un componente/
+    )
+    await expect(api.createRecord(diaper('p3', `${TODAY} 10:00`, false, false))).rejects.toThrow(
+      /pis, caca/
+    )
   })
 
   it('reintentar la misma petición no duplica ni altera los totales', async () => {
-    const input = feedInput('t4', `${TODAY} 10:13`, `${TODAY} 10:31`, { formulaMl: 63 })
-    await api.createEvent(input)
+    const input = feed('t4', `${TODAY} 10:13`, `${TODAY} 10:31`, { formulaMl: 63 })
+    await api.createRecord(input)
     const primera = (await api.getDay(TODAY)).lifeDay!.totals
-    await api.createEvent(input)
+    await api.createRecord(input)
     expect((await api.getDay(TODAY)).lifeDay!.totals).toEqual(primera)
   })
 })
 
 describe('sueño', () => {
   it('registra una siesta pasada con inicio y fin', async () => {
-    const siesta = await api.createEvent({
-      id: 's1',
-      type: 'sleep',
-      subtype: 'siesta',
-      start: `${TODAY} 11:37`,
-      end: `${TODAY} 12:54`,
-      durationMin: null,
-      quantityMl: null,
-      detail: null,
-      components: null,
-      notes: '',
-    })
+    const siesta = await api.createRecord(sleep('s1', `${TODAY} 11:37`, `${TODAY} 12:54`))
+    if (siesta.type !== 'sleep') throw new Error('tipo inesperado')
     expect(siesta.durationMin).toBe(77)
   })
 
   it('un sueño olvidado se puede cerrar editándolo', async () => {
-    const abierto = await api.createEvent({
-      id: 's2',
-      type: 'sleep',
-      subtype: 'nocturno',
-      start: addMinutes(nowMadrid(), -120),
-      end: null,
-      durationMin: null,
-      quantityMl: null,
-      detail: null,
-      components: null,
-      notes: '',
-    })
-    expect((await api.getDay(TODAY)).activeSleep?.id).toBe('s2')
+    const start = addMinutes(nowMadrid(), -120)
+    await api.createRecord(sleep('s2', start, null))
+    expect((await api.getDay(TODAY)).openSleep?.id).toBe('s2')
 
-    const cerrado = await api.updateEvent({
-      id: abierto.id,
-      type: 'sleep',
-      subtype: 'nocturno',
-      start: abierto.start,
-      end: addMinutes(abierto.start, 45),
-      durationMin: null,
-      quantityMl: null,
-      detail: null,
-      components: null,
-      notes: '',
-    })
+    const cerrado = await api.updateRecord(sleep('s2', start, addMinutes(start, 45)))
+    if (cerrado.type !== 'sleep') throw new Error('tipo inesperado')
     expect(cerrado.durationMin).toBe(45)
-    expect((await api.getDay(TODAY)).activeSleep).toBeNull()
+    expect((await api.getDay(TODAY)).openSleep).toBeNull()
   })
 
   it('no permite dos sueños abiertos a la vez', async () => {
-    const open = {
-      type: 'sleep' as const,
-      subtype: 'siesta',
-      end: null,
-      durationMin: null,
-      quantityMl: null,
-      detail: null,
-      components: null,
-      notes: '',
-    }
-    await api.createEvent({ ...open, id: 's3', start: addMinutes(nowMadrid(), -30) })
-    await expect(
-      api.createEvent({ ...open, id: 's4', start: nowMadrid() })
-    ).rejects.toThrow(/sueño en curso/)
+    await api.createRecord(sleep('s3', addMinutes(nowMadrid(), -30), null))
+    await expect(api.createRecord(sleep('s4', nowMadrid(), null))).rejects.toThrow(/sueño en curso/)
   })
 })
 
-describe('compatibilidad', () => {
-  it('los registros de la v1 siguen contando en los totales', async () => {
-    // La semilla incluye un biberón con el formato antiguo (90 ml de materna).
-    const { lifeDay, events } = await api.getDay(TODAY)
-    const antiguo = events.find((e) => e.id === 'seed-biberon-v1')
-    expect(antiguo).toBeDefined()
-    expect(antiguo!.components).toBeNull()
-    expect(lifeDay!.totals.expressedMl).toBeGreaterThanOrEqual(90)
+describe('edición y borrado', () => {
+  it('editar una toma actualiza los totales', async () => {
+    await api.createRecord(feed('t5', `${TODAY} 10:00`, `${TODAY} 10:20`, { formulaMl: 60 }))
+    const antes = (await api.getDay(TODAY)).lifeDay!.totals
+
+    await api.updateRecord(feed('t5', `${TODAY} 10:00`, `${TODAY} 10:20`, { formulaMl: 90 }))
+    const t = (await api.getDay(TODAY)).lifeDay!.totals
+    expect(t.formulaMl - antes.formulaMl).toBe(30)
+    expect(t.feeds).toBe(antes.feeds) // sigue siendo la misma toma
   })
 
-  it('editar un registro de la v1 lo migra sin perder la cantidad', async () => {
-    const { events } = await api.getDay(TODAY)
-    const antiguo = events.find((e) => e.id === 'seed-biberon-v1')!
-    const migrado = await api.updateEvent(
-      feedInput(antiguo.id, antiguo.start, antiguo.start, { expressedMl: 90 })
-    )
-    expect(migrado.components).toMatchObject({ expressedMl: 90 })
-    expect(migrado.quantityMl).toBe(90)
+  it('borrar un registro lo saca de los totales', async () => {
+    await api.createRecord(diaper('p4', `${TODAY} 09:00`, true, false))
+    const conPanal = (await api.getDay(TODAY)).lifeDay!.totals
+    await api.deleteRecord('diaper', 'p4')
+    const sinPanal = (await api.getDay(TODAY)).lifeDay!.totals
+    expect(conPanal.pees - sinPanal.pees).toBe(1)
   })
 })

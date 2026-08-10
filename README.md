@@ -14,7 +14,7 @@ La especificación original está en [docs/especificacion.md](docs/especificacio
 - **Día de vida**: periodos de 24 h contados desde la hora exacta de nacimiento, con el recuento de pises, cacas, fórmula y leche materna extraída, y progreso frente a los objetivos que pongan los padres. Convive con el día natural, que sigue rigiendo la cronología.
 - **Tomas con inicio y fin reales**, duración derivada y precisión de un minuto. Una misma toma puede combinar **pecho directo (min), leche materna extraída (ml) y fórmula (ml)**; los minutos y los mililitros nunca se mezclan.
 - **Sueño** con inicio y fin, registrable después de que haya ocurrido. El cronómetro de un toque sigue estando, pero es auxiliar: la aplicación no da por hecho que el bebé sigue dormido porque nadie cerró un sueño.
-- **Pañales**: pipí/caca/ambos; la consistencia solo aparece cuando hay caca.
+- **Pañales**: pis y caca son casillas independientes, así que un pañal puede llevar las dos; la consistencia solo aparece cuando hay caca.
 - **Baños**: completo o aseo rápido, con duración opcional.
 - **Cronología diaria** con resumen del día, cambio de fecha, edición y borrado con confirmación.
 - **Todo es corregible después**: horas, cantidades, componentes de una toma y contenido del pañal, con la misma pantalla con la que se creó.
@@ -22,39 +22,40 @@ La especificación original está en [docs/especificacion.md](docs/especificacio
 - Reintentos seguros: el identificador se genera en el cliente y **repetir una petición nunca duplica** el registro.
 - Errores de red visibles y con reintento manual; nada se marca como guardado si la hoja no confirmó la escritura.
 
-Los registros creados con la primera versión se siguen leyendo, mostrando y contabilizando sin conversión previa.
+Cada tipo de registro tiene **su propia pestaña** en la hoja de cálculo, con sus columnas y su significado: añadir un campo es añadir una columna. El modelo completo está en [docs/modelo-de-datos.md](docs/modelo-de-datos.md).
 
 ## Arquitectura
 
 ```
 ┌─────────────────┐   POST JSON    ┌──────────────────┐   lee/escribe   ┌───────────────┐
 │  PWA (Preact)   │ ─────────────► │ Google Apps      │ ──────────────► │ Google Sheets │
-│  GitHub Pages   │ ◄───────────── │ Script (Web App) │ ◄────────────── │ Usuarios ·    │
-│  u otro estático│                │ API + sesiones   │                 │ Eventos       │
+│  GitHub Pages   │ ◄───────────── │ Script (Web App) │ ◄────────────── │ Una pestaña   │
+│  u otro estático│                │ API + sesiones   │                 │ por tipo      │
 └─────────────────┘                └──────────────────┘                 └───────────────┘
         │
         └── Inicio de sesión con Google Identity Services (el backend verifica el token)
 ```
 
 - **Frontend**: Vite + TypeScript + Preact, en [web/](web/). Sin más dependencias de ejecución. Hora local de Madrid en todo el dominio (`Europe/Madrid`).
-- **Backend**: Google Apps Script, en [apps-script/](apps-script/). Cuatro archivos sin build. Verifica el ID token de Google, emite sesiones propias (180 días), valida cada evento y escribe en la hoja bajo bloqueo.
-- **Datos**: una hoja de cálculo con las pestañas `Usuarios` y `Eventos` (una fila por evento, borrado lógico en la columna `Eliminado`). Se puede editar a mano sin romper la aplicación.
+- **Backend**: Google Apps Script, en [apps-script/](apps-script/). Cuatro archivos sin build. Verifica el ID token de Google, emite sesiones propias (180 días), valida cada registro y escribe en la hoja bajo bloqueo. Los tipos de registro se declaran en un único sitio (`RECORD_TYPES`) y el resto del backend es genérico.
+- **Datos**: una hoja de cálculo con una pestaña por tipo (`Sueno`, `Tomas`, `Panales`, `Banos`), más `Usuarios` y `Bebe`. Borrado lógico en la columna `Eliminado`. Se puede editar a mano sin romper la aplicación.
 - Todo el hosting utilizado (GitHub Pages, Apps Script, Sheets) es gratuito.
 
 ### Estructura del repositorio
 
 ```
 web/                  Frontend PWA (Vite + Preact)
-  src/lib/            Lógica pura con tests: fechas, componentes de la toma,
-                      día de vida, estado derivado, formularios y resúmenes
+  src/lib/            Lógica pura con tests: fechas, día de vida, estado
+                      derivado, formularios y resúmenes
   src/views/          Pantallas: login, dashboard, formularios, cronología, ajustes
   src/api/            Cliente de la API real y mock de desarrollo
   public/             Manifest, service worker, iconos
 apps-script/          Backend Google Apps Script (Main, Sheets, Logic, Setup)
-  test/               Tests de la lógica del backend (se ejecutan en Node)
+  test/               Tests del backend y simulación de la hoja en memoria
 scripts/              Generador de iconos PNG
+docs/modelo-de-datos.md Pestañas, columnas y cómo añadir campos o tipos
 docs/especificacion.md  Especificación original del producto (contrato de la V1)
-docs/perfil-y-peso.md   Dependencia pendiente: peso y perfil del bebé
+docs/perfil-y-peso.md   Siguiente fase: peso y perfil del bebé
 .github/workflows/    Despliegue automático en GitHub Pages
 ```
 
@@ -72,7 +73,7 @@ Necesitas una cuenta de Google y unos 20 minutos. Son tres piezas: la hoja + App
    - `apps-script/appsscript.json` → `appsscript.json`
    - `apps-script/Main.js`, `apps-script/Sheets.js`, `apps-script/Logic.js`, `apps-script/Setup.js`
    > Alternativa con [clasp](https://github.com/google/clasp): copia `apps-script/.clasp.json.example` a `apps-script/.clasp.json`, pon tu `scriptId` y ejecuta `npx clasp push` dentro de `apps-script/`.
-4. Ejecuta la función **`setup`** (selector de funciones → `setup` → Ejecutar) y autoriza los permisos. En el registro verás la URL de la hoja de cálculo creada, con las pestañas `Usuarios` (tú ya estás dado de alta) y `Eventos`.
+4. Ejecuta la función **`setup`** (selector de funciones → `setup` → Ejecutar) y autoriza los permisos. En el registro verás la URL de la hoja de cálculo creada, con una pestaña por tipo de registro (`Sueno`, `Tomas`, `Panales`, `Banos`), más `Usuarios` (tú ya estás dado de alta) y `Bebe`.
    - Si prefieres usar una hoja existente, añade antes la propiedad `SPREADSHEET_ID` (paso 3.2) y ejecuta `setup` después.
 
 ### 2. Client ID de OAuth (login con Google)
@@ -136,21 +137,27 @@ No hay credenciales en el repositorio: la URL de la API y el Client ID (público
 ## Detalles de funcionamiento
 
 - **Zona horaria**: todo se guarda y se muestra en hora de Madrid (`Europe/Madrid`), independientemente del dispositivo. Formato `yyyy-MM-dd HH:mm` en la hoja.
-- **Duplicados**: el cliente genera el `Evento_ID` (UUID) antes de enviar; si un reintento llega dos veces, el backend devuelve el registro ya guardado.
+- **Duplicados**: el cliente genera el `ID` (UUID) antes de enviar; si un reintento llega dos veces, el backend devuelve el registro ya guardado.
 - **Un solo sueño abierto**: lo garantiza el backend bajo bloqueo global. Un sueño sin cerrar **no** significa que el bebé siga dormido: pasadas 14 horas se considera un cronómetro olvidado, deja de contar en las horas dormidas y la pantalla principal ofrece corregirlo.
-- **Componentes de la toma**: el desglose se guarda en `Detalle_2` —la única columna que la V1 dejaba siempre vacía— con un texto legible y reversible, `pecho 15 min (Ambos) · extraída 28 ml · fórmula 37 ml`. `Cantidad` conserva el total de mililitros cuantificables y `Detalle_1`, el significado que tenía antes. **La estructura de la hoja no cambia**. Si `Detalle_2` está vacío, el registro se interpreta con las reglas de la V1.
-- **Día de vida**: periodos de 24 h desde el instante del nacimiento. Un evento cuenta en el periodo en el que empieza, así que una toma que cruza el aniversario horario no se parte en dos.
-- **Ajustes** (nacimiento y objetivos): viven en la propiedad `SETTINGS` del proyecto de Apps Script, junto a `SPREADSHEET_ID`. Son comunes a todos los usuarios y se editan desde la pantalla de Ajustes. Los objetivos los ponen los padres; la aplicación no propone ninguno ni da recomendaciones de alimentación.
-- **Edición manual de la hoja**: tolerada. Las columnas se localizan por cabecera, las etiquetas admiten variantes sin acentos, las horas sueltas (`HH:mm`) se combinan con la columna `Fecha` y un fin menor que el inicio se interpreta como cruce de medianoche. En las tomas manda `Detalle_2`: si lo editas a mano, `Cantidad` y `Subtipo` se recalculan a partir de él.
+- **Componentes de la toma**: cada magnitud tiene su columna en la pestaña `Tomas` (`Pecho_Min`, `Extraida_Ml`, `Formula_Ml`). Los minutos y los mililitros no se convierten entre sí en ningún punto: del pecho directo no sabemos cuántos ml ha tomado el bebé.
+- **Día de vida**: periodos de 24 h desde el instante del nacimiento. Un registro cuenta en el periodo en el que empieza, así que una toma que cruza el aniversario horario no se parte en dos.
+- **Ajustes** (nacimiento y objetivos): viven en la pestaña `Bebe`, una sola fila. Son comunes a todos los usuarios y se editan desde la pantalla de Ajustes o a mano en la hoja. Los objetivos los ponen los padres; la aplicación no propone ninguno ni da recomendaciones de alimentación.
+- **Edición manual de la hoja**: tolerada. Las columnas se localizan por cabecera —puedes reordenarlas o añadir las tuyas—, las etiquetas admiten variantes sin acentos, las fechas aceptan `dd/MM/yyyy`, las horas sueltas (`HH:mm`) se combinan con la columna `Fecha`, un fin menor que el inicio se interpreta como cruce de medianoche y una casilla marcada con `x` cuenta como `TRUE`. La duración se recalcula siempre desde el intervalo.
 - **Borrado**: lógico (columna `Eliminado`), para que la hoja conserve el histórico.
 - **Latencia**: Apps Script tarda 1–3 s por operación; la interfaz muestra el estado de guardado y solo confirma cuando la hoja ha escrito.
 - **Sin conexión**: se requiere internet. El service worker solo cachea la aplicación (no los datos) para que abra al instante; la arquitectura deja el terreno preparado para una cola local en el futuro.
 
-## Actualizar desde la primera versión
+## Actualizar desde una versión anterior
 
-El frontend se publica solo al hacer push a `main`, pero **el backend hay que volver a implementarlo a mano** (*Implementar → Administrar implementaciones → editar → nueva versión*). Entre ambos momentos la aplicación sigue funcionando: si el backend todavía es el antiguo, no aparece el bloque de día de vida y los ajustes no se pueden guardar, pero el registro y la cronología funcionan con normalidad.
+El frontend y el backend cambian a la vez y **no son compatibles entre sí**: hay que hacer los dos pasos seguidos.
 
-No hay que migrar la hoja de cálculo ni tocar sus columnas.
+1. Copia el código nuevo al proyecto de Apps Script y ejecuta **`setup()`**. Crea las pestañas que falten sin tocar las que ya existen; la app en producción sigue funcionando porque todavía sirve la implementación anterior.
+2. Reintroduce los registros que quieras conservar en las pestañas nuevas. La pestaña `Eventos` de la versión 1 se deja intacta y deja de leerse: consérvala como histórico y bórrala a mano cuando ya no te haga falta.
+3. Fusiona a `main` (GitHub Pages se republica solo) y, justo después, **crea una nueva versión de la implementación** (*Implementar → Administrar implementaciones → editar → nueva versión*).
+
+Entre los pasos 3a y 3b hay unos minutos en los que la aplicación puede dar error. Si prefieres evitarlos, crea una **implementación nueva** con su propia URL, apunta `VITE_API_URL` a ella y así cada versión del frontend habla con su backend.
+
+`setup()` es seguro de ejecutar tantas veces como quieras: solo añade lo que falta y nunca reordena ni borra columnas.
 
 ## Funcionalidad futura
 

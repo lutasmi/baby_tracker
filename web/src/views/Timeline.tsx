@@ -2,9 +2,9 @@ import { ErrorCard } from '../components/ui'
 import { navigate, navigateReplace, useDay, useNow } from '../hooks'
 import { addDays, formatDateHuman, formatDuration, isValidDate } from '../lib/dates'
 import { daySummary } from '../lib/derive'
-import { eventDetail, eventIcon, eventTimeLabel, eventTitle } from '../lib/summary'
+import { recordDetail, recordIcon, recordTimeLabel, recordTitle } from '../lib/summary'
 import { userName } from '../store'
-import type { BabyEvent } from '../types'
+import type { BabyRecord } from '../types'
 
 export function Timeline({ date }: { date?: string }) {
   const now = useNow()
@@ -58,23 +58,23 @@ export function Timeline({ date }: { date?: string }) {
 
         {data && (
           <>
-            <DaySummaryCard events={data.events} day={day} now={now} />
+            <DaySummaryCard records={data.records} day={day} now={now} />
 
-            {data.events.length === 0 ? (
+            {data.records.length === 0 ? (
               <div class="empty-state">
                 <span class="icon">🗓️</span>
                 No hay registros este día.
               </div>
             ) : (
               <div class="tl-list">
-                {data.events.map((e) => (
-                  <TimelineItem key={e.id} event={e} day={day} />
+                {data.records.map((r) => (
+                  <TimelineItem key={r.id} record={r} day={day} />
                 ))}
               </div>
             )}
 
             {error && (
-              <div class="banner banner-offline">
+              <div class="banner banner-warn">
                 No se pudo actualizar.
                 <button class="banner-retry" onClick={() => void reload()}>
                   Reintentar
@@ -88,8 +88,16 @@ export function Timeline({ date }: { date?: string }) {
   )
 }
 
-function DaySummaryCard({ events, day, now }: { events: BabyEvent[]; day: string; now: string }) {
-  const s = daySummary(events, day, now)
+function DaySummaryCard({
+  records,
+  day,
+  now,
+}: {
+  records: BabyRecord[]
+  day: string
+  now: string
+}) {
+  const s = daySummary(records, day, now)
   return (
     <div class="card tl-summary">
       <div class="sum-item">
@@ -116,21 +124,21 @@ function DaySummaryCard({ events, day, now }: { events: BabyEvent[]; day: string
   )
 }
 
-function TimelineItem({ event, day }: { event: BabyEvent; day: string }) {
+function TimelineItem({ record, day }: { record: BabyRecord; day: string }) {
   return (
-    <button class="tl-item" onClick={() => navigate(`#/editar/${encodeURIComponent(event.id)}`)}>
-      <span class={`tl-icon ${event.type}`}>{eventIcon(event)}</span>
+    <button class="tl-item" onClick={() => navigate(`#/editar/${encodeURIComponent(record.id)}`)}>
+      <span class={`tl-icon ${record.type}`}>{recordIcon(record)}</span>
       <span class="tl-body">
-        <span class="tl-title">{eventTitle(event)}</span>
+        <span class="tl-title">{recordTitle(record)}</span>
         <span class="tl-detail" style="display:block">
-          {eventDetail(event) || ' '}
+          {recordDetail(record) || ' '}
         </span>
       </span>
       <span style="text-align:right">
         <span class="tl-time" style="display:block">
-          {eventTimeLabel(event, day)}
+          {recordTimeLabel(record, day)}
         </span>
-        <span class="tl-user">{userName(event.updatedBy ?? event.createdBy)}</span>
+        <span class="tl-user">{userName(record.updatedBy ?? record.createdBy)}</span>
       </span>
     </button>
   )

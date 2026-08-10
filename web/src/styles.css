@@ -607,6 +607,35 @@ select:focus {
   color: var(--text-soft);
 }
 
+/* ---------- Interruptores independientes ---------- */
+
+.toggle-row {
+  display: flex;
+  gap: 10px;
+}
+
+.toggle {
+  flex: 1;
+  min-height: var(--tap);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-soft);
+  border: 2px solid transparent;
+  transition: transform 0.06s ease;
+}
+
+.toggle:active {
+  transform: scale(0.97);
+}
+
+.toggle.on {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 /* ---------- Chips ---------- */
 
 .chips {

@@ -1,60 +1,47 @@
-> Dependencia registrada durante la v2, **no implementada**. Requiere cambiar
-> la estructura de Google Sheets, cosa que la v2 tenía prohibida.
+> Siguiente fase, **no implementada**. Con el modelo por pestañas ya no hay
+> nada que decidir: es añadir una pestaña y unas columnas.
 
 # Perfil del bebé y seguimiento de peso
 
-## Qué falta y por qué no se hizo
+## Lo que ya está resuelto
 
-La v2 podía tocar la experiencia y la lógica, pero no la estructura de la hoja
-de cálculo. El peso no cabe en el modelo actual sin forzarlo:
+Cuando esto se documentó por primera vez, el peso no cabía en el modelo: había
+una única pestaña de eventos con columnas genéricas y no existía ningún sitio
+donde guardar datos del propio bebé. Con una pestaña por tipo de registro, esa
+dificultad ha desaparecido:
 
-- La pestaña `Eventos` describe **acontecimientos con hora**. Un peso encaja
-  como evento (fecha, hora, valor), pero el **peso de nacimiento** no: es un
-  dato del bebé, no algo que ocurre cada día.
-- No existe ningún sitio donde guardar los datos del propio bebé. Ahora mismo
-  la aplicación ni siquiera tiene el concepto de "bebé": solo eventos.
+- La pestaña **`Bebe`** ya existe, con el nacimiento y los objetivos diarios.
+  Añadir `Nombre` y `Peso_Nacimiento_G` es añadir dos columnas.
+- La pantalla de **Ajustes** ya existe, con su ruta (`#/ajustes`) y su acción de
+  API (`updateSettings`).
+- `setup()` añade columnas nuevas a una pestaña existente sin tocar los datos,
+  cosa que está probada.
 
-Serializar el peso dentro de una columna existente habría sido posible, pero
-es exactamente el tipo de apaño que el documento de principios prohíbe: la hoja
-dejaría de leerse de un vistazo y el dato quedaría escondido.
+## Lo que falta
 
-## Lo que ya está preparado
+### 1. Peso de nacimiento en `Bebe`
 
-- **Fecha y hora de nacimiento** se guardan en las propiedades del script
-  (`SETTINGS`), no en la hoja. Ver [ajustes](#dónde-viven-hoy-los-ajustes).
-- El día de vida ya se calcula a partir de ese instante, que es la referencia
-  temporal que necesita la curva de peso.
-- La pantalla de **Ajustes** ya existe, con su ruta (`#/ajustes`) y su acción
-  de API (`updateSettings`). Añadir campos ahí no requiere obra nueva.
+Dos columnas más: `Nombre` y `Peso_Nacimiento_G`. En `Logic.js`, dos entradas en
+`BABY_COLUMNS` y su traducción en `babyRowToSettings` / `settingsToBabyRow`.
 
-## Lo que haría falta
+### 2. Histórico de pesos: un tipo de registro nuevo
 
-### 1. Peso de nacimiento y perfil
+Una entrada en `RECORD_TYPES`:
 
-Una pestaña nueva `Bebe` (una sola fila) con, al menos:
+```js
+weight: {
+  sheet: 'Peso',
+  label: 'Peso',
+  interval: false,
+  fields: [{ key: 'grams', column: 'Gramos', kind: 'int', max: 30000, required: true }],
+}
+```
 
-| Columna | Ejemplo |
-|---|---|
-| `Nombre` | Martina |
-| `Fecha_Nacimiento` | 2026-08-05 |
-| `Hora_Nacimiento` | 09:17 |
-| `Peso_Nacimiento_Gramos` | 3420 |
-
-Al existir esta pestaña, la fecha y hora de nacimiento deberían migrar de las
-propiedades del script a la hoja, que es la fuente de verdad del proyecto. Los
-objetivos del día de vida pueden quedarse donde están: son preferencias de uso,
-no datos del bebé.
-
-### 2. Histórico de pesos
-
-Un tipo de evento nuevo, `weight`, dentro de la pestaña `Eventos` que ya existe:
-
-- `Tipo_Evento`: `Peso`
-- `Hora_Inicio`: momento de la medición
-- `Cantidad`: gramos · `Unidad`: `g`
-
-No hacen falta columnas nuevas: el modelo de eventos ya admite un tipo con
-cantidad y unidad. Es justo el caso para el que se diseñó.
+Con eso, el backend ya sabe crear la pestaña, validar, escribir, leer y
+devolver los registros en la cronología. Falta la parte de interfaz: el miembro
+`WeightRecord` en la unión de `types.ts`, su formulario y su icono y texto en
+`summary.ts`. El proceso completo está en
+[modelo-de-datos.md](modelo-de-datos.md#cómo-añadir-un-tipo-de-registro).
 
 ### 3. Cálculos y pantalla
 
@@ -73,20 +60,9 @@ interpretarlo**: nada de rangos "normales", alertas ni recomendaciones. Igual
 que con los objetivos del día de vida, el juicio es de los padres y del
 pediatra.
 
-## Orden sugerido
+## Dónde ponerlo
 
-1. Crear la pestaña `Bebe` en `setup()` (sin romper hojas ya existentes).
-2. Mover nacimiento a la hoja, dejando lectura compatible con `SETTINGS`.
-3. Añadir el tipo de evento `weight` y su formulario.
-4. Añadir el bloque de peso a Ajustes o a una pantalla de perfil.
-
-## Dónde viven hoy los ajustes
-
-Propiedad `SETTINGS` del proyecto de Apps Script, con esta forma:
-
-```json
-{ "birth": "2026-08-05 09:17", "goals": { "pees": 6, "poops": 3, "milkMl": 400 } }
-```
-
-Se edita desde la aplicación (Ajustes) o a mano en *Configuración del proyecto →
-Propiedades de la secuencia de comandos*.
+El peso no es una acción que se repita muchas veces al día, así que no merece un
+botón en la rejilla principal. Encaja mejor como una tarjeta en Ajustes —o en
+una pantalla de perfil— con el último peso, la variación y un botón para añadir
+una medición.

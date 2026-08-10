@@ -4,12 +4,12 @@ import { ApiError } from '../api/types'
 import { ErrorCard, GoalBar } from '../components/ui'
 import { handleAuthError, navigate, useDay, useNow } from '../hooks'
 import { diffMinutes, formatAgo, formatDuration, nowMadrid, timeOf } from '../lib/dates'
-import { babyStatus, guessSleepSubtype, sleepMinutesOnDate } from '../lib/derive'
-import { newId, toInput } from '../lib/events'
-import { eventDetail, eventIcon } from '../lib/summary'
+import { babyStatus, guessSleepKind, sleepMinutesOnDate } from '../lib/derive'
+import { newId } from '../lib/records'
+import { recordDetail, recordIcon } from '../lib/summary'
 import { userName } from '../store'
 import { showToast } from '../toast'
-import type { BabyEvent, DayData, LifeDay, Settings, User } from '../types'
+import type { BabyRecord, DayData, LifeDay, Settings, SleepRecord, User } from '../types'
 
 export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
   const now = useNow()
@@ -37,25 +37,32 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
     const start = nowMadrid()
     void quickSleepAction(
       () =>
-        getApi().createEvent({
+        getApi().createRecord({
           id: newId(),
           type: 'sleep',
-          subtype: guessSleepSubtype(start),
           start,
           end: null,
           durationMin: null,
-          quantityMl: null,
-          detail: null,
-          components: null,
+          kind: guessSleepKind(start),
           notes: '',
         }),
       'Sueño iniciado 🌙'
     )
   }
 
-  function endSleep(active: BabyEvent) {
+  function endSleep(open: SleepRecord) {
+    const end = nowMadrid()
     void quickSleepAction(
-      () => getApi().updateEvent({ ...toInput(active), end: nowMadrid() }),
+      () =>
+        getApi().updateRecord({
+          id: open.id,
+          type: 'sleep',
+          start: open.start,
+          end,
+          durationMin: diffMinutes(open.start, end),
+          kind: open.kind,
+          notes: open.notes,
+        }),
       'Despertar registrado ☀️'
     )
   }
@@ -195,7 +202,6 @@ function LifeDayCard({
         <div class="kpi-breakdown">
           <span>🍼 {t.formulaMl} ml fórmula</span>
           <span>🥛 {t.expressedMl} ml extraída</span>
-          {t.mixtaMl > 0 && <span>· {t.mixtaMl} ml mixta</span>}
         </div>
         {t.breastMin > 0 && (
           <div class="kpi-breakdown">
@@ -255,10 +261,10 @@ function RegisteredCard({
   today: string
   saving: boolean
   onStartSleep: () => void
-  onEndSleep: (active: BabyEvent) => void
+  onEndSleep: (open: SleepRecord) => void
 }) {
-  const status = babyStatus(data.activeSleep, data.last.sleepEnd, now)
-  const asleep = status.state === 'asleep' && data.activeSleep
+  const status = babyStatus(data.openSleep, data.last.sleepEnd, now)
+  const asleep = status.state === 'asleep' && data.openSleep
 
   return (
     <div class="card">
@@ -284,28 +290,26 @@ function RegisteredCard({
           )}
         </div>
 
-        <LastEventStat label="Última toma" event={data.last.feed} now={now} />
-        <LastEventStat label="Último pañal" event={data.last.diaper} now={now} />
+        <LastRecordStat label="Última toma" record={data.last.feed} now={now} />
+        <LastRecordStat label="Último pañal" record={data.last.diaper} now={now} />
 
         <div class="stat-item">
           <span class="icon">🌙</span>
           <div class="stat-main">
             <div class="stat-label">Dormido hoy (día natural)</div>
             <div class="stat-value">
-              {formatDuration(sleepMinutesOnDate(data.events, today, now))}
+              {formatDuration(sleepMinutesOnDate(data.records, today, now))}
             </div>
           </div>
         </div>
       </div>
 
-      {status.staleTimer && data.activeSleep && (
+      {status.staleTimer && data.openSleep && (
         <div class="banner banner-note">
-          <span>
-            Hay un sueño abierto desde las {timeOf(data.activeSleep.start)} sin hora de fin.
-          </span>
+          <span>Hay un sueño abierto desde las {timeOf(data.openSleep.start)} sin hora de fin.</span>
           <button
             class="banner-retry"
-            onClick={() => navigate(`#/editar/${encodeURIComponent(data.activeSleep!.id)}`)}
+            onClick={() => navigate(`#/editar/${encodeURIComponent(data.openSleep!.id)}`)}
           >
             Corregir
           </button>
@@ -316,7 +320,7 @@ function RegisteredCard({
         class="btn btn-primary btn-lg"
         style="margin-top:12px"
         disabled={saving}
-        onClick={() => (asleep ? onEndSleep(data.activeSleep!) : onStartSleep())}
+        onClick={() => (asleep ? onEndSleep(data.openSleep!) : onStartSleep())}
       >
         {asleep ? '☀️ Se ha despertado' : '🌙 Se ha dormido'}
       </button>
@@ -324,16 +328,16 @@ function RegisteredCard({
   )
 }
 
-function LastEventStat({
+function LastRecordStat({
   label,
-  event,
+  record,
   now,
 }: {
   label: string
-  event: BabyEvent | null
+  record: BabyRecord | null
   now: string
 }) {
-  if (!event) {
+  if (!record) {
     return (
       <div class="stat-item">
         <span class="icon">—</span>
@@ -346,14 +350,14 @@ function LastEventStat({
   }
   return (
     <div class="stat-item">
-      <span class="icon">{eventIcon(event)}</span>
+      <span class="icon">{recordIcon(record)}</span>
       <div class="stat-main">
         <div class="stat-label">
-          {label} · {timeOf(event.start)} · {userName(event.createdBy)}
+          {label} · {timeOf(record.start)} · {userName(record.createdBy)}
         </div>
-        <div class="stat-value">{eventDetail(event) || '—'}</div>
+        <div class="stat-value">{recordDetail(record) || '—'}</div>
       </div>
-      <span class="stat-ago">{formatAgo(diffMinutes(event.start, now))}</span>
+      <span class="stat-ago">{formatAgo(diffMinutes(record.start, now))}</span>
     </div>
   )
 }

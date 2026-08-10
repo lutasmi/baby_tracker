@@ -1,8 +1,8 @@
 // Caché en memoria de los días ya cargados. Permite pintar al instante lo
 // último conocido mientras se refresca en segundo plano, y localizar un
-// evento para editarlo sin otra petición.
+// registro para editarlo sin otra petición.
 
-import type { BabyEvent, DayData } from './types'
+import type { BabyRecord, DayData } from './types'
 
 const dayCache = new Map<string, DayData>()
 
@@ -14,14 +14,14 @@ export function getCachedDay(date: string): DayData | null {
   return dayCache.get(date) ?? null
 }
 
-export function findCachedEvent(id: string): BabyEvent | null {
+export function findCachedRecord(id: string): BabyRecord | null {
   for (const day of dayCache.values()) {
-    for (const e of day.events) {
-      if (e.id === id) return e
+    for (const r of day.records) {
+      if (r.id === id) return r
     }
-    if (day.activeSleep?.id === id) return day.activeSleep
-    for (const e of [day.last.feed, day.last.diaper, day.last.sleepEnd]) {
-      if (e?.id === id) return e
+    if (day.openSleep?.id === id) return day.openSleep
+    for (const r of [day.last.feed, day.last.diaper, day.last.sleepEnd]) {
+      if (r?.id === id) return r
     }
   }
   return null

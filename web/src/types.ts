@@ -1,43 +1,24 @@
-// Modelo de datos de la aplicación. Toda la app gira alrededor del Evento.
-// Las fechas-hora son siempre hora local de Madrid en formato 'yyyy-MM-dd HH:mm'.
+// Modelo de datos de la aplicación.
+//
+// Cada tipo de registro tiene su propia forma y su propia pestaña en la hoja
+// de cálculo. En TypeScript eso se traduce en una unión discriminada por
+// `type`: un pañal no tiene duración y una toma no tiene consistencia, y el
+// compilador lo sabe.
+//
+// Las fechas-hora son siempre hora local de Madrid: 'yyyy-MM-dd HH:mm'.
 
-export type EventType = 'sleep' | 'feed' | 'diaper' | 'bath'
+export type RecordType = 'sleep' | 'feed' | 'diaper' | 'bath'
 
-// Subtipos por tipo:
-//   sleep:  'siesta' | 'nocturno'
-//   feed:   'biberon' | 'lactancia' | 'mixta'   (derivado de los componentes)
-//   diaper: 'pipi' | 'caca' | 'ambos'
-//   bath:   'completo' | 'aseo'
-// Detalle (detail) por tipo:
-//   feed:   'materna' | 'formula' | 'mixta' | lado del pecho (compatibilidad)
-//   diaper: 'liquida' | 'pastosa' | 'solida'  (consistencia, solo con caca)
+export type SleepKind = 'siesta' | 'nocturno'
+export type BathKind = 'completo' | 'aseo'
+export type BreastSide = 'izquierdo' | 'derecho' | 'ambos'
+export type Consistency = 'liquida' | 'pastosa' | 'solida'
 
-/**
- * Desglose de una toma. Una misma toma puede combinar pecho directo, leche
- * materna extraída y fórmula. Los minutos de pecho y los ml son magnitudes
- * distintas y nunca se convierten entre sí.
- *
- * `mixtaMl` solo existe en registros creados con la v1, donde el biberón
- * "mixto" guardaba el total sin decir cuánto era de cada tipo.
- */
-export interface FeedComponents {
-  breastMin: number
-  breastSide: string | null
-  expressedMl: number
-  formulaMl: number
-  mixtaMl: number
-}
-
-export interface BabyEvent {
+/** Lo que comparten todos los registros. */
+interface RecordBase {
   id: string
-  type: EventType
-  subtype: string
-  start: string // 'yyyy-MM-dd HH:mm'
-  end: string | null // null en un sueño sin cerrar
-  durationMin: number | null // derivada de inicio y fin; manual en baños
-  quantityMl: number | null // total de ml cuantificables de una toma
-  detail: string | null
-  components: FeedComponents | null // solo en las tomas
+  /** Instante principal: inicio del intervalo o momento del registro puntual. */
+  start: string
   notes: string
   createdBy: string // email
   createdAt: string
@@ -45,12 +26,83 @@ export interface BabyEvent {
   updatedAt: string | null
 }
 
+/** Registros que duran un rato: el fin puede faltar y la duración se deriva. */
+interface IntervalBase extends RecordBase {
+  end: string | null
+  durationMin: number | null
+}
+
+export interface SleepRecord extends IntervalBase {
+  type: 'sleep'
+  kind: SleepKind
+}
+
+/**
+ * Una toma puede combinar pecho directo (minutos), leche materna extraída (ml)
+ * y fórmula (ml). Son magnitudes distintas y nunca se convierten entre sí: del
+ * pecho directo no sabemos cuántos mililitros ha tomado el bebé.
+ */
+export interface FeedRecord extends IntervalBase {
+  type: 'feed'
+  breastMin: number
+  breastSide: BreastSide | null
+  expressedMl: number
+  formulaMl: number
+}
+
+export interface DiaperRecord extends RecordBase {
+  type: 'diaper'
+  pee: boolean
+  poop: boolean
+  consistency: Consistency | null
+}
+
+export interface BathRecord extends RecordBase {
+  type: 'bath'
+  kind: BathKind
+  durationMin: number
+}
+
+export type BabyRecord = SleepRecord | FeedRecord | DiaperRecord | BathRecord
+
+/** Registros con intervalo, para el código que trata inicio y fin. */
+export type IntervalRecord = SleepRecord | FeedRecord
+
+export function hasInterval(r: BabyRecord): r is IntervalRecord {
+  return r.type === 'sleep' || r.type === 'feed'
+}
+
+/** Fin del registro, o null si es puntual o sigue abierto. */
+export function endOf(r: BabyRecord): string | null {
+  return hasInterval(r) ? r.end : null
+}
+
+/** Duración en minutos, o null si no aplica. */
+export function durationOf(r: BabyRecord): number | null {
+  if (hasInterval(r)) return r.durationMin
+  return r.type === 'bath' && r.durationMin > 0 ? r.durationMin : null
+}
+
+// --- Datos que viajan al crear o editar --------------------------------------
+
+type Audit = 'createdBy' | 'createdAt' | 'updatedBy' | 'updatedAt'
+
+/**
+ * El identificador lo genera el cliente antes de enviar: reintentar una
+ * petición nunca crea duplicados.
+ */
+export type RecordInput =
+  | Omit<SleepRecord, Audit>
+  | Omit<FeedRecord, Audit>
+  | Omit<DiaperRecord, Audit>
+  | Omit<BathRecord, Audit>
+
+// --- Usuarios y ajustes -------------------------------------------------------
+
 export interface User {
   email: string
   name: string
 }
-
-// --- Ajustes compartidos ----------------------------------------------------
 
 /** Un objetivo a 0 significa "sin objetivo": no se muestra progreso. */
 export interface Goals {
@@ -64,7 +116,7 @@ export interface Settings {
   goals: Goals
 }
 
-// --- Día de vida ------------------------------------------------------------
+// --- Día de vida --------------------------------------------------------------
 
 export interface LifeDayTotals {
   pees: number
@@ -74,8 +126,8 @@ export interface LifeDayTotals {
   breastMin: number
   expressedMl: number
   formulaMl: number
-  mixtaMl: number
-  milkMl: number // fórmula + extraída + mixta; el pecho directo no es cuantificable
+  /** Fórmula + extraída. El pecho directo no es cuantificable en ml. */
+  milkMl: number
 }
 
 /** Periodo de 24 h contado desde la hora exacta de nacimiento. */
@@ -86,37 +138,25 @@ export interface LifeDay {
   totals: LifeDayTotals
 }
 
-// Respuesta de la API para un día concreto.
+// --- Respuesta de la API para un día -----------------------------------------
+
 export interface DayData {
   date: string // 'yyyy-MM-dd'
-  // Eventos cuyo intervalo toca el día (incluye el sueño nocturno que empezó ayer).
-  events: BabyEvent[]
-  // Sueño sin cerrar, sea del día que sea. No implica que el bebé siga dormido:
-  // puede ser un cronómetro que se olvidó de detener.
-  activeSleep: BabyEvent | null
-  // Últimos eventos globales, independientes del día consultado.
+  /** Registros de todas las pestañas cuyo intervalo toca el día, por hora. */
+  records: BabyRecord[]
+  /**
+   * Sueño sin cerrar, sea del día que sea. No implica que el bebé siga
+   * dormido: puede ser un cronómetro que se olvidó de detener.
+   */
+  openSleep: SleepRecord | null
+  /** Últimos registros globales, independientes del día consultado. */
   last: {
-    feed: BabyEvent | null
-    diaper: BabyEvent | null
-    sleepEnd: BabyEvent | null // último sueño finalizado
+    feed: FeedRecord | null
+    diaper: DiaperRecord | null
+    sleepEnd: SleepRecord | null // último sueño finalizado
   }
   users: Record<string, string> // email -> nombre visible
-  serverNow: string // 'yyyy-MM-dd HH:mm' hora de Madrid del servidor
+  serverNow: string
   settings: Settings
   lifeDay: LifeDay | null // null mientras no haya fecha de nacimiento
-}
-
-// Datos que viajan al crear o editar un evento. El cliente genera el id
-// (UUID) antes de enviar: reintentar una petición nunca crea duplicados.
-export interface EventInput {
-  id: string
-  type: EventType
-  subtype: string
-  start: string
-  end: string | null
-  durationMin: number | null
-  quantityMl: number | null
-  detail: string | null
-  components: FeedComponents | null
-  notes: string
 }

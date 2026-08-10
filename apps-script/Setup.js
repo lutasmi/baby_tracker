@@ -1,13 +1,18 @@
 /**
- * Baby Tracker — instalación inicial.
+ * Baby Tracker — instalación y actualización de la hoja de cálculo.
  *
  * Ejecuta setup() una vez desde el editor de Apps Script (botón "Ejecutar").
- * Crea la hoja de cálculo si no existe, prepara las pestañas Usuarios y
- * Eventos con sus cabeceras y formatos, y da de alta como primer usuario a
- * quien ejecuta el script. Es seguro ejecutarlo varias veces.
+ * Crea la hoja si no existe y prepara una pestaña por tipo de registro, más
+ * `Usuarios` y `Bebe`. Es seguro ejecutarlo varias veces: solo añade lo que
+ * falta y nunca borra datos.
+ *
+ * Si vienes de una versión anterior, la pestaña `Eventos` se deja intacta. La
+ * aplicación ya no la lee: consérvala como histórico el tiempo que quieras y
+ * bórrala a mano cuando ya no te haga falta.
  */
 
 function setup() {
+  resetSheetCache();
   var props = PropertiesService.getScriptProperties();
   var id = props.getProperty('SPREADSHEET_ID');
   var ss;
@@ -19,16 +24,23 @@ function setup() {
   }
   ss.setSpreadsheetTimeZone(TZ);
 
-  setupSheet(ss, SHEET_USERS, USER_COLUMNS, {
-    textColumns: USER_COLUMNS,
-  });
-  setupSheet(ss, SHEET_EVENTS, COLUMNS, {
-    textColumns: COLUMNS.filter(function (c) {
-      return c !== 'Cantidad' && c !== 'Duracion_Minutos';
-    }),
-  });
+  setupSheet(ss, SHEET_USERS, USER_COLUMNS, []);
+  setupSheet(ss, SHEET_BABY, BABY_COLUMNS, [
+    'Objetivo_Pises',
+    'Objetivo_Cacas',
+    'Objetivo_Leche_Ml',
+  ]);
+
+  var types = recordTypeNames();
+  for (var i = 0; i < types.length; i++) {
+    var type = types[i];
+    setupSheet(ss, RECORD_TYPES[type].sheet, columnsFor(type), numericColumnsFor(type));
+    Logger.log('✔ Pestaña "' + RECORD_TYPES[type].sheet + '" lista.');
+  }
+
   removeDefaultSheet(ss);
   addOwnerIfEmpty(ss);
+  migrationNotice(ss);
 
   Logger.log('✔ Hoja de cálculo lista: ' + ss.getUrl());
   if (!props.getProperty('GOOGLE_CLIENT_ID')) {
@@ -40,29 +52,65 @@ function setup() {
   } else {
     Logger.log('✔ GOOGLE_CLIENT_ID configurado.');
   }
-  Logger.log('Siguiente paso: Implementar > Nueva implementación > Aplicación web.');
+  Logger.log('Siguiente paso: Implementar > Administrar implementaciones > nueva versión.');
 }
 
-function setupSheet(ss, name, headers, options) {
+/** Columnas de un tipo que guardan números, no texto. */
+function numericColumnsFor(type) {
+  var out = RECORD_TYPES[type].interval ? ['Duracion_Min'] : [];
+  var fields = RECORD_TYPES[type].fields;
+  for (var i = 0; i < fields.length; i++) {
+    if (fields[i].kind === 'int') out.push(fields[i].column);
+  }
+  return out;
+}
+
+/**
+ * Crea la pestaña si falta y garantiza que están todas las columnas. Las
+ * columnas que ya existen no se tocan ni se reordenan; las que faltan se
+ * añaden al final, de modo que actualizar nunca pierde datos.
+ */
+function setupSheet(ss, name, headers, numericColumns) {
   var sheet = ss.getSheetByName(name);
   if (!sheet) sheet = ss.insertSheet(name);
 
-  // Escribe las cabeceras solo si faltan, sin machacar datos existentes.
-  var firstRow = sheet.getRange(1, 1, 1, headers.length).getValues()[0];
-  var hasHeaders = String(firstRow[0]).trim() !== '';
-  if (!hasHeaders) {
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  var lastColumn = Math.max(1, sheet.getLastColumn());
+  var current = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  var present = {};
+  for (var i = 0; i < current.length; i++) {
+    var key = normText(current[i]).replace(/ /g, '_');
+    if (key) present[key] = true;
   }
-  sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+
+  var missing = [];
+  for (var j = 0; j < headers.length; j++) {
+    if (!present[normText(headers[j]).replace(/ /g, '_')]) missing.push(headers[j]);
+  }
+  if (missing.length) {
+    var startColumn = String(current[0]).trim() === '' ? 1 : lastColumn + 1;
+    sheet.getRange(1, startColumn, 1, missing.length).setValues([missing]);
+  }
+
+  var width = Math.max(sheet.getLastColumn(), headers.length);
+  sheet.getRange(1, 1, 1, width).setFontWeight('bold');
   sheet.setFrozenRows(1);
 
-  // Las columnas de fecha/hora se guardan como texto para que Sheets no las
-  // reinterprete; así la celda contiene exactamente 'yyyy-MM-dd HH:mm'.
-  for (var i = 0; i < headers.length; i++) {
-    var isText = options.textColumns.indexOf(headers[i]) !== -1;
-    var a1 = columnLetter(i + 1) + '2:' + columnLetter(i + 1);
-    sheet.getRange(a1).setNumberFormat(isText ? '@' : '0');
+  // Las columnas de fecha/hora y las de texto se fuerzan a texto para que
+  // Sheets no las reinterprete; así la celda contiene exactamente lo escrito.
+  var header = sheet.getRange(1, 1, 1, width).getValues()[0];
+  for (var c = 0; c < width; c++) {
+    var isNumeric = indexOfText(numericColumns, header[c]) !== -1;
+    var a1 = columnLetter(c + 1) + '2:' + columnLetter(c + 1);
+    sheet.getRange(a1).setNumberFormat(isNumeric ? '0' : '@');
   }
+}
+
+function indexOfText(list, value) {
+  var target = normText(value);
+  for (var i = 0; i < list.length; i++) {
+    if (normText(list[i]) === target) return i;
+  }
+  return -1;
 }
 
 function columnLetter(n) {
@@ -99,4 +147,15 @@ function addOwnerIfEmpty(ss) {
     Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'),
   ]);
   Logger.log('✔ Usuario inicial dado de alta: ' + email);
+}
+
+function migrationNotice(ss) {
+  var old = ss.getSheetByName('Eventos');
+  if (!old) return;
+  Logger.log(
+    'ℹ La pestaña "Eventos" de la versión anterior sigue ahí con ' +
+      Math.max(0, old.getLastRow() - 1) +
+      ' filas. La aplicación ya no la lee. Vuelve a introducir esos registros en ' +
+      'las pestañas nuevas y bórrala cuando quieras.'
+  );
 }

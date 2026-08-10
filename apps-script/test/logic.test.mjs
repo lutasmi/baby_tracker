@@ -5,357 +5,391 @@ import { describe, expect, it } from 'vitest'
 const require = createRequire(import.meta.url)
 const L = require('../Logic.js')
 
-const NOW = '2026-07-15 12:00'
+const NOW = '2026-08-07 16:00'
 
-function input(partial) {
-  return {
-    id: 'uuid-1',
-    type: 'sleep',
-    subtype: 'siesta',
-    start: '2026-07-15 10:00',
-    end: '2026-07-15 11:00',
-    durationMin: null,
-    quantityMl: null,
-    detail: null,
-    notes: '',
-    ...partial,
-  }
-}
+const sleep = (p = {}) => ({
+  id: 'uuid-1',
+  type: 'sleep',
+  start: '2026-08-07 11:37',
+  end: '2026-08-07 12:54',
+  kind: 'siesta',
+  notes: '',
+  ...p,
+})
 
-/** Toma con sus componentes: `{start, end, breastMin, expressedMl, formulaMl}`. */
-function feed({ start, end, breastMin, breastSide, expressedMl, formulaMl, mixtaMl, ...rest }) {
-  return input({
-    type: 'feed',
-    subtype: null,
-    start: start ?? '2026-07-15 09:00',
-    end: end === undefined ? '2026-07-15 09:20' : end,
-    components: { breastMin, breastSide, expressedMl, formulaMl, mixtaMl },
-    ...rest,
+const feed = (p = {}) => ({
+  id: 'uuid-2',
+  type: 'feed',
+  start: '2026-08-07 10:13',
+  end: '2026-08-07 10:31',
+  breastMin: 0,
+  breastSide: null,
+  expressedMl: 0,
+  formulaMl: 0,
+  notes: '',
+  ...p,
+})
+
+const diaper = (p = {}) => ({
+  id: 'uuid-3',
+  type: 'diaper',
+  start: '2026-08-07 14:08',
+  pee: false,
+  poop: false,
+  consistency: null,
+  notes: '',
+  ...p,
+})
+
+const bath = (p = {}) => ({
+  id: 'uuid-4',
+  type: 'bath',
+  start: '2026-08-07 15:00',
+  kind: 'completo',
+  durationMin: 0,
+  notes: '',
+  ...p,
+})
+
+// ---------------------------------------------------------------------------
+
+describe('declaración de tipos', () => {
+  it('cada tipo tiene su propia pestaña', () => {
+    const sheets = L.recordTypeNames().map((t) => L.RECORD_TYPES[t].sheet)
+    expect(sheets).toEqual(['Sueno', 'Tomas', 'Panales', 'Banos'])
+    expect(new Set(sheets).size).toBe(sheets.length)
   })
-}
 
-describe('normalizeAndValidate', () => {
-  it('acepta un sueño cerrado y calcula la duración', () => {
-    const e = L.normalizeAndValidate(input({}), NOW)
-    expect(e.durationMin).toBe(60)
+  it('las columnas se derivan del esquema, sin repetirse', () => {
+    for (const type of L.recordTypeNames()) {
+      const cols = L.columnsFor(type)
+      expect(new Set(cols).size).toBe(cols.length)
+      // Comunes en todas las pestañas, con el mismo nombre.
+      expect(cols).toContain('ID')
+      expect(cols).toContain('Fecha')
+      expect(cols).toContain('Notas')
+      for (const audit of L.AUDIT_COLUMNS) expect(cols).toContain(audit)
+    }
   })
 
-  it('acepta un sueño activo (sin fin)', () => {
-    const e = L.normalizeAndValidate(input({ end: null }), NOW)
-    expect(e.end).toBeNull()
-    expect(e.durationMin).toBeNull()
+  it('los tipos con intervalo llevan inicio, fin y duración; los puntuales, hora', () => {
+    expect(L.columnsFor('sleep')).toEqual(
+      expect.arrayContaining(['Hora_Inicio', 'Hora_Fin', 'Duracion_Min'])
+    )
+    expect(L.columnsFor('diaper')).toContain('Hora')
+    expect(L.columnsFor('diaper')).not.toContain('Hora_Inicio')
+    expect(L.startColumnOf('feed')).toBe('Hora_Inicio')
+    expect(L.startColumnOf('bath')).toBe('Hora')
   })
 
-  it('rechaza un fin anterior al inicio', () => {
-    expect(() => L.normalizeAndValidate(input({ end: '2026-07-15 09:00' }), NOW)).toThrowError(
+  it('la toma tiene una columna por magnitud', () => {
+    const cols = L.columnsFor('feed')
+    expect(cols).toEqual(
+      expect.arrayContaining(['Pecho_Min', 'Pecho_Lado', 'Extraida_Ml', 'Formula_Ml'])
+    )
+  })
+})
+
+describe('normalizeAndValidate · sueño', () => {
+  it('acepta un sueño cerrado y deriva la duración', () => {
+    const r = L.normalizeAndValidate(sleep(), NOW)
+    expect(r.durationMin).toBe(77)
+    expect(r.kind).toBe('siesta')
+  })
+
+  it('acepta un sueño sin cerrar', () => {
+    const r = L.normalizeAndValidate(sleep({ end: null }), NOW)
+    expect(r.end).toBeNull()
+    expect(r.durationMin).toBeNull()
+  })
+
+  it('rechaza un fin anterior o igual al inicio', () => {
+    expect(() => L.normalizeAndValidate(sleep({ end: '2026-08-07 11:00' }), NOW)).toThrow(
+      /posterior al inicio/
+    )
+    expect(() => L.normalizeAndValidate(sleep({ end: sleep().start }), NOW)).toThrow(
       /posterior al inicio/
     )
   })
 
-  it('rechaza inicios en el futuro', () => {
-    expect(() => L.normalizeAndValidate(input({ start: '2026-07-15 13:00', end: null }), NOW)).toThrowError(
-      /futuro/
-    )
-  })
-
-  it('rechaza duraciones de más de 24 horas', () => {
+  it('rechaza horas futuras y duraciones de más de 24 h', () => {
+    expect(() => L.normalizeAndValidate(sleep({ start: '2026-08-07 18:00' }), NOW)).toThrow(/futuro/)
     expect(() =>
-      L.normalizeAndValidate(
-        input({ start: '2026-07-13 10:00', end: '2026-07-14 11:00' }),
-        NOW
-      )
-    ).toThrowError(/24 horas/)
+      L.normalizeAndValidate(sleep({ start: '2026-08-05 10:00', end: '2026-08-06 11:00' }), NOW)
+    ).toThrow(/24 horas/)
   })
 
-  it('la toma conserva inicio y fin y deriva la duración con precisión de 1 min', () => {
-    const e = L.normalizeAndValidate(
-      feed({ start: '2026-07-15 10:13', end: '2026-07-15 10:31', formulaMl: 63 }),
-      NOW
-    )
-    expect(e.end).toBe('2026-07-15 10:31')
-    expect(e.durationMin).toBe(18)
-    expect(e.quantityMl).toBe(63)
-    expect(e.subtype).toBe('biberon')
-    expect(e.components).toMatchObject({ formulaMl: 63, expressedMl: 0, breastMin: 0 })
-  })
-
-  it('acepta una toma con varios componentes y deriva el subtipo mixto', () => {
-    const e = L.normalizeAndValidate(
-      feed({
-        start: '2026-07-15 09:00',
-        end: '2026-07-15 09:30',
-        breastMin: 17,
-        expressedMl: 28,
-        formulaMl: 37,
-      }),
-      NOW
-    )
-    expect(e.subtype).toBe('mixta')
-    expect(e.detail).toBe('mixta')
-    // Los ml cuantificables suman; los minutos de pecho no se convierten.
-    expect(e.quantityMl).toBe(65)
-    expect(e.components.breastMin).toBe(17)
-  })
-
-  it('una toma solo de pecho es lactancia y no tiene cantidad', () => {
-    const e = L.normalizeAndValidate(
-      feed({ start: '2026-07-15 09:00', end: '2026-07-15 09:20', breastMin: 20, breastSide: 'ambos' }),
-      NOW
-    )
-    expect(e.subtype).toBe('lactancia')
-    expect(e.quantityMl).toBeNull()
-    expect(e.components.breastSide).toBe('ambos')
-  })
-
-  it('admite una toma puntual (inicio igual que fin)', () => {
-    const e = L.normalizeAndValidate(
-      feed({ start: '2026-07-15 09:00', end: '2026-07-15 09:00', formulaMl: 60 }),
-      NOW
-    )
-    expect(e.durationMin).toBe(0)
-  })
-
-  it('rechaza una toma sin ningún componente', () => {
-    expect(() => L.normalizeAndValidate(feed({}), NOW)).toThrowError(/al menos un componente/)
-  })
-
-  it('rechaza cantidades fuera de rango y minutos de pecho imposibles', () => {
-    expect(() => L.normalizeAndValidate(feed({ formulaMl: 2000 }), NOW)).toThrowError(/fórmula/)
-    expect(() =>
-      L.normalizeAndValidate(
-        feed({ start: '2026-07-15 09:00', end: '2026-07-15 09:10', breastMin: 90 }),
-        NOW
-      )
-    ).toThrowError(/superar la duración/)
-  })
-
-  it('descarta la consistencia en un pañal de solo pipí', () => {
-    const e = L.normalizeAndValidate(
-      input({ type: 'diaper', subtype: 'pipi', end: null, detail: 'liquida' }),
-      NOW
-    )
-    expect(e.detail).toBeNull()
-  })
-
-  it('acepta la consistencia cuando hay caca', () => {
-    const e = L.normalizeAndValidate(
-      input({ type: 'diaper', subtype: 'caca', end: null, detail: 'liquida' }),
-      NOW
-    )
-    expect(e.detail).toBe('liquida')
-  })
-
-  it('valida la duración opcional del baño', () => {
-    const e = L.normalizeAndValidate(
-      input({ type: 'bath', subtype: 'completo', end: null, durationMin: 15 }),
-      NOW
-    )
-    expect(e.durationMin).toBe(15)
-
-    expect(() =>
-      L.normalizeAndValidate(
-        input({ type: 'bath', subtype: 'completo', end: null, durationMin: 500 }),
-        NOW
-      )
-    ).toThrowError(/240/)
-  })
-
-  it('recorta las notas y rechaza ids vacíos', () => {
-    const e = L.normalizeAndValidate(input({ notes: '  hola  ' }), NOW)
-    expect(e.notes).toBe('hola')
-    expect(() => L.normalizeAndValidate(input({ id: '  ' }), NOW)).toThrowError(/Identificador/)
+  it('exige el tipo de sueño', () => {
+    expect(() => L.normalizeAndValidate(sleep({ kind: null }), NOW)).toThrow(/Falta Tipo/)
+    expect(() => L.normalizeAndValidate(sleep({ kind: 'profundo' }), NOW)).toThrow(/Tipo/)
   })
 })
 
-describe('eventToRecord / recordToEvent', () => {
-  it('hace la ida y vuelta de una toma mixta sin perder información', () => {
-    const event = L.normalizeAndValidate(
-      feed({
-        start: '2026-07-15 09:00',
-        end: '2026-07-15 09:29',
-        breastMin: 10,
-        breastSide: 'derecho',
-        expressedMl: 25,
-        formulaMl: 15,
-        notes: 'con ayuda',
-      }),
+describe('normalizeAndValidate · toma', () => {
+  it('guarda inicio y fin reales con precisión de un minuto', () => {
+    const r = L.normalizeAndValidate(feed({ formulaMl: 63 }), NOW)
+    expect(r.start).toBe('2026-08-07 10:13')
+    expect(r.end).toBe('2026-08-07 10:31')
+    expect(r.durationMin).toBe(18)
+    expect(r.formulaMl).toBe(63)
+  })
+
+  it('admite varios componentes a la vez sin mezclarlos', () => {
+    const r = L.normalizeAndValidate(
+      feed({ start: '2026-08-07 15:00', end: '2026-08-07 15:30', breastMin: 17, expressedMl: 28, formulaMl: 37 }),
       NOW
     )
-    event.createdBy = 'ana@example.com'
-    event.createdAt = '2026-07-15 09:30'
-    const rec = L.eventToRecord(event, false)
-    expect(rec.Tipo_Evento).toBe('Toma')
-    expect(rec.Subtipo).toBe('Mixta')
-    expect(rec.Fecha).toBe('2026-07-15')
-    expect(rec.Cantidad).toBe(40)
-    expect(rec.Unidad).toBe('ml')
-    // El desglose viaja en Detalle_2, la única columna que estaba sin usar.
-    expect(rec.Detalle_2).toBe('pecho 10 min (Derecho) · extraída 25 ml · fórmula 15 ml')
+    expect(r.breastMin).toBe(17)
+    expect(r.expressedMl).toBe(28)
+    expect(r.formulaMl).toBe(37)
+    // Sin conversión de minutos a mililitros en ningún sitio.
+    expect(r.formulaMl + r.expressedMl).toBe(65)
+  })
 
-    const back = L.recordToEvent(rec)
-    expect(back.deleted).toBe(false)
-    expect(back.event).toMatchObject({
-      id: 'uuid-1',
-      type: 'feed',
-      subtype: 'mixta',
-      start: '2026-07-15 09:00',
-      end: '2026-07-15 09:29',
-      durationMin: 29,
-      quantityMl: 40,
-      notes: 'con ayuda',
-      createdBy: 'ana@example.com',
+  it('admite una toma puntual (inicio igual que fin)', () => {
+    const r = L.normalizeAndValidate(
+      feed({ end: feed().start, formulaMl: 60 }),
+      NOW
+    )
+    expect(r.durationMin).toBe(0)
+  })
+
+  it('exige hora de fin', () => {
+    expect(() => L.normalizeAndValidate(feed({ end: null, formulaMl: 60 }), NOW)).toThrow(/fin/)
+  })
+
+  it('exige al menos un componente', () => {
+    expect(() => L.normalizeAndValidate(feed(), NOW)).toThrow(/al menos un componente/)
+  })
+
+  it('rechaza cantidades fuera de rango', () => {
+    expect(() => L.normalizeAndValidate(feed({ formulaMl: 2000 }), NOW)).toThrow(/Formula_Ml/)
+    expect(() => L.normalizeAndValidate(feed({ expressedMl: -5 }), NOW)).toThrow(/Extraida_Ml/)
+  })
+
+  it('no admite más minutos de pecho que duración de la toma', () => {
+    expect(() =>
+      L.normalizeAndValidate(feed({ start: '2026-08-07 15:00', end: '2026-08-07 15:10', breastMin: 90 }), NOW)
+    ).toThrow(/superar la duración/)
+  })
+
+  it('descarta el lado si no hay pecho', () => {
+    const r = L.normalizeAndValidate(feed({ formulaMl: 60, breastSide: 'izquierdo' }), NOW)
+    expect(r.breastSide).toBeNull()
+  })
+})
+
+describe('normalizeAndValidate · pañal y baño', () => {
+  it('el pañal registra pis y caca por separado', () => {
+    const r = L.normalizeAndValidate(diaper({ pee: true, poop: true }), NOW)
+    expect(r.pee).toBe(true)
+    expect(r.poop).toBe(true)
+  })
+
+  it('exige que el pañal lleve algo', () => {
+    expect(() => L.normalizeAndValidate(diaper(), NOW)).toThrow(/pis, caca/)
+  })
+
+  it('descarta la consistencia si no hay caca', () => {
+    const r = L.normalizeAndValidate(diaper({ pee: true, consistency: 'liquida' }), NOW)
+    expect(r.consistency).toBeNull()
+  })
+
+  it('conserva la consistencia cuando hay caca', () => {
+    const r = L.normalizeAndValidate(diaper({ poop: true, consistency: 'pastosa' }), NOW)
+    expect(r.consistency).toBe('pastosa')
+  })
+
+  it('valida la duración opcional del baño', () => {
+    expect(L.normalizeAndValidate(bath({ durationMin: 15 }), NOW).durationMin).toBe(15)
+    expect(L.normalizeAndValidate(bath(), NOW).durationMin).toBe(0)
+    expect(() => L.normalizeAndValidate(bath({ durationMin: 500 }), NOW)).toThrow(/Duracion_Min/)
+  })
+
+  it('recorta las notas y rechaza ids vacíos', () => {
+    expect(L.normalizeAndValidate(bath({ notes: '  hola  ' }), NOW).notes).toBe('hola')
+    expect(() => L.normalizeAndValidate(bath({ id: '  ' }), NOW)).toThrow(/Identificador/)
+  })
+})
+
+describe('recordToRow / rowToRecord', () => {
+  const withAudit = (r) => ({
+    ...r,
+    createdBy: 'ana@example.com',
+    createdAt: '2026-08-07 16:00',
+    updatedBy: null,
+    updatedAt: null,
+  })
+
+  it('la toma va y vuelve con cada magnitud en su columna', () => {
+    const record = withAudit(
+      L.normalizeAndValidate(
+        feed({
+          start: '2026-08-07 09:00',
+          end: '2026-08-07 09:29',
+          breastMin: 10,
+          breastSide: 'derecho',
+          expressedMl: 25,
+          formulaMl: 15,
+          notes: 'con ayuda',
+        }),
+        NOW
+      )
+    )
+    const row = L.recordToRow(record, false)
+    expect(row).toMatchObject({
+      ID: 'uuid-2',
+      Fecha: '2026-08-07',
+      Hora_Inicio: '2026-08-07 09:00',
+      Hora_Fin: '2026-08-07 09:29',
+      Duracion_Min: 29,
+      Pecho_Min: 10,
+      Pecho_Lado: 'Derecho',
+      Extraida_Ml: 25,
+      Formula_Ml: 15,
+      Notas: 'con ayuda',
+      Eliminado: '',
     })
-    expect(back.event.components).toMatchObject({
+
+    const back = L.rowToRecord('feed', row)
+    expect(back.deleted).toBe(false)
+    expect(back.record).toMatchObject({
+      id: 'uuid-2',
+      type: 'feed',
+      start: '2026-08-07 09:00',
+      end: '2026-08-07 09:29',
+      durationMin: 29,
       breastMin: 10,
       breastSide: 'derecho',
       expressedMl: 25,
       formulaMl: 15,
+      createdBy: 'ana@example.com',
     })
   })
 
-  it('lee filas editadas a mano: etiquetas sin acentos y hora suelta', () => {
-    const back = L.recordToEvent({
-      Evento_ID: 'manual-1',
-      Tipo_Evento: 'sueño',
-      Fecha: '15/07/2026',
+  it('el pañal escribe booleanos legibles', () => {
+    const row = L.recordToRow(
+      withAudit(L.normalizeAndValidate(diaper({ pee: true, poop: true, consistency: 'liquida' }), NOW)),
+      false
+    )
+    expect(row).toMatchObject({ Hora: '2026-08-07 14:08', Pis: 'TRUE', Caca: 'TRUE', Consistencia: 'Líquida' })
+    expect(row.Hora_Inicio).toBeUndefined()
+
+    const back = L.rowToRecord('diaper', row).record
+    expect(back).toMatchObject({ pee: true, poop: true, consistency: 'liquida' })
+  })
+
+  it('un pañal solo de pis deja la casilla de caca vacía', () => {
+    const row = L.recordToRow(withAudit(L.normalizeAndValidate(diaper({ pee: true }), NOW)), false)
+    expect(row.Pis).toBe('TRUE')
+    expect(row.Caca).toBe('')
+    expect(L.rowToRecord('diaper', row).record.poop).toBe(false)
+  })
+
+  it('marca el borrado lógico y reconoce sus variantes', () => {
+    const record = withAudit(L.normalizeAndValidate(bath(), NOW))
+    expect(L.recordToRow(record, true).Eliminado).toBe('TRUE')
+    for (const v of ['TRUE', 'sí', 'Si', '1', true, 'x']) {
+      const row = { ...L.recordToRow(record, false), Eliminado: v }
+      expect(L.rowToRecord('bath', row).deleted).toBe(true)
+    }
+  })
+
+  it('devuelve null para filas sin identificador o sin hora', () => {
+    expect(L.rowToRecord('bath', { ID: '', Hora: '2026-08-07 19:00' })).toBeNull()
+    expect(L.rowToRecord('bath', { ID: 'x', Hora: '', Fecha: '' })).toBeNull()
+  })
+})
+
+describe('lectura tolerante de ediciones manuales', () => {
+  it('acepta etiquetas sin acentos, en mayúsculas y fechas con barras', () => {
+    const back = L.rowToRecord('sleep', {
+      ID: 'manual-1',
+      Fecha: '07/08/2026',
       Hora_Inicio: '10:00',
       Hora_Fin: '11:30',
-      Duracion_Minutos: '',
-      Subtipo: 'SIESTA',
-      Cantidad: '',
-      Unidad: '',
-      Detalle_1: '',
-      Detalle_2: '',
+      Duracion_Min: '',
+      Tipo: 'SIESTA',
       Notas: '',
-      Creado_Por: 'ana@example.com',
-      Creado_En: '',
-      Modificado_Por: '',
-      Modificado_En: '',
       Eliminado: '',
     })
-    expect(back.event).toMatchObject({
-      type: 'sleep',
-      subtype: 'siesta',
-      start: '2026-07-15 10:00',
-      end: '2026-07-15 11:30',
+    expect(back.record).toMatchObject({
+      start: '2026-08-07 10:00',
+      end: '2026-08-07 11:30',
       durationMin: 90,
+      kind: 'siesta',
     })
   })
 
   it('interpreta un fin de solo hora que cruza la medianoche', () => {
-    const back = L.recordToEvent({
-      Evento_ID: 'manual-2',
-      Tipo_Evento: 'Sueño',
-      Fecha: '2026-07-14',
+    const back = L.rowToRecord('sleep', {
+      ID: 'manual-2',
+      Fecha: '2026-08-07',
       Hora_Inicio: '21:30',
       Hora_Fin: '07:00',
-      Subtipo: 'Nocturno',
+      Tipo: 'Nocturno',
       Eliminado: '',
     })
-    expect(back.event.end).toBe('2026-07-15 07:00')
-    expect(back.event.durationMin).toBe(570)
+    expect(back.record.end).toBe('2026-08-08 07:00')
+    expect(back.record.durationMin).toBe(570)
   })
 
-  it('reconoce las variantes de borrado lógico', () => {
-    for (const v of ['TRUE', 'sí', 'Si', '1', true, 'x']) {
-      expect(L.recordToEvent({ Evento_ID: 'a', Tipo_Evento: 'Baño', Fecha: '2026-07-15', Hora_Inicio: '10:00', Subtipo: 'Baño completo', Eliminado: v }).deleted).toBe(true)
-    }
-    expect(L.recordToEvent({ Evento_ID: 'a', Tipo_Evento: 'Baño', Fecha: '2026-07-15', Hora_Inicio: '10:00', Subtipo: 'Baño completo', Eliminado: '' }).deleted).toBe(false)
+  it('recalcula la duración aunque la celda diga otra cosa', () => {
+    const back = L.rowToRecord('feed', {
+      ID: 'manual-3',
+      Fecha: '2026-08-07',
+      Hora_Inicio: '10:00',
+      Hora_Fin: '10:20',
+      Duracion_Min: '999',
+      Formula_Ml: '60',
+      Eliminado: '',
+    })
+    expect(back.record.durationMin).toBe(20)
+    expect(back.record.formulaMl).toBe(60)
   })
 
-  it('devuelve null para filas no interpretables', () => {
-    expect(L.recordToEvent({ Tipo_Evento: 'Cosa rara', Hora_Inicio: '10:00' })).toBeNull()
-    expect(L.recordToEvent({ Tipo_Evento: 'Sueño', Fecha: '', Hora_Inicio: '' })).toBeNull()
+  it('una casilla de pañal marcada a mano con una equis cuenta', () => {
+    const back = L.rowToRecord('diaper', {
+      ID: 'manual-4',
+      Fecha: '2026-08-07',
+      Hora: '14:08',
+      Pis: 'x',
+      Caca: '',
+      Eliminado: '',
+    })
+    expect(back.record.pee).toBe(true)
+    expect(back.record.poop).toBe(false)
   })
 })
 
-describe('componentes de la toma', () => {
-  it('parsea el desglose tolerando acentos, mayúsculas y separadores', () => {
-    expect(L.parseComponents('PECHO 12 MIN; Extraida 30 ml, Fórmula 45 ml')).toMatchObject({
-      breastMin: 12,
-      expressedMl: 30,
-      formulaMl: 45,
-    })
-    expect(L.parseComponents('pecho 15 min (Ambos)')).toMatchObject({
-      breastMin: 15,
-      breastSide: 'ambos',
-    })
-    expect(L.parseComponents('')).toBeNull()
-    expect(L.parseComponents('cualquier cosa escrita a mano')).toBeNull()
+describe('recordTouchesDay', () => {
+  const now = '2026-08-07 12:00'
+
+  it('incluye el sueño nocturno en el día en que termina', () => {
+    const r = { type: 'sleep', start: '2026-08-06 21:30', end: '2026-08-07 07:00' }
+    expect(L.recordTouchesDay(r, '2026-08-06', now)).toBe(true)
+    expect(L.recordTouchesDay(r, '2026-08-07', now)).toBe(true)
+    expect(L.recordTouchesDay(r, '2026-08-08', now)).toBe(false)
   })
 
-  it('deriva el subtipo y la etiqueta de Detalle_1 según los componentes', () => {
-    const c = (p) => ({ ...L.emptyComponents(), ...p })
-    expect(L.feedSubtypeFor(c({ formulaMl: 60 }))).toBe('biberon')
-    expect(L.feedSubtypeFor(c({ breastMin: 15 }))).toBe('lactancia')
-    expect(L.feedSubtypeFor(c({ breastMin: 15, formulaMl: 30 }))).toBe('mixta')
-    expect(L.feedDetailLabel(c({ formulaMl: 60 }))).toBe('formula')
-    expect(L.feedDetailLabel(c({ expressedMl: 60 }))).toBe('materna')
-    expect(L.feedDetailLabel(c({ expressedMl: 20, formulaMl: 40 }))).toBe('mixta')
-    expect(L.feedDetailLabel(c({ breastMin: 10, breastSide: 'izquierdo' }))).toBe('izquierdo')
+  it('un registro puntual solo toca su día', () => {
+    const r = { type: 'diaper', start: '2026-08-07 08:00' }
+    expect(L.recordTouchesDay(r, '2026-08-07', now)).toBe(true)
+    expect(L.recordTouchesDay(r, '2026-08-06', now)).toBe(false)
   })
 
-  it('no mezcla minutos de pecho con ml cuantificables', () => {
-    const c = { ...L.emptyComponents(), breastMin: 40, expressedMl: 10, formulaMl: 20 }
-    expect(L.quantifiableMl(c)).toBe(30)
-  })
-})
-
-describe('compatibilidad con registros de la v1', () => {
-  const row = (partial) => ({
-    Evento_ID: 'v1',
-    Tipo_Evento: 'Toma',
-    Fecha: '2026-07-15',
-    Hora_Inicio: '2026-07-15 09:00',
-    Hora_Fin: '',
-    Duracion_Minutos: '',
-    Subtipo: 'Biberón',
-    Cantidad: '',
-    Unidad: '',
-    Detalle_1: '',
-    Detalle_2: '', // la v1 nunca escribía esta columna
-    Notas: '',
-    Eliminado: '',
-    ...partial,
+  it('un sueño que termina a medianoche no aparece al día siguiente', () => {
+    const r = { type: 'sleep', start: '2026-08-06 22:00', end: '2026-08-07 00:00' }
+    expect(L.recordTouchesDay(r, '2026-08-07', now)).toBe(false)
+    expect(L.recordTouchesDay(r, '2026-08-06', now)).toBe(true)
   })
 
-  it('un biberón de fórmula se lee como componente de fórmula', () => {
-    const e = L.recordToEvent(row({ Cantidad: '120', Detalle_1: 'Fórmula' })).event
-    expect(e.components).toMatchObject({ formulaMl: 120, expressedMl: 0, breastMin: 0 })
-    expect(e.quantityMl).toBe(120)
-    expect(e.subtype).toBe('biberon')
-  })
-
-  it('un biberón de leche materna se lee como leche extraída', () => {
-    const e = L.recordToEvent(row({ Cantidad: '90', Detalle_1: 'Materna' })).event
-    expect(e.components).toMatchObject({ expressedMl: 90, formulaMl: 0 })
-  })
-
-  it('un biberón mixto conserva el total aunque se desconozca el reparto', () => {
-    const e = L.recordToEvent(row({ Cantidad: '80', Detalle_1: 'Mixta' })).event
-    expect(e.components).toMatchObject({ mixtaMl: 80, formulaMl: 0, expressedMl: 0 })
-    expect(L.quantifiableMl(e.components)).toBe(80)
-  })
-
-  it('una lactancia antigua se lee como minutos de pecho', () => {
-    const e = L.recordToEvent(
-      row({
-        Subtipo: 'Lactancia',
-        Hora_Fin: '2026-07-15 09:25',
-        Detalle_1: 'Izquierdo',
-      })
-    ).event
-    expect(e.components).toMatchObject({ breastMin: 25, breastSide: 'izquierdo' })
-    expect(e.subtype).toBe('lactancia')
-    expect(e.quantityMl).toBeNull()
-  })
-
-  it('el desglose de Detalle_2 tiene prioridad sobre la lectura heredada', () => {
-    const e = L.recordToEvent(
-      row({ Cantidad: '120', Detalle_1: 'Fórmula', Detalle_2: 'extraída 45 ml · fórmula 15 ml' })
-    ).event
-    expect(e.components).toMatchObject({ expressedMl: 45, formulaMl: 15 })
-    expect(e.quantityMl).toBe(60)
+  it('un sueño olvidado no se arrastra por todos los días siguientes', () => {
+    const olvidado = { type: 'sleep', start: '2026-08-02 22:00', end: null }
+    expect(L.recordTouchesDay(olvidado, '2026-08-02', now)).toBe(true)
+    expect(L.recordTouchesDay(olvidado, '2026-08-03', now)).toBe(true) // hasta el tope
+    expect(L.recordTouchesDay(olvidado, '2026-08-04', now)).toBe(false)
+    expect(L.recordTouchesDay(olvidado, '2026-08-07', now)).toBe(false)
   })
 })
 
@@ -366,109 +400,75 @@ describe('día de vida', () => {
     expect(L.lifeDayNumber(BIRTH, '2026-08-05 09:17')).toBe(1)
     expect(L.lifeDayNumber(BIRTH, '2026-08-06 09:16')).toBe(1)
     expect(L.lifeDayNumber(BIRTH, '2026-08-06 09:17')).toBe(2)
-    expect(L.lifeDayNumber(BIRTH, '2026-08-07 23:59')).toBe(3)
   })
 
-  it('separa correctamente los eventos a ambos lados de la hora de nacimiento', () => {
+  it('separa los registros a ambos lados de la hora de nacimiento', () => {
     expect(L.lifeDayNumber(BIRTH, '2026-08-07 09:10')).toBe(2)
     expect(L.lifeDayNumber(BIRTH, '2026-08-07 09:20')).toBe(3)
   })
 
-  it('devuelve 0 antes de nacer', () => {
+  it('devuelve 0 antes de nacer y calcula el rango', () => {
     expect(L.lifeDayNumber(BIRTH, '2026-08-05 09:10')).toBe(0)
-  })
-
-  it('calcula el rango del día de vida', () => {
     expect(L.lifeDayRange(BIRTH, 3)).toEqual({
       start: '2026-08-07 09:17',
       end: '2026-08-08 09:17',
     })
   })
 
-  it('suma los totales del día de vida y deja fuera lo que no le pertenece', () => {
+  it('suma los totales del periodo y deja fuera lo demás', () => {
     const range = L.lifeDayRange(BIRTH, 3)
-    const mk = (start, partial) => ({ start, type: 'feed', subtype: 'biberon', ...partial })
-    const events = [
-      mk('2026-08-07 09:10', { components: { ...L.emptyComponents(), formulaMl: 999 } }), // día 2
-      mk('2026-08-07 09:20', { components: { ...L.emptyComponents(), formulaMl: 60 } }),
-      mk('2026-08-07 14:00', {
-        components: { ...L.emptyComponents(), expressedMl: 40, breastMin: 15 },
-      }),
-      mk('2026-08-08 08:00', { components: { ...L.emptyComponents(), mixtaMl: 30 } }),
-      { start: '2026-08-07 12:00', type: 'diaper', subtype: 'ambos' },
-      { start: '2026-08-07 18:00', type: 'diaper', subtype: 'pipi' },
-      { start: '2026-08-08 10:00', type: 'diaper', subtype: 'caca' }, // día 4
-      { start: '2026-08-07 20:00', type: 'sleep', subtype: 'nocturno' },
+    const records = [
+      { type: 'feed', start: '2026-08-07 09:10', formulaMl: 999 }, // día 2
+      { type: 'feed', start: '2026-08-07 09:20', formulaMl: 60 },
+      { type: 'feed', start: '2026-08-07 14:00', expressedMl: 40, breastMin: 15 },
+      { type: 'feed', start: '2026-08-08 09:17', formulaMl: 999 }, // día 4
+      { type: 'diaper', start: '2026-08-07 12:00', pee: true, poop: true },
+      { type: 'diaper', start: '2026-08-07 18:00', pee: true },
+      { type: 'sleep', start: '2026-08-07 20:00' },
     ]
-    const t = L.lifeDayTotals(events, range.start, range.end)
+    const t = L.lifeDayTotals(records, range.start, range.end)
     expect(t).toMatchObject({
-      feeds: 3,
+      feeds: 2,
       formulaMl: 60,
       expressedMl: 40,
-      mixtaMl: 30,
       breastMin: 15,
       pees: 2,
       poops: 1,
       diapers: 2,
     })
-    // Leche cuantificable: fórmula + extraída + mixta, sin el pecho directo.
-    expect(t.milkMl).toBe(130)
+    // Leche cuantificable: fórmula + extraída, sin el pecho directo.
+    expect(t.milkMl).toBe(100)
   })
 })
 
-describe('ajustes', () => {
-  it('acepta nacimiento y objetivos válidos', () => {
-    const s = L.normalizeSettings({
+describe('ajustes en la pestaña Bebe', () => {
+  it('va y vuelve entre ajustes y fila', () => {
+    const settings = L.normalizeSettings({
       birth: '2026-08-05 09:17',
       goals: { pees: 6, poops: 3, milkMl: 400 },
     })
-    expect(s).toEqual({ birth: '2026-08-05 09:17', goals: { pees: 6, poops: 3, milkMl: 400 } })
+    const row = L.settingsToBabyRow(settings)
+    expect(row).toEqual({
+      Fecha_Nacimiento: '2026-08-05',
+      Hora_Nacimiento: '09:17',
+      Objetivo_Pises: 6,
+      Objetivo_Cacas: 3,
+      Objetivo_Leche_Ml: 400,
+    })
+    expect(L.babyRowToSettings(row)).toEqual(settings)
   })
 
-  it('sin nacimiento ni objetivos devuelve los valores neutros', () => {
-    expect(L.normalizeSettings({})).toEqual(L.defaultSettings())
-    expect(L.normalizeSettings(null)).toEqual(L.defaultSettings())
+  it('una pestaña vacía da los valores neutros', () => {
+    expect(L.babyRowToSettings(null)).toEqual(L.defaultSettings())
+    expect(L.babyRowToSettings({})).toEqual(L.defaultSettings())
+  })
+
+  it('acepta el nacimiento escrito a mano con la fecha en otro formato', () => {
+    const s = L.babyRowToSettings({ Fecha_Nacimiento: '05/08/2026', Hora_Nacimiento: '9:17' })
+    expect(s.birth).toBe('2026-08-05 09:17')
   })
 
   it('rechaza una fecha de nacimiento mal formada', () => {
-    expect(() => L.normalizeSettings({ birth: '5 de agosto' })).toThrowError(/nacimiento/)
-  })
-})
-
-describe('eventTouchesDay', () => {
-  const now = '2026-07-15 12:00'
-
-  it('incluye el sueño nocturno en el día en que termina', () => {
-    const e = { type: 'sleep', start: '2026-07-14 21:30', end: '2026-07-15 07:00' }
-    expect(L.eventTouchesDay(e, '2026-07-14', now)).toBe(true)
-    expect(L.eventTouchesDay(e, '2026-07-15', now)).toBe(true)
-    expect(L.eventTouchesDay(e, '2026-07-16', now)).toBe(false)
-  })
-
-  it('el sueño en curso toca desde su inicio hasta ahora', () => {
-    const e = { type: 'sleep', start: '2026-07-14 22:00', end: null }
-    expect(L.eventTouchesDay(e, '2026-07-15', now)).toBe(true)
-    expect(L.eventTouchesDay(e, '2026-07-13', now)).toBe(false)
-  })
-
-  it('un sueño olvidado no se arrastra por todos los días siguientes', () => {
-    const olvidado = { type: 'sleep', start: '2026-07-10 22:00', end: null }
-    const ahora = '2026-07-15 12:00'
-    expect(L.eventTouchesDay(olvidado, '2026-07-10', ahora)).toBe(true)
-    expect(L.eventTouchesDay(olvidado, '2026-07-11', ahora)).toBe(true) // hasta el tope
-    expect(L.eventTouchesDay(olvidado, '2026-07-12', ahora)).toBe(false)
-    expect(L.eventTouchesDay(olvidado, '2026-07-15', ahora)).toBe(false)
-  })
-
-  it('un evento puntual solo toca su día', () => {
-    const e = { type: 'diaper', start: '2026-07-15 08:00', end: null }
-    expect(L.eventTouchesDay(e, '2026-07-15', now)).toBe(true)
-    expect(L.eventTouchesDay(e, '2026-07-14', now)).toBe(false)
-  })
-
-  it('un sueño que termina exactamente a medianoche no aparece al día siguiente', () => {
-    const e = { type: 'sleep', start: '2026-07-14 22:00', end: '2026-07-15 00:00' }
-    expect(L.eventTouchesDay(e, '2026-07-15', now)).toBe(false)
-    expect(L.eventTouchesDay(e, '2026-07-14', now)).toBe(true)
+    expect(() => L.normalizeSettings({ birth: '5 de agosto' })).toThrow(/nacimiento/)
   })
 })
