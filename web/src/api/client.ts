@@ -1,7 +1,15 @@
 // Cliente de la API real (Google Apps Script).
 
 import { loadSession } from '../session'
-import type { BabyRecord, DayData, RecordInput, RecordType, Settings, User } from '../types'
+import type {
+  BabyRecord,
+  DayData,
+  History,
+  RecordInput,
+  RecordType,
+  Settings,
+  User,
+} from '../types'
 import { ApiError, type Api, type ApiErrorCode } from './types'
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
@@ -59,6 +67,9 @@ export const realApi: Api = {
   },
   getDay(date: string) {
     return call<DayData>('getDay', { date })
+  },
+  getHistory(days: number) {
+    return call<History>('getHistory', { days })
   },
   createRecord(input: RecordInput) {
     return call<BabyRecord>('createRecord', { record: input })

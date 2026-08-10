@@ -6,6 +6,7 @@ import { clearDayCache } from './store'
 import { showToast, subscribeToast, type Toast } from './toast'
 import type { RecordType } from './types'
 import { Dashboard } from './views/Dashboard'
+import { HistoryView } from './views/History'
 import { EditRecord, NewRecord } from './views/RecordForm'
 import { Login } from './views/Login'
 import { SettingsView } from './views/Settings'
@@ -82,6 +83,9 @@ function Screen({ session, onLogout }: { session: Session; onLogout: () => void 
   }
   if (route.startsWith('#/cronologia')) {
     return <Timeline date={route.split('/')[2]} />
+  }
+  if (route.startsWith('#/evolucion')) {
+    return <HistoryView />
   }
   if (route.startsWith('#/ajustes')) {
     return <SettingsView />

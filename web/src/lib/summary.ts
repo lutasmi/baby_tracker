@@ -89,24 +89,24 @@ export function recordDetail(r: BabyRecord): string {
 }
 
 /**
- * Hora que se muestra en la cronología del día `date`:
- *  - registro puntual: '14:30'
- *  - con fin el mismo día: '14:30–15:45'
- *  - empezó otro día: '→ 07:00'
- *  - termina otro día o sigue sin cerrar: '21:30 →'
+ * Cómo se muestra la hora en la columna izquierda de la cronología: una hora
+ * grande y, debajo, la matización que haga falta.
+ *
+ *   14:30            registro puntual
+ *   14:30 → 15:45    empieza y acaba el mismo día
+ *   07:00 de antes   venía del día anterior
+ *   21:30 sin cerrar sueño que sigue abierto
  */
-export function recordTimeLabel(r: BabyRecord, date: string): string {
-  const startsToday = dateOf(r.start) === date
+export function recordTimeParts(r: BabyRecord, date: string): { time: string; note: string | null } {
   const end = endOf(r)
-  if (!end) {
-    // Sin fin: solo el sueño queda abierto; el resto son registros puntuales.
-    if (r.type !== 'sleep') return timeOf(r.start)
-    return startsToday ? `${timeOf(r.start)} →` : '→'
+  const startsToday = dateOf(r.start) === date
+
+  if (!startsToday) {
+    const endsToday = end != null && dateOf(end) === date
+    return { time: timeOf(endsToday ? end! : r.start), note: 'de antes' }
   }
-  const endsToday = dateOf(end) === date
-  if (startsToday && endsToday) {
-    return end === r.start ? timeOf(r.start) : `${timeOf(r.start)}–${timeOf(end)}`
-  }
-  if (startsToday) return `${timeOf(r.start)} →`
-  return `→ ${timeOf(end)}`
+  if (end && dateOf(end) !== date) return { time: timeOf(r.start), note: 'sigue' }
+  if (end && end !== r.start) return { time: timeOf(r.start), note: `→ ${timeOf(end)}` }
+  if (!end && r.type === 'sleep') return { time: timeOf(r.start), note: 'sin cerrar' }
+  return { time: timeOf(r.start), note: null }
 }

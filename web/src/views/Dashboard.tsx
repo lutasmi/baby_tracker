@@ -103,7 +103,12 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
 
         {data && (
           <>
-            <LifeDayCard lifeDay={data.lifeDay} settings={data.settings} now={now} />
+            <LifeDayCard
+              lifeDay={data.lifeDay}
+              settings={data.settings}
+              last={data.last}
+              now={now}
+            />
 
             <div class="action-grid">
               <button class="action-btn action-feed" onClick={() => navigate('#/nuevo/toma')}>
@@ -131,9 +136,14 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
 
             <WeightCard data={data} />
 
-            <button class="btn btn-lg" onClick={() => navigate('#/cronologia')}>
-              📋 Cronología del día
-            </button>
+            <div class="nav-pair">
+              <button class="btn" onClick={() => navigate('#/cronologia')}>
+                📋 Cronología
+              </button>
+              <button class="btn" onClick={() => navigate('#/evolucion')}>
+                📈 Evolución
+              </button>
+            </div>
 
             {error && (
               <div class="banner banner-warn">
@@ -159,10 +169,12 @@ const editRoute = (id: string) => `#/editar/${encodeURIComponent(id)}`
 function LifeDayCard({
   lifeDay,
   settings,
+  last,
   now,
 }: {
   lifeDay: LifeDay | null
   settings: Settings
+  last: DayData['last']
   now: string
 }) {
   if (!lifeDay) {
@@ -195,14 +207,19 @@ function LifeDayCard({
       </div>
 
       <div class="kpi-row">
-        <KpiTile icon="💧" label="Pises" value={t.pees} />
-        <KpiTile icon="💩" label="Cacas" value={t.poops} />
+        <KpiTile icon="💧" label="Pises" value={t.pees} since={last.pee?.start} now={now} />
+        <KpiTile icon="💩" label="Cacas" value={t.poops} since={last.poop?.start} now={now} />
       </div>
 
       <div class="kpi-milk">
         <div class="kpi-milk-head">
           <span>🥛 Leche cuantificable</span>
           <strong>{t.milkMl} ml</strong>
+        </div>
+        <div class="kpi-fresh">
+          {last.feed
+            ? `Última toma ${formatAgo(diffMinutes(last.feed.start, now))}`
+            : 'Sin tomas registradas todavía'}
         </div>
         <div class="kpi-breakdown">
           <span>🍼 {t.formulaMl} ml fórmula</span>
@@ -224,13 +241,32 @@ function LifeDayCard({
   )
 }
 
-function KpiTile({ icon, label, value }: { icon: string; label: string; value: number }) {
+/**
+ * Contador del día de vida con el tiempo transcurrido desde el último. El
+ * "cuántos van" contesta a cómo va el día; el "hace cuánto", a si toca ya.
+ */
+function KpiTile({
+  icon,
+  label,
+  value,
+  since,
+  now,
+}: {
+  icon: string
+  label: string
+  value: number
+  since?: string
+  now: string
+}) {
   return (
     <div class="kpi-tile">
       <div class="kpi-label">
         {icon} {label}
       </div>
       <div class="kpi-value">{value}</div>
+      <div class="kpi-fresh">
+        {since ? formatAgo(diffMinutes(since, now)) : 'sin registros'}
+      </div>
     </div>
   )
 }

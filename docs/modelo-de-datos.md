@@ -142,7 +142,8 @@ los sitios donde falta tratarlo.
 
 ## Rendimiento
 
-Cada petición lee las cinco pestañas de registros, más `Usuarios` y `Bebe`.
+Cada petición (`getDay` y `getHistory`) lee las cinco pestañas de registros, más
+`Usuarios` y `Bebe`.
 Con el volumen de un bebé son unas décimas de segundo sobre los 1-3 s que ya
 tarda Apps Script.
 

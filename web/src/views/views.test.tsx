@@ -7,9 +7,10 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { addDays, nowMadrid } from '../lib/dates'
 import { lifeDayRange } from '../lib/lifeday'
 import { cacheDay, clearDayCache } from '../store'
-import { aDay, aDiaper, aFeed, aSleep, aWeight } from '../test-fixtures'
+import { aDay, aDiaper, aFeed, aHistoryDay, aSleep, aWeight, someTotals } from '../test-fixtures'
 import type { DayData } from '../types'
 import { Dashboard } from './Dashboard'
+import { BarList, WeightList } from './History'
 import { SettingsView } from './Settings'
 import { Timeline } from './Timeline'
 
@@ -61,6 +62,24 @@ describe('Dashboard · día de vida', () => {
     // Los objetivos se retiraron: nada de "4 / 6" ni barras de progreso.
     expect(html).not.toContain('goal-bar')
     expect(html).not.toContain('/ 6')
+  })
+
+  it('junto a cada contador dice cuánto hace del último', () => {
+    const pis = aDiaper({ start: `${TODAY} 11:00`, pee: true, poop: false })
+    const caca = aDiaper({ start: `${TODAY} 02:00`, pee: false, poop: true })
+    const toma = aFeed({ start: `${TODAY} 10:30`, end: `${TODAY} 10:50` })
+    const html = renderDashboard(
+      day({ records: [caca, toma, pis], last: { ...day().last, pee: pis, poop: caca, feed: toma } })
+    )
+    // Tres "hace ..." distintos: el contador dice cómo va el día y esto si toca ya.
+    expect(html).toContain('Última toma hace')
+    expect((html.match(/hace /g) ?? []).length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('sin registros los contadores lo dicen sin dejar hueco en blanco', () => {
+    const html = renderDashboard(day())
+    expect(html).toContain('sin registros')
+    expect(html).toContain('Sin tomas registradas todavía')
   })
 
   it('desglosa fórmula y extraída sin mezclarlas con los minutos de pecho', () => {
@@ -187,7 +206,8 @@ describe('Timeline', () => {
     const panal = aDiaper({ start: `${TODAY} 14:08`, pee: true, poop: true })
     cacheDay(day({ records: [toma, panal] }))
     const html = render(<Timeline date={TODAY} />)
-    expect(html).toContain('09:12–09:41')
+    expect(html).toContain('09:12')
+    expect(html).toContain('→ 09:41')
     expect(html).toContain('Toma')
     expect(html).toContain('29 min · 35 ml fórmula')
     expect(html).toContain('💩💧')
@@ -199,7 +219,7 @@ describe('Timeline', () => {
     const segunda = aFeed({ start: `${TODAY} 09:10`, end: `${TODAY} 09:30` })
     cacheDay(day({ records: [primera, segunda] }))
     const html = render(<Timeline date={TODAY} />)
-    expect(html).toContain('+3 h 10 min')
+    expect(html).toContain('3 h 10 min desde la anterior')
   })
 
   it('la primera toma del día toma su hueco de la última de anoche', () => {
@@ -207,7 +227,7 @@ describe('Timeline', () => {
     const madrugada = aFeed({ start: `${TODAY} 02:45`, end: `${TODAY} 03:05` })
     cacheDay(day({ records: [madrugada], previousFeed: anoche }))
     const html = render(<Timeline date={TODAY} />)
-    expect(html).toContain('+3 h 15 min')
+    expect(html).toContain('3 h 15 min desde la anterior')
   })
 
   it('el peso aparece en la cronología como un registro más', () => {
@@ -222,6 +242,24 @@ describe('Timeline', () => {
     const html = render(<Timeline date={TODAY} />)
     expect(html).toContain('No hay registros este día')
   })
+
+  it('deja claro que el resumen es del día natural', () => {
+    cacheDay(day({ records: [aFeed({ start: `${TODAY} 10:00` })] }))
+    const html = render(<Timeline date={TODAY} />)
+    expect(html).toContain('Resumen del día natural')
+  })
+
+  it('ancla en su hora de fin lo que viene del día anterior', () => {
+    const noche = aSleep({
+      start: `${addDays(TODAY, -1)} 21:30`,
+      end: `${TODAY} 07:00`,
+      durationMin: 570,
+    })
+    cacheDay(day({ records: [noche] }))
+    const html = render(<Timeline date={TODAY} />)
+    expect(html).toContain('07:00')
+    expect(html).toContain('de antes')
+  })
 })
 
 describe('Ajustes', () => {
@@ -233,5 +271,42 @@ describe('Ajustes', () => {
     expect(html).toContain('value="3420"')
     expect(html).toContain('3,420 kg')
     expect(html).toContain('día de vida')
+  })
+})
+
+describe('Evolución', () => {
+  const days = [
+    aHistoryDay(6, { totals: someTotals({ pees: 3, poops: 1, milkMl: 210 }), weightG: 3300 }),
+    aHistoryDay(5, { totals: someTotals({ pees: 6, poops: 3, milkMl: 380 }), weightG: 3250 }),
+    aHistoryDay(4, { totals: someTotals({ pees: 4, poops: 2, milkMl: 300 }) }),
+  ]
+
+  it('dibuja una barra por día, proporcional al máximo', () => {
+    const html = render(<BarList days={days} metric="pees" />)
+    expect(html).toContain('Día 6')
+    expect(html).toContain('Día 4')
+    // 6 pises es el máximo del periodo: su barra ocupa el 100 %.
+    expect(html).toContain('width:100%')
+    expect(html).toContain('width:50%') // 3 de 6
+  })
+
+  it('marca el día en curso, que aún no está completo', () => {
+    const html = render(<BarList days={days} metric="pees" />)
+    expect(html).toContain('en curso')
+    expect(html).toContain('hist-bar-current')
+  })
+
+  it('la leche se muestra con su unidad', () => {
+    const html = render(<BarList days={days} metric="milk" />)
+    expect(html).toContain('380 ml')
+  })
+
+  it('el peso se lista con su variación, sin barras engañosas', () => {
+    const html = render(<WeightList days={days} />)
+    expect(html).toContain('3,300 kg')
+    expect(html).toContain('3,250 kg')
+    expect(html).toContain('+50 g') // del día 5 al 6
+    expect(html).toContain('sin pesada') // el día 4 no tuvo
+    expect(html).not.toContain('hist-bar')
   })
 })

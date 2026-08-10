@@ -139,6 +139,18 @@ export interface LifeDay {
   totals: LifeDayTotals
 }
 
+/** Un día de vida ya cerrado (o el actual) dentro del histórico. */
+export interface HistoryDay extends LifeDay {
+  /** Última pesada del periodo, si la hubo. */
+  weightG: number | null
+}
+
+export interface History {
+  birth: string | null
+  /** Del día de vida más reciente al más antiguo. */
+  days: HistoryDay[]
+}
+
 // --- Respuesta de la API para un día -----------------------------------------
 
 export interface DayData {
@@ -154,7 +166,11 @@ export interface DayData {
   last: {
     feed: FeedRecord | null
     diaper: DiaperRecord | null
-    /** Último pañal *con caca*: un pañal de solo pis no dice nada de ella. */
+    /**
+     * Últimos pañales con pis y con caca, por separado: un pañal de solo pis
+     * no dice nada de la caca, y es lo que se vigila las primeras semanas.
+     */
+    pee: DiaperRecord | null
     poop: DiaperRecord | null
     sleepEnd: SleepRecord | null // último sueño finalizado
     weight: WeightRecord | null

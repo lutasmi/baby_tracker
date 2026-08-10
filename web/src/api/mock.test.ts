@@ -156,3 +156,21 @@ describe('edición y borrado', () => {
     expect(conPanal.pees - sinPanal.pees).toBe(1)
   })
 })
+
+describe('evolución', () => {
+  it('agrupa los totales por día de vida', async () => {
+    await api.createRecord(diaper('h1', `${TODAY} 09:00`, true, true))
+    await api.createRecord(feed('h2', `${TODAY} 10:00`, `${TODAY} 10:20`, { formulaMl: 90 }))
+
+    const { birth, days } = await api.getHistory(7)
+    expect(birth).toBe(`${TODAY} 00:01`)
+    expect(days[0].number).toBe(1)
+    expect(days[0].totals.poops).toBeGreaterThanOrEqual(1)
+    expect(days[0].totals.milkMl).toBeGreaterThanOrEqual(90)
+  })
+
+  it('sin fecha de nacimiento devuelve una evolución vacía', async () => {
+    await api.updateSettings({ birth: null, birthWeightG: 0 })
+    expect(await api.getHistory(7)).toEqual({ birth: null, days: [] })
+  })
+})

@@ -11,14 +11,15 @@ La especificación original está en [docs/especificacion.md](docs/especificacio
 ## Qué incluye
 
 - **Acceso con Google** restringido a los usuarios autorizados en la hoja `Usuarios`.
-- **Día de vida**: periodos de 24 h contados desde la hora exacta de nacimiento, con el recuento de pises, cacas, fórmula y leche materna extraída. Convive con el día natural, que sigue rigiendo la cronología.
+- **Día de vida**: periodos de 24 h contados desde la hora exacta de nacimiento, con el recuento de pises, cacas, fórmula y leche materna extraída, y cuánto hace del último de cada cosa. Convive con el día natural, que sigue rigiendo la cronología.
 - **Tomas con inicio y fin reales**, duración derivada y precisión de un minuto. Una misma toma puede combinar **pecho directo (min), leche materna extraída (ml) y fórmula (ml)**; los minutos y los mililitros nunca se mezclan.
 - **Sueño** con inicio y fin, registrable después de que haya ocurrido. El cronómetro de un toque sigue estando, pero es auxiliar: la aplicación no da por hecho que el bebé sigue dormido porque nadie cerró un sueño.
 - **Pañales**: pis y caca son casillas independientes, así que un pañal puede llevar las dos; la consistencia solo aparece cuando hay caca.
 - **Baños**: completo o aseo rápido, con duración opcional.
 - **Tiempo desde la toma anterior**, al registrar una toma y en cada toma de la cronología, para no tener que restar.
 - **Peso**: cada pesada con su hora, y la variación en gramos y en porcentaje respecto al peso al nacer. Se muestra el dato, sin interpretarlo.
-- **Cronología diaria** con resumen del día, cambio de fecha, edición y borrado con confirmación.
+- **Cronología diaria** como línea de tiempo, con la hora a la izquierda, resumen del día natural, cambio de fecha, edición y borrado con confirmación.
+- **Evolución** por días de vida: pises, cacas y leche en barras comparables, y el histórico de peso con su variación.
 - **Lo último registrado se corrige desde la pantalla principal**: cada fila abre su registro.
 - **Todo es corregible después**: horas, cantidades, componentes de una toma y contenido del pañal, con la misma pantalla con la que se creó.
 - Cada registro guarda **quién lo creó, quién lo modificó y cuándo**.
@@ -146,6 +147,8 @@ No hay credenciales en el repositorio: la URL de la API y el Client ID (público
 - **Datos del bebé** (nacimiento y peso al nacer): viven en la pestaña `Bebe`, una sola fila. Son comunes a todos los usuarios y se editan desde la pantalla de Ajustes o a mano en la hoja.
 - **Nada de recomendaciones**: la aplicación no propone objetivos de alimentación, no dice si un peso es normal ni avisa de que lleváis mucho sin registrar. Muestra lo registrado y deja el juicio a los padres y al pediatra.
 - **Hueco entre tomas**: se mide de inicio a inicio, que es como se cuenta lo de "cada tres horas".
+- **Días naturales y días de vida conviven**: la pantalla principal y la evolución van por días de vida; la cronología, por días naturales, y lo dice en su cabecera para que no haya duda.
+- **El peso no se dibuja con barras**: como no empezarían en cero, un cambio de 50 g parecería enorme. Se muestra la cifra y la variación.
 - **Edición manual de la hoja**: tolerada. Las columnas se localizan por cabecera —puedes reordenarlas o añadir las tuyas—, las etiquetas admiten variantes sin acentos, las fechas aceptan `dd/MM/yyyy`, las horas sueltas (`HH:mm`) se combinan con la columna `Fecha`, un fin menor que el inicio se interpreta como cruce de medianoche y una casilla marcada con `x` cuenta como `TRUE`. La duración se recalcula siempre desde el intervalo.
 - **Borrado**: lógico (columna `Eliminado`), para que la hoja conserve el histórico.
 - **Latencia**: Apps Script tarda 1–3 s por operación; la interfaz muestra el estado de guardado y solo confirma cuando la hoja ha escrito.

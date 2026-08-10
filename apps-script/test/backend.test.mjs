@@ -343,6 +343,60 @@ describe('un día de uso', () => {
   })
 })
 
+describe('evolución por días de vida', () => {
+  it('devuelve los totales de cada periodo, del más reciente al más antiguo', () => {
+    backend.call('updateSettings', { settings: { birth: '2026-08-05 09:17', birthWeightG: 3420 } })
+
+    // Día de vida 2 (del 6 a las 09:17 al 7 a las 09:17).
+    backend.setNow('2026-08-07 08:00')
+    backend.call(
+      'createRecord',
+      record({ id: 'p-d2', type: 'diaper', start: '2026-08-06 20:00', pee: true, poop: true, notes: '' })
+    )
+    // Día de vida 3.
+    backend.setNow(`${DAY} 16:00`)
+    backend.call(
+      'createRecord',
+      record({ id: 'p-d3', type: 'diaper', start: `${DAY} 12:00`, pee: true, poop: false, notes: '' })
+    )
+    backend.call(
+      'createRecord',
+      record({
+        id: 't-d3',
+        type: 'feed',
+        start: `${DAY} 13:00`,
+        end: `${DAY} 13:20`,
+        formulaMl: 90,
+        notes: '',
+      })
+    )
+    backend.call(
+      'createRecord',
+      record({ id: 'w-d3', type: 'weight', start: `${DAY} 14:00`, grams: 3300, notes: '' })
+    )
+
+    const { birth, days } = backend.call('getHistory', { days: 5 })
+    expect(birth).toBe('2026-08-05 09:17')
+    expect(days.map((d) => d.number)).toEqual([3, 2, 1])
+
+    expect(days[0]).toMatchObject({ number: 3, weightG: 3300 })
+    expect(days[0].totals).toMatchObject({ pees: 1, poops: 0, milkMl: 90 })
+    expect(days[1].totals).toMatchObject({ pees: 1, poops: 1, milkMl: 0 })
+    expect(days[1].weightG).toBeNull()
+  })
+
+  it('limita cuántos días devuelve', () => {
+    backend.call('updateSettings', { settings: { birth: '2026-07-01 09:00', birthWeightG: 0 } })
+    backend.setNow(`${DAY} 12:00`)
+    expect(backend.call('getHistory', { days: 5 }).days).toHaveLength(5)
+    expect(backend.call('getHistory', {}).days).toHaveLength(14)
+  })
+
+  it('sin fecha de nacimiento no hay evolución que mostrar', () => {
+    expect(backend.call('getHistory', {})).toEqual({ birth: null, days: [] })
+  })
+})
+
 describe('correcciones posteriores', () => {
   beforeEach(() => {
     backend.setNow(`${DAY} 11:00`)

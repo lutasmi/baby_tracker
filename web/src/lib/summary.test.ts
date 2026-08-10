@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { aBath, aDiaper, aFeed, aSleep } from '../test-fixtures'
-import { recordDetail, recordIcon, recordTimeLabel, recordTitle } from './summary'
+import { recordDetail, recordIcon, recordTimeParts, recordTitle } from './summary'
 
 describe('recordTitle', () => {
   it('titula cada tipo de registro', () => {
@@ -71,30 +71,44 @@ describe('recordDetail', () => {
   })
 })
 
-describe('recordTimeLabel', () => {
+describe('recordTimeParts', () => {
   const day = '2026-08-07'
 
   it('registro puntual: solo la hora', () => {
-    expect(recordTimeLabel(aDiaper({ start: '2026-08-07 08:10' }), day)).toBe('08:10')
-    expect(recordTimeLabel(aBath({ start: '2026-08-07 19:30' }), day)).toBe('19:30')
+    expect(recordTimeParts(aDiaper({ start: '2026-08-07 08:10' }), day)).toEqual({
+      time: '08:10',
+      note: null,
+    })
+    expect(recordTimeParts(aBath({ start: '2026-08-07 19:30' }), day)).toEqual({
+      time: '19:30',
+      note: null,
+    })
   })
 
-  it('intervalo dentro del día', () => {
+  it('intervalo dentro del día: hora de inicio y hasta cuándo', () => {
     const r = aFeed({ start: '2026-08-07 14:30', end: '2026-08-07 15:45' })
-    expect(recordTimeLabel(r, day)).toBe('14:30–15:45')
+    expect(recordTimeParts(r, day)).toEqual({ time: '14:30', note: '→ 15:45' })
   })
 
   it('una toma puntual no muestra un rango vacío', () => {
     const r = aFeed({ start: '2026-08-07 14:30', end: '2026-08-07 14:30' })
-    expect(recordTimeLabel(r, day)).toBe('14:30')
+    expect(recordTimeParts(r, day)).toEqual({ time: '14:30', note: null })
   })
 
-  it('sueño que empezó ayer: muestra solo el despertar', () => {
+  it('lo que viene del día anterior se ancla en su hora de fin', () => {
     const r = aSleep({ start: '2026-08-06 21:30', end: '2026-08-07 07:00' })
-    expect(recordTimeLabel(r, day)).toBe('→ 07:00')
+    expect(recordTimeParts(r, day)).toEqual({ time: '07:00', note: 'de antes' })
   })
 
-  it('sueño que sigue sin cerrar', () => {
-    expect(recordTimeLabel(aSleep({ start: '2026-08-07 21:30' }), day)).toBe('21:30 →')
+  it('lo que sigue al día siguiente se marca como tal', () => {
+    const r = aSleep({ start: '2026-08-07 21:30', end: '2026-08-08 07:00' })
+    expect(recordTimeParts(r, day)).toEqual({ time: '21:30', note: 'sigue' })
+  })
+
+  it('un sueño sin cerrar lo dice, sin afirmar que siga durmiendo', () => {
+    expect(recordTimeParts(aSleep({ start: '2026-08-07 21:30' }), day)).toEqual({
+      time: '21:30',
+      note: 'sin cerrar',
+    })
   })
 })

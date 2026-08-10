@@ -323,6 +323,13 @@ button {
   line-height: 1.2;
 }
 
+/* Cuánto hace del último: el contador dice cómo va el día, esto si toca ya. */
+.kpi-fresh {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin-top: 2px;
+}
+
 .kpi-goal {
   font-size: 16px;
   font-weight: 600;
@@ -780,32 +787,86 @@ select:focus {
   box-shadow: var(--shadow);
 }
 
+/* Una sola tarjeta con hilo vertical: se lee como una línea de tiempo, no
+   como veinte fichas sueltas. */
 .tl-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.tl-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
   background: var(--surface);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 12px 14px;
+  overflow: hidden;
+}
+
+.tl-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 52px 34px 1fr;
+  gap: 10px;
+  align-items: start;
   width: 100%;
   text-align: left;
+  padding: 12px 14px;
+}
+
+.tl-item:active {
+  background: var(--surface-2);
+}
+
+.tl-item + .tl-item::after {
+  content: '';
+  position: absolute;
+  left: 76px;
+  right: 14px;
+  top: 0;
+  height: 1px;
+  background: var(--border);
+}
+
+.tl-when {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding-top: 2px;
+}
+
+.tl-time {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tl-note {
+  font-size: 11px;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+/* El hilo pasa por detrás de los iconos y une todos los registros. */
+.tl-mark {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding-top: 1px;
+}
+
+.tl-mark::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  bottom: -20px;
+  width: 2px;
+  background: var(--border);
 }
 
 .tl-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 21px;
+  font-size: 16px;
   flex-shrink: 0;
 }
 
@@ -813,10 +874,13 @@ select:focus {
 .tl-icon.feed { background: var(--feed-soft); }
 .tl-icon.diaper { background: var(--diaper-soft); }
 .tl-icon.bath { background: var(--bath-soft); }
+.tl-icon.weight { background: var(--surface-2); }
 
 .tl-body {
-  flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .tl-title {
@@ -827,21 +891,21 @@ select:focus {
 .tl-detail {
   font-size: 13px;
   color: var(--text-soft);
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.tl-time {
-  font-size: 15px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.tl-user {
+.tl-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
   font-size: 11px;
   color: var(--text-soft);
-  text-align: right;
+  margin-top: 2px;
+}
+
+.tl-gap {
+  color: var(--feed);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .tl-summary {
@@ -864,6 +928,101 @@ select:focus {
 .tl-summary .sum-label {
   font-size: 11px;
   color: var(--text-soft);
+}
+
+/* ---------- Evolución ---------- */
+
+.hist-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.hist-row {
+  display: grid;
+  grid-template-columns: 76px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.hist-row + .hist-row {
+  border-top: 1px solid var(--border);
+}
+
+.hist-day {
+  display: flex;
+  flex-direction: column;
+}
+
+.hist-number {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.hist-current {
+  font-size: 10px;
+  color: var(--text-soft);
+}
+
+.hist-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.hist-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  min-width: 2px;
+  transition: width 0.2s ease;
+}
+
+/* El día en curso aún no está completo: se distingue del resto. */
+.hist-bar-current {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--primary),
+    var(--primary) 5px,
+    var(--primary-soft) 5px,
+    var(--primary-soft) 10px
+  );
+}
+
+.hist-value {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+  text-align: right;
+}
+
+.hist-weight {
+  grid-column: 2 / 4;
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hist-weight strong {
+  font-size: 17px;
+}
+
+.hist-delta,
+.hist-none {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+/* ---------- Navegación entre pantallas ---------- */
+
+.nav-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 /* ---------- Avisos y estados ---------- */

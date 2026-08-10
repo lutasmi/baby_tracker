@@ -53,6 +53,8 @@ function route(req) {
   switch (req.action) {
     case 'getDay':
       return getDay(req);
+    case 'getHistory':
+      return getHistory(req);
     case 'createRecord':
       return createRecord(req, session);
     case 'updateRecord':
@@ -179,6 +181,7 @@ function getDay(req) {
   var openSleep = null;
   var lastFeed = null;
   var lastDiaper = null;
+  var lastPee = null;
   var lastPoop = null;
   var lastSleepEnd = null;
   var lastWeight = null;
@@ -196,7 +199,9 @@ function getDay(req) {
     }
     if (r.type === 'diaper') {
       if (!lastDiaper || r.start > lastDiaper.start) lastDiaper = r;
-      // La caca se sigue aparte: un pañal de solo pis no dice nada de ella.
+      // Pis y caca se siguen por separado: un pañal de solo pis no dice nada
+      // de la caca, y es justo lo que se vigila las primeras semanas.
+      if (r.pee && (!lastPee || r.start > lastPee.start)) lastPee = r;
       if (r.poop && (!lastPoop || r.start > lastPoop.start)) lastPoop = r;
     }
     if (r.type === 'sleep' && r.end && (!lastSleepEnd || r.end > lastSleepEnd.end)) {
@@ -214,6 +219,7 @@ function getDay(req) {
     last: {
       feed: lastFeed,
       diaper: lastDiaper,
+      pee: lastPee,
       poop: lastPoop,
       sleepEnd: lastSleepEnd,
       weight: lastWeight,
@@ -226,6 +232,46 @@ function getDay(req) {
     // fecha consultada: es lo que necesita la pantalla principal.
     lifeDay: currentLifeDay(settings, all, now),
   };
+}
+
+/**
+ * Totales de los últimos días de vida, del más reciente al más antiguo, para
+ * ver la evolución. Sin fecha de nacimiento no hay días de vida que contar.
+ */
+function getHistory(req) {
+  var settings = readSettings();
+  if (!settings.birth) return { birth: null, days: [] };
+
+  var now = nowMadrid();
+  var current = lifeDayNumber(settings.birth, now);
+  if (current < 1) return { birth: settings.birth, days: [] };
+
+  var wanted = Math.min(60, Math.max(1, Number(req.days) || 14));
+  var all = readAllRecords();
+  var days = [];
+  for (var n = current; n > 0 && days.length < wanted; n--) {
+    var range = lifeDayRange(settings.birth, n);
+    days.push({
+      number: n,
+      start: range.start,
+      end: range.end,
+      totals: lifeDayTotals(all, range.start, range.end),
+      // Última pesada del periodo, si la hubo.
+      weightG: lastWeightIn(all, range.start, range.end),
+    });
+  }
+  return { birth: settings.birth, days: days };
+}
+
+function lastWeightIn(records, rangeStart, rangeEnd) {
+  var found = null;
+  for (var i = 0; i < records.length; i++) {
+    var r = records[i];
+    if (r.type !== 'weight') continue;
+    if (r.start < rangeStart || r.start >= rangeEnd) continue;
+    if (!found || r.start > found.start) found = r;
+  }
+  return found ? found.grams : null;
 }
 
 /** Día de vida actual con sus totales, o null si no hay fecha de nacimiento. */

@@ -2,7 +2,7 @@ import { ErrorCard } from '../components/ui'
 import { navigate, navigateReplace, useDay, useNow } from '../hooks'
 import { addDays, formatDateHuman, formatDuration, isValidDate } from '../lib/dates'
 import { daySummary, feedGaps } from '../lib/derive'
-import { recordDetail, recordIcon, recordTimeLabel, recordTitle } from '../lib/summary'
+import { recordDetail, recordIcon, recordTimeParts, recordTitle } from '../lib/summary'
 import { userName } from '../store'
 import type { BabyRecord } from '../types'
 
@@ -102,7 +102,11 @@ function DaySummaryCard({
 }) {
   const s = daySummary(records, day, now)
   return (
-    <div class="card tl-summary">
+    <div class="card">
+      {/* Deja claro de qué día se habla: aquí manda el calendario, no el
+          día de vida, que es el que rige la pantalla principal. */}
+      <div class="card-title">Resumen del día natural · 00:00 – 23:59</div>
+      <div class="tl-summary">
       <div class="sum-item">
         <div class="sum-value">{formatDuration(s.sleepMin)}</div>
         <div class="sum-label">dormido</div>
@@ -123,6 +127,7 @@ function DaySummaryCard({
         <div class="sum-value">{s.baths}</div>
         <div class="sum-label">baños</div>
       </div>
+      </div>
     </div>
   )
 }
@@ -136,24 +141,30 @@ function TimelineItem({
   day: string
   gapMin: number | null
 }) {
+  const when = recordTimeParts(record, day)
+  const detail = recordDetail(record)
+  const who = userName(record.updatedBy ?? record.createdBy)
+
   return (
     <button class="tl-item" onClick={() => navigate(`#/editar/${encodeURIComponent(record.id)}`)}>
-      <span class={`tl-icon ${record.type}`}>{recordIcon(record)}</span>
-      <span class="tl-body">
-        <span class="tl-title">
-          {recordTitle(record)}
-          {/* Hueco desde la toma anterior, de inicio a inicio. */}
-          {gapMin != null && <span class="tl-gap">+{formatDuration(gapMin)}</span>}
-        </span>
-        <span class="tl-detail" style="display:block">
-          {recordDetail(record) || ' '}
-        </span>
+      {/* La hora manda: es por lo que se recorre una cronología. */}
+      <span class="tl-when">
+        <span class="tl-time">{when.time}</span>
+        {when.note && <span class="tl-note">{when.note}</span>}
       </span>
-      <span style="text-align:right">
-        <span class="tl-time" style="display:block">
-          {recordTimeLabel(record, day)}
+
+      <span class="tl-mark">
+        <span class={`tl-icon ${record.type}`}>{recordIcon(record)}</span>
+      </span>
+
+      <span class="tl-body">
+        <span class="tl-title">{recordTitle(record)}</span>
+        {detail && <span class="tl-detail">{detail}</span>}
+        <span class="tl-meta">
+          {/* Hueco desde la toma anterior, de inicio a inicio. */}
+          {gapMin != null && <span class="tl-gap">{formatDuration(gapMin)} desde la anterior</span>}
+          {who && <span>{who}</span>}
         </span>
-        <span class="tl-user">{userName(record.updatedBy ?? record.createdBy)}</span>
       </span>
     </button>
   )

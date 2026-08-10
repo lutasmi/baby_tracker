@@ -12,6 +12,8 @@ import type {
   DayData,
   DiaperRecord,
   FeedRecord,
+  History,
+  HistoryDay,
   LifeDay,
   RecordInput,
   RecordType,
@@ -212,6 +214,7 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
       let lastFeed: FeedRecord | null = null
       let previousFeed: FeedRecord | null = null
       let lastDiaper: DiaperRecord | null = null
+      let lastPee: DiaperRecord | null = null
       let lastPoop: DiaperRecord | null = null
       let lastSleepEnd: SleepRecord | null = null
       let lastWeight: WeightRecord | null = null
@@ -223,6 +226,7 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
         }
         if (r.type === 'diaper') {
           if (!lastDiaper || r.start > lastDiaper.start) lastDiaper = r
+          if (r.pee && (!lastPee || r.start > lastPee.start)) lastPee = r
           if (r.poop && (!lastPoop || r.start > lastPoop.start)) lastPoop = r
         }
         if (r.type === 'sleep') {
@@ -239,6 +243,7 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
         last: {
           feed: lastFeed,
           diaper: lastDiaper,
+          pee: lastPee,
           poop: lastPoop,
           sleepEnd: lastSleepEnd,
           weight: lastWeight,
@@ -249,6 +254,34 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
         settings,
         lifeDay: currentLifeDay(all, now),
       }
+    },
+
+    async getHistory(days: number): Promise<History> {
+      await wait()
+      if (!settings.birth) return { birth: null, days: [] }
+      const now = nowMadrid()
+      const current = lifeDayNumber(settings.birth, now)
+      if (current < 1) return { birth: settings.birth, days: [] }
+      const all = [...records.values()]
+      const wanted = Math.min(60, Math.max(1, days || 14))
+      const out: HistoryDay[] = []
+      for (let n = current; n > 0 && out.length < wanted; n--) {
+        const range = lifeDayRange(settings.birth, n)
+        const weights = all.filter(
+          (r) => r.type === 'weight' && r.start >= range.start && r.start < range.end
+        )
+        out.push({
+          number: n,
+          ...range,
+          totals: lifeDayTotals(all, range.start, range.end),
+          weightG:
+            weights.length > 0
+              ? (weights.sort((a, b) => (a.start < b.start ? -1 : 1)).at(-1) as { grams: number })
+                  .grams
+              : null,
+        })
+      }
+      return { birth: settings.birth, days: out }
     },
 
     async createRecord(input: RecordInput): Promise<BabyRecord> {
