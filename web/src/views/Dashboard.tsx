@@ -1,24 +1,35 @@
 import { useState } from 'preact/hooks'
 import { getApi } from '../api'
 import { ApiError } from '../api/types'
-import { ErrorCard, StatTile } from '../components/ui'
-import { handleAuthError, navigate, useDay, useNow } from '../hooks'
-import { diffMinutes, formatAgo, formatDuration, nowMadrid, timeOf } from '../lib/dates'
-import { babyStatus, guessSleepKind, sleepMinutesOnDate } from '../lib/derive'
-import {
-  formatGrams,
-  formatKg,
-  formatPercent,
-  newId,
-  weightChange,
-} from '../lib/records'
+import { DayStrip } from '../components/DayStrip'
+import { ErrorCard, Seg, StatTile } from '../components/ui'
+import { handleAuthError, navigate, useDay, useDayMode, useNow } from '../hooks'
+import { addDays, diffMinutes, formatAgo, formatDuration, nowMadrid, timeOf } from '../lib/dates'
+import { babyStatus, guessSleepKind } from '../lib/derive'
+import { lifeDayTotals } from '../lib/lifeday'
+import { formatGrams, formatKg, formatPercent, newId, weightChange } from '../lib/records'
+import type { DayMode } from '../prefs'
 import { showToast } from '../toast'
-import type { DayData, LifeDay, Settings, SleepRecord, User } from '../types'
+import type { BabyRecord, DayData, LifeDayTotals, SleepRecord, User } from '../types'
+
+const editRoute = (id: string) => `#/editar/${encodeURIComponent(id)}`
+const goEdit = (id: string) => navigate(editRoute(id))
+
+/** El periodo que se está mirando, con lo que pasó dentro. */
+interface Period {
+  title: string
+  subtitle: string
+  start: string
+  end: string
+  records: BabyRecord[]
+  totals: LifeDayTotals
+}
 
 export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
   const now = useNow()
   const today = now.slice(0, 10)
   const { data, loading, error, reload } = useDay(today)
+  const [mode, setMode] = useDayMode()
   const [saving, setSaving] = useState(false)
 
   async function quickSleepAction(action: () => Promise<unknown>, okMessage: string) {
@@ -71,6 +82,8 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
     )
   }
 
+  const period = data ? periodOf(data, mode, today) : null
+
   return (
     <>
       <header class="app-header">
@@ -99,14 +112,30 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
 
         {!data && error && <ErrorCard message={error.message} onRetry={() => void reload()} />}
 
-        {data && (
+        {data && period && (
           <>
-            <LifeDayCard
-              lifeDay={data.lifeDay}
-              settings={data.settings}
-              last={data.last}
-              now={now}
+            {/* Los dos calendarios conviven; aquí se elige con cuál mirar. */}
+            <Seg<DayMode>
+              options={[
+                { value: 'life', label: 'Día de vida' },
+                { value: 'natural', label: 'Día natural' },
+              ]}
+              value={mode}
+              onChange={setMode}
             />
+
+            {mode === 'life' && !data.lifeDay && (
+              <button class="card lifeday-empty" onClick={() => navigate('#/ajustes')}>
+                <div>
+                  {data.settings.birth
+                    ? 'La fecha de nacimiento es posterior a hoy. Revísala en Ajustes.'
+                    : 'Añade la fecha y la hora de nacimiento para contar días de vida.'}
+                </div>
+                <div class="lifeday-cta">Ir a ajustes ›</div>
+              </button>
+            )}
+
+            <PeriodCard period={period} last={data.last} now={now} />
 
             <div class="action-grid">
               <button class="action-btn action-feed" onClick={() => navigate('#/nuevo/toma')}>
@@ -126,11 +155,21 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
             <StatusCard
               data={data}
               now={now}
-              today={today}
               saving={saving}
               onStartSleep={startSleep}
               onEndSleep={endSleep}
             />
+
+            <div class="card">
+              <div class="card-title">{period.title} de un vistazo</div>
+              <DayStrip
+                start={period.start}
+                end={period.end}
+                records={period.records}
+                now={now}
+                onSelect={goEdit}
+              />
+            </div>
 
             <WeightCard data={data} />
 
@@ -158,50 +197,54 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
   )
 }
 
-const editRoute = (id: string) => `#/editar/${encodeURIComponent(id)}`
-const goEdit = (id: string) => navigate(editRoute(id))
+/** El periodo que toca según el calendario elegido. */
+function periodOf(data: DayData, mode: DayMode, today: string): Period {
+  if (mode === 'life' && data.lifeDay) {
+    const { number, start, end, totals, records } = data.lifeDay
+    return {
+      title: `Día de vida ${number}`,
+      subtitle: `desde las ${timeOf(start)}`,
+      start,
+      end,
+      records,
+      totals,
+    }
+  }
+  const start = `${data.date} 00:00`
+  const end = `${addDays(data.date, 1)} 00:00`
+  return {
+    title: data.date === today ? 'Hoy' : data.date,
+    subtitle: 'de 00:00 a 23:59',
+    start,
+    end,
+    records: data.records,
+    totals: lifeDayTotals(data.records, start, end),
+  }
+}
 
 // ---------------------------------------------------------------------------
-// Día de vida: el bloque principal de la pantalla
+// Cómo va el periodo
 // ---------------------------------------------------------------------------
 
-function LifeDayCard({
-  lifeDay,
-  settings,
+function PeriodCard({
+  period,
   last,
   now,
 }: {
-  lifeDay: LifeDay | null
-  settings: Settings
+  period: Period
   last: DayData['last']
   now: string
 }) {
-  if (!lifeDay) {
-    return (
-      <button class="card lifeday-empty" onClick={() => navigate('#/ajustes')}>
-        <div class="card-title">Día de vida</div>
-        <div>
-          {settings.birth
-            ? 'La fecha de nacimiento es posterior a hoy. Revísala en Ajustes.'
-            : 'Añade la fecha y la hora de nacimiento para seguir los días de vida.'}
-        </div>
-        <div class="lifeday-cta">Ir a ajustes ›</div>
-      </button>
-    )
-  }
-
-  const t = lifeDay.totals
-  const elapsed = diffMinutes(lifeDay.start, now)
+  const t = period.totals
+  const elapsed = diffMinutes(period.start, now)
 
   return (
     <div class="card lifeday">
       <div class="lifeday-head">
-        <div class="card-title" style="margin:0">
-          Día de vida
-        </div>
-        <div class="lifeday-number">{lifeDay.number}</div>
+        <div class="lifeday-title">{period.title}</div>
         <div class="lifeday-range">
-          desde las {timeOf(lifeDay.start)} · llevamos {formatDuration(Math.max(0, elapsed))}
+          {period.subtitle}
+          {elapsed > 0 && ` · llevamos ${formatDuration(Math.min(elapsed, 24 * 60))}`}
         </div>
       </div>
 
@@ -240,30 +283,26 @@ function LifeDayCard({
       </div>
 
       <div class="kpi-feeds">
-        {t.feeds === 0 ? 'Sin tomas registradas' : `${t.feeds} tomas registradas`} ·{' '}
+        {t.feeds === 0 ? 'Sin tomas' : `${t.feeds} tomas`} ·{' '}
         {t.diapers === 0 ? 'sin pañales' : `${t.diapers} pañales`}
       </div>
     </div>
   )
 }
 
-
-
 // ---------------------------------------------------------------------------
-// Cómo vamos: el estado del bebé y lo que no cabe en los contadores de arriba
+// Estado del bebé: lo único de la pantalla que habla de ahora mismo
 // ---------------------------------------------------------------------------
 
 function StatusCard({
   data,
   now,
-  today,
   saving,
   onStartSleep,
   onEndSleep,
 }: {
   data: DayData
   now: string
-  today: string
   saving: boolean
   onStartSleep: () => void
   onEndSleep: (open: SleepRecord) => void
@@ -272,22 +311,32 @@ function StatusCard({
   const asleep = status.state === 'asleep' && data.openSleep
   const sleepRecord = asleep ? data.openSleep : data.last.sleepEnd
   const elapsed = status.since ? formatDuration(diffMinutes(status.since, now)) : null
-
   const state = asleep ? 'Dormido' : status.state === 'awake' ? 'Despierto' : 'Sin sueños aún'
   const icon = asleep ? '😴' : status.state === 'awake' ? '☀️' : '👶'
 
+  const stateBody = (
+    <>
+      <span class="state-icon">{icon}</span>
+      <span class="state-main">
+        <span class="state-name">{state}</span>
+        <span class="state-since">
+          {status.since ? `desde las ${timeOf(status.since)}` : 'sin sueños registrados todavía'}
+          {elapsed && ` · ${elapsed}`}
+        </span>
+      </span>
+      {sleepRecord && <span class="stat-edit">›</span>}
+    </>
+  )
+
   return (
     <div class="card">
-      <div class="card-title">¿Cómo vamos?</div>
-
-      {/* El estado es lo único de esta pantalla que describe un ahora mismo. */}
-      <SleepState
-        icon={icon}
-        state={state}
-        since={status.since}
-        elapsed={elapsed}
-        editId={sleepRecord?.id}
-      />
+      {sleepRecord ? (
+        <button class="state-row state-row-link" onClick={() => goEdit(sleepRecord.id)}>
+          {stateBody}
+        </button>
+      ) : (
+        <div class="state-row">{stateBody}</div>
+      )}
 
       {status.staleTimer && data.openSleep && (
         <div class="banner banner-note">
@@ -306,58 +355,7 @@ function StatusCard({
       >
         {asleep ? '☀️ Se ha despertado' : '🌙 Se ha dormido'}
       </button>
-
-      {/* Pises y cacas no se repiten aquí: sus contadores, arriba, ya llevan
-          cuánto hace del último y abren su registro. */}
-      <div class="kpi-row" style="margin-top:12px">
-        <StatTile
-          label="🍼 Última toma"
-          value={data.last.feed ? formatAgo(diffMinutes(data.last.feed.start, now)) : 'Sin tomas'}
-          note={data.last.feed ? `a las ${timeOf(data.last.feed.start)}` : null}
-          editId={data.last.feed?.id}
-          onEdit={goEdit}
-        />
-        <StatTile
-          label="🌙 Dormido hoy"
-          value={formatDuration(sleepMinutesOnDate(data.records, today, now))}
-          note="día natural"
-        />
-      </div>
     </div>
-  )
-}
-
-function SleepState({
-  icon,
-  state,
-  since,
-  elapsed,
-  editId,
-}: {
-  icon: string
-  state: string
-  since: string | null
-  elapsed: string | null
-  editId?: string
-}) {
-  const body = (
-    <>
-      <span class="state-icon">{icon}</span>
-      <span class="state-main">
-        <span class="state-name">{state}</span>
-        <span class="state-since">
-          {since ? `desde las ${timeOf(since)}` : 'sin sueños registrados todavía'}
-          {elapsed && ` · ${elapsed}`}
-        </span>
-      </span>
-      {editId && <span class="stat-edit">›</span>}
-    </>
-  )
-  if (!editId) return <div class="state-row">{body}</div>
-  return (
-    <button class="state-row state-row-link" onClick={() => goEdit(editId)}>
-      {body}
-    </button>
   )
 }
 
@@ -376,7 +374,7 @@ function WeightCard({ data }: { data: DayData }) {
       {last ? (
         <>
           <div class="weight-row">
-            <button class="weight-main" onClick={() => navigate(editRoute(last.id))}>
+            <button class="weight-main" onClick={() => goEdit(last.id)}>
               <div class="weight-value">{formatKg(last.grams)}</div>
               <div class="weight-when">
                 {last.start.slice(0, 10) === data.date ? 'hoy' : last.start.slice(0, 10)} ·{' '}
@@ -400,9 +398,14 @@ function WeightCard({ data }: { data: DayData }) {
             : 'Todavía no hay ninguna pesada. El peso al nacer se indica en Ajustes.'}
         </div>
       )}
-      <button class="btn" style="margin-top:12px" onClick={() => navigate('#/nuevo/peso')}>
-        ⚖️ Añadir pesada
-      </button>
+      <div class="nav-pair" style="margin-top:12px">
+        <button class="btn" onClick={() => navigate('#/nuevo/peso')}>
+          ⚖️ Añadir pesada
+        </button>
+        <button class="btn" onClick={() => navigate('#/evolucion')}>
+          📈 Ver evolución
+        </button>
+      </div>
     </div>
   )
 }

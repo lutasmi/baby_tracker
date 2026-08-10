@@ -143,7 +143,9 @@ los sitios donde falta tratarlo.
 ## Rendimiento
 
 Cada petición (`getDay` y `getHistory`) lee las cinco pestañas de registros, más
-`Usuarios` y `Bebe`.
+`Usuarios` y `Bebe`. `getDay` devuelve además los registros del día de vida en
+curso, que casi siempre cae a caballo de dos días naturales: así la pantalla
+principal pinta su franja sin una segunda petición.
 Con el volumen de un bebé son unas décimas de segundo sobre los 1-3 s que ya
 tarda Apps Script.
 

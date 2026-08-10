@@ -181,7 +181,12 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
     const number = lifeDayNumber(settings.birth, now)
     if (number < 1) return null
     const range = lifeDayRange(settings.birth, number)
-    return { number, ...range, totals: lifeDayTotals(all, range.start, range.end) }
+    return {
+      number,
+      ...range,
+      totals: lifeDayTotals(all, range.start, range.end),
+      records: all.filter((r) => r.start >= range.start && r.start < range.end),
+    }
   }
 
   return {

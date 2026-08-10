@@ -1,45 +1,54 @@
 import { useEffect, useState } from 'preact/hooks'
-import { getApi } from '../api'
-import { ApiError } from '../api/types'
-import { ErrorCard } from '../components/ui'
-import { handleAuthError, navigate, navigateReplace, useDay, useNow } from '../hooks'
-import { addDays, dateOf, formatDateHuman, formatDuration, isValidDate } from '../lib/dates'
+import { ErrorCard, Seg } from '../components/ui'
+import { navigate, navigateReplace, useDay, useDayMode, useDays, useNow } from '../hooks'
+import {
+  addDays,
+  addMinutes,
+  dateOf,
+  formatDateHuman,
+  formatDuration,
+  isValidDate,
+  timeOf,
+} from '../lib/dates'
 import { daySummary, feedGaps } from '../lib/derive'
+import { lifeDayNumber, lifeDayRange } from '../lib/lifeday'
 import { recordDetail, recordIcon, recordTimeParts, recordTitle } from '../lib/summary'
+import { windowRecords } from '../lib/timeline'
+import type { DayMode } from '../prefs'
 import { userName } from '../store'
-import { showToast } from '../toast'
 import type { BabyRecord, DayData } from '../types'
+
+/** Un tramo de la cronología: un día natural o un día de vida. */
+interface Section {
+  key: string
+  title: string
+  subtitle: string
+  start: string
+  end: string
+}
 
 export function Timeline({ date }: { date?: string }) {
   const now = useNow()
   const today = now.slice(0, 10)
   const day = date && isValidDate(date) ? date : today
   const { data, loading, error, reload } = useDay(day)
-  // Días anteriores traídos con "Ver anteriores". Son histórico: no cambian,
-  // así que se cargan una vez y no se refrescan.
-  const [older, setOlder] = useState<DayData[]>([])
-  const [loadingOlder, setLoadingOlder] = useState(false)
+  const [mode, setMode] = useDayMode()
+  // Cuántos tramos anteriores se han pedido con "Ver anteriores".
+  const [extra, setExtra] = useState(0)
 
-  // Saltar a otra fecha empieza de cero.
-  useEffect(() => setOlder([]), [day])
+  // Cambiar de fecha o de calendario empieza de cero.
+  useEffect(() => setExtra(0), [day, mode])
 
   const goTo = (d: string) => navigateReplace(`#/cronologia/${d}`)
-  const loaded = data ? [data, ...older] : []
-  const oldestDate = loaded.length > 0 ? loaded[loaded.length - 1].date : day
+  const birth = data?.settings.birth ?? null
+  const useLife = mode === 'life' && birth != null
+  const sections = useLife
+    ? lifeSections(birth, day, today, now, extra)
+    : naturalSections(day, today, extra)
 
-  async function loadOlder() {
-    setLoadingOlder(true)
-    try {
-      const previous = await getApi().getDay(addDays(oldestDate, -1))
-      setOlder((current) => [...current, previous])
-    } catch (err) {
-      if (!handleAuthError(err)) {
-        showToast(err instanceof ApiError ? err.message : 'No se pudo cargar.', 'error')
-      }
-    } finally {
-      setLoadingOlder(false)
-    }
-  }
+  // Un día de vida cae casi siempre a caballo de dos días naturales.
+  const dates = [...new Set(sections.flatMap((s) => datesOf(s)))].sort().reverse()
+  const { days, loading: loadingDays } = useDays(dates)
 
   return (
     <>
@@ -51,8 +60,17 @@ export function Timeline({ date }: { date?: string }) {
       </div>
 
       <main class="app-main">
+        <Seg<DayMode>
+          options={[
+            { value: 'life', label: 'Día de vida' },
+            { value: 'natural', label: 'Día natural' },
+          ]}
+          value={mode}
+          onChange={setMode}
+        />
+
         <div class="date-nav">
-          <button class="nav-arrow" aria-label="Día anterior" onClick={() => goTo(addDays(day, -1))}>
+          <button class="nav-arrow" aria-label="Anterior" onClick={() => goTo(addDays(day, -1))}>
             ◀
           </button>
           <input
@@ -66,7 +84,7 @@ export function Timeline({ date }: { date?: string }) {
           />
           <button
             class="nav-arrow"
-            aria-label="Día siguiente"
+            aria-label="Siguiente"
             disabled={day >= today}
             onClick={() => goTo(addDays(day, 1))}
           >
@@ -74,28 +92,26 @@ export function Timeline({ date }: { date?: string }) {
           </button>
         </div>
 
-        {/* Aquí manda el calendario; los días de vida rigen la pantalla
-            principal y la evolución. Decirlo una vez evita la confusión. */}
-        <p class="field-hint" style="text-align:center">
-          Días naturales, de 00:00 a 23:59
-        </p>
+        {mode === 'life' && !birth && (
+          <p class="field-hint" style="text-align:center">
+            Sin fecha de nacimiento no hay días de vida: se muestran días naturales.
+          </p>
+        )}
 
         {!data && loading && (
           <div class="loading-screen">
             <div class="spinner" />
-            <div>Cargando el día…</div>
+            <div>Cargando…</div>
           </div>
         )}
 
         {!data && error && <ErrorCard message={error.message} onRetry={() => void reload()} />}
 
-        {loaded.length > 0 && <Stream days={loaded} today={today} now={now} />}
+        {data && <Stream sections={sections} days={days} now={now} />}
 
-        {loaded.length > 0 && (
-          <button class="btn" disabled={loadingOlder} onClick={() => void loadOlder()}>
-            {loadingOlder
-              ? 'Cargando…'
-              : `↑ Ver ${formatDateHuman(addDays(oldestDate, -1), today).toLowerCase()}`}
+        {data && (
+          <button class="btn" disabled={loadingDays} onClick={() => setExtra(extra + 1)}>
+            {loadingDays ? 'Cargando…' : '↑ Ver anteriores'}
           </button>
         )}
 
@@ -112,38 +128,90 @@ export function Timeline({ date }: { date?: string }) {
   )
 }
 
+/** Días naturales que hay que cargar para cubrir un tramo. */
+function datesOf(section: Section): string[] {
+  const first = dateOf(section.start)
+  const last = dateOf(addMinutes(section.end, -1))
+  return first === last ? [first] : [first, last]
+}
+
+function naturalSections(day: string, today: string, extra: number): Section[] {
+  const out: Section[] = []
+  for (let i = 0; i <= extra; i++) {
+    const d = addDays(day, -i)
+    out.push({
+      key: d,
+      title: formatDateHuman(d, today),
+      subtitle: 'de 00:00 a 23:59',
+      start: `${d} 00:00`,
+      end: `${addDays(d, 1)} 00:00`,
+    })
+  }
+  return out
+}
+
+function lifeSections(
+  birth: string,
+  day: string,
+  today: string,
+  now: string,
+  extra: number
+): Section[] {
+  // El día de vida que contiene la fecha elegida (o el actual, si es hoy).
+  const anchor = Math.max(1, lifeDayNumber(birth, day === today ? now : `${day} 12:00`))
+  const out: Section[] = []
+  for (let i = 0; i <= extra && anchor - i >= 1; i++) {
+    const number = anchor - i
+    const range = lifeDayRange(birth, number)
+    out.push({
+      key: `vida-${number}`,
+      title: `Día de vida ${number}`,
+      subtitle: `${formatDateHuman(dateOf(range.start), today)} ${timeOf(range.start)} → ${timeOf(range.end)}`,
+      start: range.start,
+      end: range.end,
+    })
+  }
+  return out
+}
+
 /**
- * Los días cargados, uno detrás de otro, del más reciente al más antiguo. Se
- * leen como una sola corriente: muchos registros se entienden por lo que pasó
- * justo antes, aunque fuera ayer.
+ * Los tramos cargados, uno detrás de otro, del más reciente al más antiguo. Se
+ * leen como una sola corriente: muchos registros solo se entienden por lo que
+ * pasó justo antes, aunque fuera ayer.
  */
-function Stream({ days, today, now }: { days: DayData[]; today: string; now: string }) {
-  // Cada registro se muestra en el día en que empieza. El día más antiguo
-  // cargado recoge además lo que venía de antes, para no perder el sueño
-  // nocturno que arranca fuera del tramo visible.
-  const sections = days.map((data, index) => ({
-    data,
-    records: data.records.filter(
-      (r) =>
-        dateOf(r.start) === data.date ||
-        (index === days.length - 1 && r.start < `${data.date} 00:00`)
-    ),
+function Stream({
+  sections,
+  days,
+  now,
+}: {
+  sections: Section[]
+  days: DayData[]
+  now: string
+}) {
+  const withRecords = sections.map((section, index) => ({
+    section,
+    records: windowRecords(days, section.start, section.end, {
+      // Solo el tramo más antiguo recoge lo que venía de antes, para no
+      // perderlo ni repetirlo en los tramos de arriba.
+      includeEarlier: index === sections.length - 1,
+    }),
   }))
 
   // Los huecos entre tomas se calculan sobre toda la corriente, así que la
-  // primera toma de un día se compara con la última del día anterior.
-  const chronological = [...sections].reverse().flatMap((s) => s.records)
-  const gaps = feedGaps(chronological, days[days.length - 1].previousFeed)
+  // primera toma de un tramo se compara con la última del anterior.
+  const chronological = [...withRecords].reverse().flatMap((s) => s.records)
+  const oldest = days.find((d) => d.date === dateOf(sections[sections.length - 1]?.start ?? ''))
+  const gaps = feedGaps(chronological, oldest?.previousFeed ?? null)
 
   return (
     <>
-      {sections.map(({ data, records }) => (
-        <section class="day-section" key={data.date}>
-          <DayHeader date={data.date} records={records} today={today} now={now} />
+      {withRecords.map(({ section, records }) => (
+        <section class="day-section" key={section.key}>
+          <SectionHeader section={section} records={records} now={now} />
           {records.length === 0 ? (
             <div class="empty-state">
               <span class="icon">🗓️</span>
-              No hay registros este día.
+              No hay registros en este tramo.
             </div>
           ) : (
             <div class="tl-list">
@@ -151,7 +219,7 @@ function Stream({ days, today, now }: { days: DayData[]; today: string; now: str
                 <TimelineItem
                   key={r.id}
                   record={r}
-                  day={data.date}
+                  day={dateOf(section.start)}
                   gapMin={gaps.get(r.id) ?? null}
                 />
               ))}
@@ -163,22 +231,22 @@ function Stream({ days, today, now }: { days: DayData[]; today: string; now: str
   )
 }
 
-/** Cabecera pegajosa: al desplazarse siempre se sabe de qué día se habla. */
-function DayHeader({
-  date,
+/** Cabecera pegajosa: al desplazarse siempre se sabe de qué tramo se habla. */
+function SectionHeader({
+  section,
   records,
-  today,
   now,
 }: {
-  date: string
+  section: Section
   records: BabyRecord[]
-  today: string
   now: string
 }) {
-  const s = daySummary(records, date, now)
+  const s = daySummary(records, dateOf(section.start), now)
   return (
     <div class="day-header">
-      <span class="day-name">{formatDateHuman(date, today)}</span>
+      <span class="day-name">
+        {section.title} <small>{section.subtitle}</small>
+      </span>
       <span class="day-summary">
         {formatDuration(s.sleepMin)} dormido · {plural(s.feeds, 'toma', 'tomas')}
         {s.milkMl > 0 && ` · ${s.milkMl} ml`} · {plural(s.diapers, 'pañal', 'pañales')}

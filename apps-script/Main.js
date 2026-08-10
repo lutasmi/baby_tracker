@@ -274,17 +274,27 @@ function lastWeightIn(records, rangeStart, rangeEnd) {
   return found ? found.grams : null;
 }
 
-/** Día de vida actual con sus totales, o null si no hay fecha de nacimiento. */
+/**
+ * Día de vida actual con sus totales y sus registros. Los registros vienen
+ * aquí y no se piden aparte porque la franja de la pantalla principal cubre un
+ * periodo que casi siempre cae a caballo de dos días naturales.
+ */
 function currentLifeDay(settings, allRecords, now) {
   if (!settings.birth) return null;
   var number = lifeDayNumber(settings.birth, now);
   if (number < 1) return null; // la fecha de nacimiento aún no ha llegado
   var range = lifeDayRange(settings.birth, number);
+  var records = [];
+  for (var i = 0; i < allRecords.length; i++) {
+    var r = allRecords[i];
+    if (r.start >= range.start && r.start < range.end) records.push(r);
+  }
   return {
     number: number,
     start: range.start,
     end: range.end,
     totals: lifeDayTotals(allRecords, range.start, range.end),
+    records: records,
   };
 }
 

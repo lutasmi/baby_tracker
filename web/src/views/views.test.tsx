@@ -29,6 +29,7 @@ function day(partial: Partial<DayData> = {}): DayData {
       number: 3,
       start: range.start,
       end: range.end,
+      records: partial.records ?? [],
       totals: {
         pees: 4,
         poops: 2,
@@ -54,14 +55,19 @@ beforeEach(() => clearDayCache())
 describe('Dashboard · día de vida', () => {
   it('muestra el número de día y los contadores, sin objetivos', () => {
     const html = renderDashboard(day())
-    expect(html).toContain('Día de vida')
-    expect(html).toContain('>3<')
+    expect(html).toContain('Día de vida 3')
     expect(html).toContain('>4<') // pises
     expect(html).toContain('>2<') // cacas
     expect(html).toContain('310')
     // Los objetivos se retiraron: nada de "4 / 6" ni barras de progreso.
     expect(html).not.toContain('goal-bar')
     expect(html).not.toContain('/ 6')
+  })
+
+  it('deja elegir entre día de vida y día natural', () => {
+    const html = renderDashboard(day())
+    expect(html).toContain('Día de vida')
+    expect(html).toContain('Día natural')
   })
 
   it('junto a cada contador dice cuánto hace del último', () => {
@@ -71,13 +77,12 @@ describe('Dashboard · día de vida', () => {
     const html = renderDashboard(
       day({ records: [caca, toma, pis], last: { ...day().last, pee: pis, poop: caca, feed: toma } })
     )
-    // Tres "hace ..." distintos: el contador dice cómo va el día y esto si toca ya.
-    expect(html).toContain('Última toma')
-    expect((html.match(/hace /g) ?? []).length).toBeGreaterThanOrEqual(3)
+    // Cada contador dice cuánto hace del último de su tipo.
+    expect((html.match(/hace /g) ?? []).length).toBeGreaterThanOrEqual(2)
   })
 
   it('sin registros los contadores lo dicen sin dejar hueco en blanco', () => {
-    const html = renderDashboard(day())
+    const html = renderDashboard(day({ lifeDay: { ...day().lifeDay!, totals: someTotals() } }))
     expect(html).toContain('sin registros')
     expect(html).toContain('Sin tomas')
   })
@@ -125,23 +130,23 @@ describe('Dashboard · peso', () => {
       })
     )
     expect(html).toContain('3,210 kg')
-    expect(html).not.toContain('%')
+    expect(html).not.toContain('desde el nacimiento')
   })
 })
 
 describe('Dashboard · lo registrado', () => {
-  it('la última toma dice cuánto hace y a qué hora, y se puede corregir', () => {
-    const ultima = aFeed({
-      start: `${TODAY} 09:12`,
-      end: `${TODAY} 09:41`,
-      durationMin: 29,
-      formulaMl: 35,
-    })
-    const html = renderDashboard(day({ records: [ultima], last: { ...day().last, feed: ultima } }))
-    expect(html).toContain('Última toma')
-    expect(html).toContain('a las 09:12')
-    // La casilla es pulsable para corregir lo último registrado.
-    expect(html).toContain('kpi-tile-link')
+  it('la franja coloca cada registro en su carril y su hora', () => {
+    const toma = aFeed({ start: `${TODAY} 06:17`, end: `${TODAY} 06:47`, formulaMl: 60 })
+    const caca = aDiaper({ start: `${TODAY} 12:17`, pee: true, poop: true })
+    const html = renderDashboard(day({ records: [toma, caca] }))
+    expect(html).toContain('de un vistazo')
+    // Cuatro carriles con marcas: sueño, tomas, pises y cacas.
+    expect(html).toContain('strip-feed')
+    expect(html).toContain('strip-pee')
+    expect(html).toContain('strip-poop')
+    // El pañal con las dos cosas aparece en los dos carriles.
+    expect((html.match(/Cacas · 12:17/g) ?? []).length).toBe(1)
+    expect((html.match(/Pises · 12:17/g) ?? []).length).toBe(1)
   })
 
   it('los contadores de pises y cacas abren su último registro', () => {
@@ -157,12 +162,9 @@ describe('Dashboard · lo registrado', () => {
 
   it('el estado del bebé es lo único que habla de ahora mismo', () => {
     const dormido = aSleep({ start: `${TODAY} 11:00` })
-    const html = renderDashboard(
-      day({ records: [dormido], openSleep: dormido, serverNow: `${TODAY} 11:30` })
-    )
-    expect(html).toContain('¿Cómo vamos?')
+    const html = renderDashboard(day({ records: [dormido], openSleep: dormido }))
     expect(html).toContain('desde las 11:00')
-    expect(html).toContain('Dormido hoy')
+    expect(html).toContain('Se ha despertado')
   })
 
   it('un cronómetro olvidado no afirma que el bebé siga dormido', () => {
@@ -185,15 +187,13 @@ describe('Dashboard · lo registrado', () => {
     expect(html).toContain('sueño abierto desde las 00:05')
     expect(html).toContain('banner-note')
     expect(html).not.toContain('banner-warn')
-    // …y no infla las horas dormidas de hoy.
-    expect(html).toContain('>0 min<')
   })
 
   it('sin registros no muestra huecos raros', () => {
-    const html = renderDashboard(day({ records: [] }))
+    const html = renderDashboard(day({ records: [], lifeDay: { ...day().lifeDay!, totals: someTotals() } }))
     expect(html).toContain('sin registros')
-    expect(html).toContain('Sin tomas')
     expect(html).toContain('sin sueños registrados todavía')
+    expect(html).toContain('Sin registros en este periodo todavía')
   })
 })
 
@@ -239,27 +239,33 @@ describe('Timeline', () => {
     expect(html).toContain('3,210 kg')
   })
 
-  it('muestra el estado vacío cuando no hay nada ese día', () => {
+  it('muestra el estado vacío cuando no hay nada en el tramo', () => {
     cacheDay(day({ records: [] }))
     const html = render(<Timeline date={TODAY} />)
-    expect(html).toContain('No hay registros este día')
+    expect(html).toContain('No hay registros en este tramo')
   })
 
-  it('deja claro que se cuentan días naturales y resume cada uno', () => {
+  it('cada tramo lleva su cabecera con el resumen, en singular cuando toca', () => {
     const toma = aFeed({ start: `${TODAY} 10:00`, end: `${TODAY} 10:20` })
     cacheDay(day({ records: [toma] }))
     const html = render(<Timeline date={TODAY} />)
-    expect(html).toContain('Días naturales, de 00:00 a 23:59')
-    // Cabecera del día con su resumen, y en singular cuando toca.
-    expect(html).toContain('>Hoy<')
+    expect(html).toContain('Día de vida 1')
     expect(html).toContain('1 toma')
     expect(html).toContain('0 pañales')
   })
 
-  it('ofrece cargar el día anterior sin salir de la pantalla', () => {
+  it('ofrece encadenar tramos anteriores sin salir de la pantalla', () => {
     cacheDay(day({ records: [aFeed({ start: `${TODAY} 10:00`, end: `${TODAY} 10:20` })] }))
     const html = render(<Timeline date={TODAY} />)
-    expect(html).toContain('Ver ayer')
+    expect(html).toContain('Ver anteriores')
+  })
+
+  it('deja elegir el calendario y lo dice en la cabecera del tramo', () => {
+    cacheDay(day({ records: [aFeed({ start: `${TODAY} 10:00`, end: `${TODAY} 10:20` })] }))
+    const html = render(<Timeline date={TODAY} />)
+    expect(html).toContain('Día natural')
+    // En modo día de vida la cabecera muestra el tramo horario real.
+    expect(html).toContain('00:17 → 00:17')
   })
 
   it('ancla en su hora de fin lo que viene del día anterior', () => {

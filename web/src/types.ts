@@ -137,10 +137,12 @@ export interface LifeDay {
   start: string
   end: string // exclusivo
   totals: LifeDayTotals
+  /** Los registros que empiezan dentro del periodo, en orden. */
+  records: BabyRecord[]
 }
 
-/** Un día de vida ya cerrado (o el actual) dentro del histórico. */
-export interface HistoryDay extends LifeDay {
+/** Un día de vida dentro del histórico: totales sí, registros no. */
+export interface HistoryDay extends Omit<LifeDay, 'records'> {
   /** Última pesada del periodo, si la hubo. */
   weightG: number | null
 }

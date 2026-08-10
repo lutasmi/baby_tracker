@@ -8,9 +8,11 @@ import { useEffect, useState } from 'preact/hooks'
 import { getApi } from '../api'
 import { ApiError } from '../api/types'
 import { ErrorCard, ScreenTitle, Seg } from '../components/ui'
+import { WeightChart } from '../components/WeightChart'
 import { handleAuthError, navigate } from '../hooks'
+import { nowMadrid } from '../lib/dates'
 import { formatGrams, formatKg } from '../lib/records'
-import type { History, HistoryDay } from '../types'
+import type { History, HistoryDay, Settings } from '../types'
 
 export type Metric = 'pees' | 'poops' | 'milk' | 'weight'
 
@@ -25,6 +27,7 @@ const DAYS = 14
 
 export function HistoryView() {
   const [history, setHistory] = useState<History | null>(null)
+  const [settings, setSettings] = useState<Settings | null>(null)
   const [error, setError] = useState<ApiError | null>(null)
   const [metric, setMetric] = useState<Metric>('pees')
 
@@ -32,8 +35,15 @@ export function HistoryView() {
     let cancelled = false
     void (async () => {
       try {
-        const data = await getApi().getHistory(DAYS)
-        if (!cancelled) setHistory(data)
+        const [data, day] = await Promise.all([
+          getApi().getHistory(DAYS),
+          // El peso al nacer es la referencia de la gráfica.
+          getApi().getDay(nowMadrid().slice(0, 10)),
+        ])
+        if (!cancelled) {
+          setHistory(data)
+          setSettings(day.settings)
+        }
       } catch (err) {
         if (!handleAuthError(err) && !cancelled) {
           setError(err instanceof ApiError ? err : new ApiError('INTERNAL', 'Error inesperado.'))
@@ -77,6 +87,11 @@ export function HistoryView() {
 
         {history && history.days.length > 0 && (
           <>
+            {metric === 'weight' && (
+              <div class="card">
+                <WeightChart days={history.days} birthWeightG={settings?.birthWeightG ?? 0} />
+              </div>
+            )}
             <div class="card">
               {metric === 'weight' ? (
                 <WeightList days={history.days} />

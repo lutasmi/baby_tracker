@@ -3,6 +3,7 @@ import { getApi } from './api'
 import { ApiError } from './api/types'
 import { nowMadrid } from './lib/dates'
 import { clearSession } from './session'
+import { loadDayMode, saveDayMode, type DayMode } from './prefs'
 import { cacheDay, getCachedDay } from './store'
 import type { DayData } from './types'
 
@@ -128,4 +129,64 @@ export function useDay(date: string): DayState {
   }, [reload])
 
   return { data, loading, error, reload }
+}
+
+// --- Calendario elegido -----------------------------------------------------
+
+/** Día de vida o día natural. Se recuerda entre pantallas y entre sesiones. */
+export function useDayMode(): [DayMode, (mode: DayMode) => void] {
+  const [mode, setMode] = useState<DayMode>(() => loadDayMode())
+  return [
+    mode,
+    (next: DayMode) => {
+      saveDayMode(next)
+      setMode(next)
+    },
+  ]
+}
+
+// --- Varios días a la vez ---------------------------------------------------
+
+/**
+ * Carga los días naturales indicados, aprovechando lo que ya esté en caché.
+ * Un día de vida cae casi siempre a caballo de dos días naturales, así que la
+ * cronología necesita poder pedir varios de golpe.
+ */
+export function useDays(dates: string[]): { days: DayData[]; loading: boolean } {
+  const key = dates.join(',')
+  const collect = useCallback(
+    () => (key ? key.split(',') : []).map(getCachedDay).filter((d): d is DayData => d != null),
+    [key]
+  )
+  const [days, setDays] = useState<DayData[]>(collect)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const wanted = key ? key.split(',') : []
+    const missing = wanted.filter((d) => !getCachedDay(d))
+    if (missing.length === 0) {
+      setDays(collect())
+      return
+    }
+    setLoading(true)
+    void (async () => {
+      for (const date of missing) {
+        try {
+          cacheDay(await getApi().getDay(date))
+        } catch (err) {
+          handleAuthError(err)
+        }
+      }
+      if (!cancelled) {
+        setDays(collect())
+        setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [key, collect])
+
+  return { days, loading }
 }
