@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { addDays, nowMadrid } from '../lib/dates'
 import { lifeDayRange } from '../lib/lifeday'
 import { cacheDay, clearDayCache } from '../store'
-import { aDiaper, aFeed, aSleep, aDay } from '../test-fixtures'
+import { aDay, aDiaper, aFeed, aSleep, aWeight } from '../test-fixtures'
 import type { DayData } from '../types'
 import { Dashboard } from './Dashboard'
 import { SettingsView } from './Settings'
@@ -23,7 +23,7 @@ function day(partial: Partial<DayData> = {}): DayData {
   return aDay({
     date: TODAY,
     serverNow: NOW,
-    settings: { birth: BIRTH, goals: { pees: 6, poops: 3, milkMl: 400 } },
+    settings: { birth: BIRTH, birthWeightG: 3420 },
     lifeDay: {
       number: 3,
       start: range.start,
@@ -51,15 +51,16 @@ function renderDashboard(d: DayData): string {
 beforeEach(() => clearDayCache())
 
 describe('Dashboard · día de vida', () => {
-  it('muestra el número de día y el progreso frente a los objetivos', () => {
+  it('muestra el número de día y los contadores, sin objetivos', () => {
     const html = renderDashboard(day())
     expect(html).toContain('Día de vida')
     expect(html).toContain('>3<')
-    expect(html).toContain('/ 6')
-    expect(html).toContain('/ 3')
+    expect(html).toContain('>4<') // pises
+    expect(html).toContain('>2<') // cacas
     expect(html).toContain('310')
-    expect(html).toContain('/ 400')
-    expect(html).toContain('goal-bar')
+    // Los objetivos se retiraron: nada de "4 / 6" ni barras de progreso.
+    expect(html).not.toContain('goal-bar')
+    expect(html).not.toContain('/ 6')
   })
 
   it('desglosa fórmula y extraída sin mezclarlas con los minutos de pecho', () => {
@@ -71,23 +72,46 @@ describe('Dashboard · día de vida', () => {
 
   it('sin fecha de nacimiento invita a configurarla, sin dar error', () => {
     const html = renderDashboard(
-      day({ settings: { birth: null, goals: { pees: 0, poops: 0, milkMl: 0 } }, lifeDay: null })
+      day({ settings: { birth: null, birthWeightG: 0 }, lifeDay: null })
     )
     expect(html).toContain('Añade la fecha y la hora de nacimiento')
     expect(html).not.toContain('banner-warn')
   })
+})
 
-  it('sin objetivos muestra las cifras y oculta las barras de progreso', () => {
+describe('Dashboard · peso', () => {
+  it('muestra la última pesada y su variación desde el nacimiento', () => {
+    const peso = aWeight({ start: `${TODAY} 09:00`, grams: 3210 })
     const html = renderDashboard(
-      day({ settings: { birth: BIRTH, goals: { pees: 0, poops: 0, milkMl: 0 } } })
+      day({ records: [peso], last: { ...day().last, weight: peso } })
     )
-    expect(html).not.toContain('goal-bar')
-    expect(html).toContain('310')
+    expect(html).toContain('3,210 kg')
+    expect(html).toContain('−210 g')
+    expect(html).toContain('−6,1 %')
+    expect(html).toContain('Al nacer 3,420 kg')
+  })
+
+  it('sin pesadas invita a añadir la primera', () => {
+    const html = renderDashboard(day())
+    expect(html).toContain('Todavía no hay ninguna pesada')
+    expect(html).toContain('Añadir pesada')
+  })
+
+  it('sin peso al nacer no inventa una variación', () => {
+    const peso = aWeight({ grams: 3210 })
+    const html = renderDashboard(
+      day({
+        settings: { birth: BIRTH, birthWeightG: 0 },
+        last: { ...day().last, weight: peso },
+      })
+    )
+    expect(html).toContain('3,210 kg')
+    expect(html).not.toContain('%')
   })
 })
 
 describe('Dashboard · lo registrado', () => {
-  it('resume la última toma con su desglose', () => {
+  it('resume la última toma con su desglose y deja corregirla', () => {
     const ultima = aFeed({
       start: `${TODAY} 09:12`,
       end: `${TODAY} 09:41`,
@@ -95,10 +119,30 @@ describe('Dashboard · lo registrado', () => {
       formulaMl: 35,
     })
     const html = renderDashboard(
-      day({ records: [ultima], last: { feed: ultima, diaper: null, sleepEnd: null } })
+      day({ records: [ultima], last: { ...day().last, feed: ultima } })
     )
     expect(html).toContain('35 ml fórmula')
     expect(html).toContain('09:12')
+    // La fila es pulsable para editar lo último registrado.
+    expect(html).toContain('stat-item-link')
+  })
+
+  it('sigue la última caca aparte del último pañal', () => {
+    const pis = aDiaper({ start: `${TODAY} 12:00`, pee: true, poop: false })
+    const caca = aDiaper({ start: `${TODAY} 02:00`, pee: true, poop: true })
+    const html = renderDashboard(
+      day({ records: [caca, pis], last: { ...day().last, diaper: pis, poop: caca } })
+    )
+    expect(html).toContain('Último pañal')
+    expect(html).toContain('Última caca')
+    expect(html).toContain('02:00')
+  })
+
+  it('sin cacas registradas lo dice sin alarmar', () => {
+    const pis = aDiaper({ start: `${TODAY} 12:00`, pee: true, poop: false })
+    const html = renderDashboard(day({ records: [pis], last: { ...day().last, diaper: pis } }))
+    expect(html).toContain('Sin cacas')
+    expect(html).not.toContain('banner-warn')
   })
 
   it('un cronómetro olvidado no afirma que el bebé siga dormido', () => {
@@ -109,8 +153,7 @@ describe('Dashboard · lo registrado', () => {
         records: [abierto],
         openSleep: abierto,
         last: {
-          feed: null,
-          diaper: null,
+          ...day().last,
           sleepEnd: aSleep({ start: `${TODAY} 01:00`, end: `${TODAY} 02:00`, durationMin: 60 }),
         },
       })
@@ -151,6 +194,29 @@ describe('Timeline', () => {
     expect(html).toContain('Pañal · pis y caca')
   })
 
+  it('muestra el hueco entre tomas consecutivas', () => {
+    const primera = aFeed({ start: `${TODAY} 06:00`, end: `${TODAY} 06:20` })
+    const segunda = aFeed({ start: `${TODAY} 09:10`, end: `${TODAY} 09:30` })
+    cacheDay(day({ records: [primera, segunda] }))
+    const html = render(<Timeline date={TODAY} />)
+    expect(html).toContain('+3 h 10 min')
+  })
+
+  it('la primera toma del día toma su hueco de la última de anoche', () => {
+    const anoche = aFeed({ start: `${addDays(TODAY, -1)} 23:30`, end: `${addDays(TODAY, -1)} 23:50` })
+    const madrugada = aFeed({ start: `${TODAY} 02:45`, end: `${TODAY} 03:05` })
+    cacheDay(day({ records: [madrugada], previousFeed: anoche }))
+    const html = render(<Timeline date={TODAY} />)
+    expect(html).toContain('+3 h 15 min')
+  })
+
+  it('el peso aparece en la cronología como un registro más', () => {
+    cacheDay(day({ records: [aWeight({ start: `${TODAY} 10:00`, grams: 3210 })] }))
+    const html = render(<Timeline date={TODAY} />)
+    expect(html).toContain('Peso')
+    expect(html).toContain('3,210 kg')
+  })
+
   it('muestra el estado vacío cuando no hay nada ese día', () => {
     cacheDay(day({ records: [] }))
     const html = render(<Timeline date={TODAY} />)
@@ -159,20 +225,13 @@ describe('Timeline', () => {
 })
 
 describe('Ajustes', () => {
-  it('carga el nacimiento y los objetivos guardados', () => {
+  it('carga el nacimiento y el peso al nacer guardados', () => {
     cacheDay(day())
     const html = render(<SettingsView />)
     expect(html).toContain(`value="${TODAY}"`)
     expect(html).toContain('value="00:17"')
-    expect(html).toContain('value="6"')
-    expect(html).toContain('value="400"')
+    expect(html).toContain('value="3420"')
+    expect(html).toContain('3,420 kg')
     expect(html).toContain('día de vida')
-  })
-
-  it('deja claro que los objetivos los ponen los padres', () => {
-    cacheDay(day())
-    const html = render(<SettingsView />)
-    expect(html).toContain('La aplicación no propone ninguno')
-    expect(html).toContain('El pecho directo no cuenta aquí')
   })
 })

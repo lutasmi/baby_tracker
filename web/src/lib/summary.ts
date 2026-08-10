@@ -3,6 +3,7 @@
 import type { BabyRecord, FeedRecord } from '../types'
 import { durationOf, endOf } from '../types'
 import { dateOf, formatDuration, timeOf } from './dates'
+import { formatKg } from './records'
 
 const SLEEP_LABELS: Record<string, string> = { siesta: 'Siesta', nocturno: 'Sueño nocturno' }
 const BATH_LABELS: Record<string, string> = { completo: 'Baño completo', aseo: 'Aseo rápido' }
@@ -29,6 +30,8 @@ export function recordIcon(r: BabyRecord): string {
       return r.poop ? '💩' : '💧'
     case 'bath':
       return '🛁'
+    case 'weight':
+      return '⚖️'
   }
 }
 
@@ -43,6 +46,8 @@ export function recordTitle(r: BabyRecord): string {
       return `Pañal · ${diaperContent(r.pee, r.poop)}`
     case 'bath':
       return BATH_LABELS[r.kind] ?? 'Baño'
+    case 'weight':
+      return 'Peso'
   }
 }
 
@@ -75,6 +80,8 @@ export function recordDetail(r: BabyRecord): string {
     parts.push(...feedParts(r))
   } else if (r.type === 'diaper' && r.consistency) {
     parts.push(`consistencia ${CONSISTENCY_LABELS[r.consistency] ?? r.consistency}`)
+  } else if (r.type === 'weight') {
+    parts.push(formatKg(r.grams))
   }
 
   if (r.notes) parts.push(r.notes)

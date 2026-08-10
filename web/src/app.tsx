@@ -67,6 +67,7 @@ const FORM_TYPES: Record<string, RecordType> = {
   toma: 'feed',
   panal: 'diaper',
   bano: 'bath',
+  peso: 'weight',
 }
 
 function Screen({ session, onLogout }: { session: Session; onLogout: () => void }) {

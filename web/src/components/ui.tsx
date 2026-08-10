@@ -55,37 +55,6 @@ export function Seg<T extends string>({
   )
 }
 
-/** Fecha y hora en una fila, con selectores nativos del móvil. */
-export function DateTimeField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: string // 'yyyy-MM-dd HH:mm'
-  onChange: (dt: string) => void
-}) {
-  const date = value.slice(0, 10)
-  const time = value.slice(11, 16)
-  return (
-    <div class="field">
-      <span class="field-label">{label}</span>
-      <div style="display:flex;gap:8px">
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => onChange(`${(e.target as HTMLInputElement).value} ${time}`)}
-        />
-        <input
-          type="time"
-          value={time}
-          onChange={(e) => onChange(`${date} ${(e.target as HTMLInputElement).value}`)}
-        />
-      </div>
-    </div>
-  )
-}
-
 /**
  * Interruptor independiente. A diferencia de `Seg`, varios pueden estar
  * activos a la vez: un pañal puede llevar pis y caca.
@@ -180,22 +149,26 @@ export function AmountField({
   value,
   onChange,
   unit,
-  presets,
+  presets = [],
   max,
+  step = 1,
   autoFocus,
 }: {
   value: number
   onChange: (v: number) => void
   unit: string
-  presets: number[]
+  /** Valores habituales; sin ellos solo quedan el campo y los botones. */
+  presets?: number[]
   max: number
+  /** Cuánto suman y restan los botones. El campo admite cualquier valor. */
+  step?: number
   autoFocus?: boolean
 }) {
   const clamp = (v: number) => Math.min(max, Math.max(0, v))
   return (
     <>
       <div class="stepper">
-        <button type="button" aria-label="Menos" onClick={() => onChange(clamp(value - 1))}>
+        <button type="button" aria-label="Menos" onClick={() => onChange(clamp(value - step))}>
           −
         </button>
         <div class="stepper-input">
@@ -218,33 +191,19 @@ export function AmountField({
           />
           <small>{unit}</small>
         </div>
-        <button type="button" aria-label="Más" onClick={() => onChange(clamp(value + 1))}>
+        <button type="button" aria-label="Más" onClick={() => onChange(clamp(value + step))}>
           +
         </button>
       </div>
-      <div class="chips chips-quick">
-        {presets.map((p) => (
-          <button
-            key={p}
-            type="button"
-            class={value === p ? 'on' : ''}
-            onClick={() => onChange(p)}
-          >
-            {p}
-          </button>
-        ))}
-      </div>
+      {presets.length > 0 && (
+        <div class="chips chips-quick">
+          {presets.map((p) => (
+            <button key={p} type="button" class={value === p ? 'on' : ''} onClick={() => onChange(p)}>
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
     </>
-  )
-}
-
-/** Progreso frente a un objetivo manual. Sin objetivo muestra solo la cifra. */
-export function GoalBar({ value, goal }: { value: number; goal: number }) {
-  if (goal <= 0) return null
-  const pct = Math.min(100, Math.round((value / goal) * 100))
-  return (
-    <div class="goal-bar" role="presentation">
-      <div class="goal-fill" style={`width:${pct}%`} />
-    </div>
   )
 }

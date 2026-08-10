@@ -7,6 +7,7 @@ import type {
   DiaperRecord,
   FeedRecord,
   SleepRecord,
+  WeightRecord,
 } from './types'
 
 let seq = 0
@@ -77,15 +78,28 @@ export function aBath(p: Partial<BathRecord> = {}): BathRecord {
   }
 }
 
+export function aWeight(p: Partial<WeightRecord> = {}): WeightRecord {
+  return {
+    ...AUDIT,
+    id: nextId(),
+    type: 'weight',
+    start: '2026-08-07 09:00',
+    grams: 3210,
+    notes: '',
+    ...p,
+  }
+}
+
 export function aDay(p: Partial<DayData> = {}): DayData {
   return {
     date: '2026-08-07',
     records: [],
     openSleep: null,
-    last: { feed: null, diaper: null, sleepEnd: null },
+    last: { feed: null, diaper: null, poop: null, sleepEnd: null, weight: null },
+    previousFeed: null,
     users: { 'ana@example.com': 'Ana' },
     serverNow: '2026-08-07 12:00',
-    settings: { birth: null, goals: { pees: 0, poops: 0, milkMl: 0 } },
+    settings: { birth: null, birthWeightG: 0 },
     lifeDay: null,
     ...p,
   }

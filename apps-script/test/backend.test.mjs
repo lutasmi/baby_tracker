@@ -19,7 +19,7 @@ describe('instalación', () => {
   it('crea una pestaña por tipo de registro, más Usuarios y Bebe', () => {
     const names = backend.spreadsheet().getSheets().map((s) => s.getName())
     expect(names).toEqual(
-      expect.arrayContaining(['Usuarios', 'Bebe', 'Sueno', 'Tomas', 'Panales', 'Banos'])
+      expect.arrayContaining(['Usuarios', 'Bebe', 'Sueno', 'Tomas', 'Panales', 'Banos', 'Peso'])
     )
     expect(names).not.toContain('Hoja 1') // la pestaña por defecto se retira
   })
@@ -117,7 +117,7 @@ describe('un día de uso', () => {
   /** Registra el día tal y como lo harían unos padres, hora a hora. */
   function liveTheDay() {
     backend.call('updateSettings', {
-      settings: { birth: '2026-08-05 09:17', goals: { pees: 6, poops: 3, milkMl: 400 } },
+      settings: { birth: '2026-08-05 09:17', birthWeightG: 3420 },
     })
 
     // 08:05 — toma de fórmula anotada justo al terminar.
@@ -288,14 +288,58 @@ describe('un día de uso', () => {
     expect(backend.sheet('Bebe').asObjects()[0]).toMatchObject({
       Fecha_Nacimiento: '2026-08-05',
       Hora_Nacimiento: '09:17',
-      Objetivo_Pises: 6,
-      Objetivo_Cacas: 3,
-      Objetivo_Leche_Ml: 400,
+      Peso_Nacimiento_G: 3420,
     })
     expect(backend.call('getDay', { date: DAY }).settings).toEqual({
       birth: '2026-08-05 09:17',
-      goals: { pees: 6, poops: 3, milkMl: 400 },
+      birthWeightG: 3420,
     })
+  })
+
+  it('sigue la última caca aparte del último pañal', () => {
+    liveTheDay()
+    backend.setNow(`${DAY} 16:05`)
+    const { last } = backend.call('getDay', { date: DAY })
+    // El último pañal es el pis de las 15:10; la última caca, el de las 08:18.
+    expect(last.diaper.id).toBe('panal-2')
+    expect(last.poop.id).toBe('panal-1')
+  })
+
+  it('da la toma anterior al día para calcular el hueco de la primera', () => {
+    liveTheDay()
+    // Una toma de anoche, que no aparece en la cronología de hoy.
+    backend.setNow(`${DAY} 16:10`)
+    backend.call(
+      'createRecord',
+      record({
+        id: 'toma-noche',
+        type: 'feed',
+        start: '2026-08-06 23:30',
+        end: '2026-08-06 23:50',
+        formulaMl: 50,
+        notes: '',
+      })
+    )
+    const day = backend.call('getDay', { date: DAY })
+    expect(day.records.find((r) => r.id === 'toma-noche')).toBeUndefined()
+    expect(day.previousFeed.id).toBe('toma-noche')
+  })
+
+  it('registra el peso en su pestaña y lo devuelve como último', () => {
+    liveTheDay()
+    backend.setNow(`${DAY} 17:00`)
+    backend.call(
+      'createRecord',
+      record({ id: 'peso-1', type: 'weight', start: `${DAY} 16:45`, grams: 3210, notes: '' })
+    )
+    expect(backend.sheet('Peso').asObjects()[0]).toMatchObject({
+      ID: 'peso-1',
+      Hora: `${DAY} 16:45`,
+      Gramos: 3210,
+    })
+    const day = backend.call('getDay', { date: DAY })
+    expect(day.last.weight.grams).toBe(3210)
+    expect(day.records.find((r) => r.id === 'peso-1')).toBeDefined()
   })
 })
 

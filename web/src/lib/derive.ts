@@ -134,3 +134,27 @@ export function feedDefaults(lastFeed: FeedRecord | null): FeedDefaults {
     formulaMl: lastFeed.formulaMl,
   }
 }
+
+/**
+ * Minutos entre el inicio de cada toma y el de la anterior, por identificador.
+ *
+ * De inicio a inicio, que es como se cuenta lo de "cada tres horas". La toma
+ * anterior al día llega aparte para que la primera de la madrugada tampoco se
+ * quede sin su hueco.
+ */
+export function feedGaps(
+  records: BabyRecord[],
+  previousFeed: FeedRecord | null
+): Map<string, number> {
+  const gaps = new Map<string, number>()
+  let previousStart = previousFeed?.start ?? null
+  for (const r of records) {
+    if (r.type !== 'feed') continue
+    if (previousStart) {
+      const minutes = diffMinutes(previousStart, r.start)
+      if (minutes >= 0) gaps.set(r.id, minutes)
+    }
+    previousStart = r.start
+  }
+  return gaps
+}

@@ -29,13 +29,7 @@ var SHEET_USERS = 'Usuarios';
 var SHEET_BABY = 'Bebe';
 
 var USER_COLUMNS = ['Usuario_ID', 'Email', 'Nombre', 'Activo', 'Rol', 'Fecha_Alta'];
-var BABY_COLUMNS = [
-  'Fecha_Nacimiento',
-  'Hora_Nacimiento',
-  'Objetivo_Pises',
-  'Objetivo_Cacas',
-  'Objetivo_Leche_Ml',
-];
+var BABY_COLUMNS = ['Fecha_Nacimiento', 'Hora_Nacimiento', 'Peso_Nacimiento_G'];
 
 // ---------------------------------------------------------------------------
 // Declaración de los tipos de registro
@@ -128,6 +122,15 @@ var RECORD_TYPES = {
       },
       { key: 'durationMin', column: 'Duracion_Min', kind: 'int', max: 240 },
     ],
+  },
+
+  // El peso se pesa de vez en cuando, no varias veces al día: es un registro
+  // puntual más, con su pestaña y una sola columna propia.
+  weight: {
+    sheet: 'Peso',
+    label: 'Peso',
+    interval: false,
+    fields: [{ key: 'grams', column: 'Gramos', kind: 'int', max: 30000, required: true }],
   },
 };
 
@@ -396,6 +399,7 @@ function normalizeAndValidate(input, now) {
   if (spec.requireAny && !hasAny(out, spec.requireAny)) {
     throw apiError('VALIDATION', requireAnyMessage(input.type));
   }
+  requirePositive(out, spec);
   applyTypeRules(out, spec);
   return out;
 }
@@ -412,6 +416,16 @@ function requireAnyMessage(type) {
     return 'La toma necesita al menos un componente: pecho, leche extraída o fórmula.';
   }
   return 'El pañal tiene que llevar pis, caca o las dos cosas.';
+}
+
+/** Un campo obligatorio a 0 no vale: un peso de 0 gramos no es un peso. */
+function requirePositive(record, spec) {
+  for (var i = 0; i < spec.fields.length; i++) {
+    var field = spec.fields[i];
+    if (field.required && field.kind === 'int' && !record[field.key]) {
+      throw apiError('VALIDATION', 'Falta ' + field.column + '.');
+    }
+  }
 }
 
 /** Reglas que no caben en un descriptor de campo. */
@@ -620,7 +634,7 @@ function lifeDayTotals(records, rangeStart, rangeEnd) {
 // ---------------------------------------------------------------------------
 
 function defaultSettings() {
-  return { birth: null, goals: { pees: 0, poops: 0, milkMl: 0 } };
+  return { birth: null, birthWeightG: 0 };
 }
 
 function normalizeSettings(raw) {
@@ -629,14 +643,9 @@ function normalizeSettings(raw) {
   if (birth && !isValidDt(birth)) {
     throw apiError('VALIDATION', 'La fecha y hora de nacimiento no son válidas.');
   }
-  var goals = s.goals && typeof s.goals === 'object' ? s.goals : {};
   return {
     birth: birth || null,
-    goals: {
-      pees: boundedInt(goals.pees, 50, 'el objetivo de pises'),
-      poops: boundedInt(goals.poops, 50, 'el objetivo de cacas'),
-      milkMl: boundedInt(goals.milkMl, 5000, 'el objetivo de leche'),
-    },
+    birthWeightG: boundedInt(s.birthWeightG, 30000, 'el peso al nacer'),
   };
 }
 
@@ -648,11 +657,7 @@ function babyRowToSettings(row) {
   var birth = date && time ? time : '';
   return {
     birth: birth && isValidDt(birth) ? birth : null,
-    goals: {
-      pees: numOrNull(row.Objetivo_Pises) || 0,
-      poops: numOrNull(row.Objetivo_Cacas) || 0,
-      milkMl: numOrNull(row.Objetivo_Leche_Ml) || 0,
-    },
+    birthWeightG: numOrNull(row.Peso_Nacimiento_G) || 0,
   };
 }
 
@@ -662,9 +667,7 @@ function settingsToBabyRow(settings) {
     Fecha_Nacimiento: settings.birth ? dtDateOf(settings.birth) : '',
     // Solo la hora: la fecha ya está en su columna y así la pestaña se lee mejor.
     Hora_Nacimiento: settings.birth ? settings.birth.slice(11, 16) : '',
-    Objetivo_Pises: settings.goals.pees || '',
-    Objetivo_Cacas: settings.goals.poops || '',
-    Objetivo_Leche_Ml: settings.goals.milkMl || '',
+    Peso_Nacimiento_G: settings.birthWeightG || '',
   };
 }
 

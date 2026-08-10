@@ -11,12 +11,15 @@ La especificación original está en [docs/especificacion.md](docs/especificacio
 ## Qué incluye
 
 - **Acceso con Google** restringido a los usuarios autorizados en la hoja `Usuarios`.
-- **Día de vida**: periodos de 24 h contados desde la hora exacta de nacimiento, con el recuento de pises, cacas, fórmula y leche materna extraída, y progreso frente a los objetivos que pongan los padres. Convive con el día natural, que sigue rigiendo la cronología.
+- **Día de vida**: periodos de 24 h contados desde la hora exacta de nacimiento, con el recuento de pises, cacas, fórmula y leche materna extraída. Convive con el día natural, que sigue rigiendo la cronología.
 - **Tomas con inicio y fin reales**, duración derivada y precisión de un minuto. Una misma toma puede combinar **pecho directo (min), leche materna extraída (ml) y fórmula (ml)**; los minutos y los mililitros nunca se mezclan.
 - **Sueño** con inicio y fin, registrable después de que haya ocurrido. El cronómetro de un toque sigue estando, pero es auxiliar: la aplicación no da por hecho que el bebé sigue dormido porque nadie cerró un sueño.
 - **Pañales**: pis y caca son casillas independientes, así que un pañal puede llevar las dos; la consistencia solo aparece cuando hay caca.
 - **Baños**: completo o aseo rápido, con duración opcional.
+- **Tiempo desde la toma anterior**, al registrar una toma y en cada toma de la cronología, para no tener que restar.
+- **Peso**: cada pesada con su hora, y la variación en gramos y en porcentaje respecto al peso al nacer. Se muestra el dato, sin interpretarlo.
 - **Cronología diaria** con resumen del día, cambio de fecha, edición y borrado con confirmación.
+- **Lo último registrado se corrige desde la pantalla principal**: cada fila abre su registro.
 - **Todo es corregible después**: horas, cantidades, componentes de una toma y contenido del pañal, con la misma pantalla con la que se creó.
 - Cada registro guarda **quién lo creó, quién lo modificó y cuándo**.
 - Reintentos seguros: el identificador se genera en el cliente y **repetir una petición nunca duplica** el registro.
@@ -38,7 +41,7 @@ Cada tipo de registro tiene **su propia pestaña** en la hoja de cálculo, con s
 
 - **Frontend**: Vite + TypeScript + Preact, en [web/](web/). Sin más dependencias de ejecución. Hora local de Madrid en todo el dominio (`Europe/Madrid`).
 - **Backend**: Google Apps Script, en [apps-script/](apps-script/). Cuatro archivos sin build. Verifica el ID token de Google, emite sesiones propias (180 días), valida cada registro y escribe en la hoja bajo bloqueo. Los tipos de registro se declaran en un único sitio (`RECORD_TYPES`) y el resto del backend es genérico.
-- **Datos**: una hoja de cálculo con una pestaña por tipo (`Sueno`, `Tomas`, `Panales`, `Banos`), más `Usuarios` y `Bebe`. Borrado lógico en la columna `Eliminado`. Se puede editar a mano sin romper la aplicación.
+- **Datos**: una hoja de cálculo con una pestaña por tipo (`Sueno`, `Tomas`, `Panales`, `Banos`, `Peso`), más `Usuarios` y `Bebe`. Borrado lógico en la columna `Eliminado`. Se puede editar a mano sin romper la aplicación.
 - Todo el hosting utilizado (GitHub Pages, Apps Script, Sheets) es gratuito.
 
 ### Estructura del repositorio
@@ -55,7 +58,6 @@ apps-script/          Backend Google Apps Script (Main, Sheets, Logic, Setup)
 scripts/              Generador de iconos PNG
 docs/modelo-de-datos.md Pestañas, columnas y cómo añadir campos o tipos
 docs/especificacion.md  Especificación original del producto (contrato de la V1)
-docs/perfil-y-peso.md   Siguiente fase: peso y perfil del bebé
 .github/workflows/    Despliegue automático en GitHub Pages
 ```
 
@@ -73,7 +75,7 @@ Necesitas una cuenta de Google y unos 20 minutos. Son tres piezas: la hoja + App
    - `apps-script/appsscript.json` → `appsscript.json`
    - `apps-script/Main.js`, `apps-script/Sheets.js`, `apps-script/Logic.js`, `apps-script/Setup.js`
    > Alternativa con [clasp](https://github.com/google/clasp): copia `apps-script/.clasp.json.example` a `apps-script/.clasp.json`, pon tu `scriptId` y ejecuta `npx clasp push` dentro de `apps-script/`.
-4. Ejecuta la función **`setup`** (selector de funciones → `setup` → Ejecutar) y autoriza los permisos. En el registro verás la URL de la hoja de cálculo creada, con una pestaña por tipo de registro (`Sueno`, `Tomas`, `Panales`, `Banos`), más `Usuarios` (tú ya estás dado de alta) y `Bebe`.
+4. Ejecuta la función **`setup`** (selector de funciones → `setup` → Ejecutar) y autoriza los permisos. En el registro verás la URL de la hoja de cálculo creada, con una pestaña por tipo de registro (`Sueno`, `Tomas`, `Panales`, `Banos`, `Peso`), más `Usuarios` (tú ya estás dado de alta) y `Bebe`.
    - Si prefieres usar una hoja existente, añade antes la propiedad `SPREADSHEET_ID` (paso 3.2) y ejecuta `setup` después.
 
 ### 2. Client ID de OAuth (login con Google)
@@ -141,7 +143,9 @@ No hay credenciales en el repositorio: la URL de la API y el Client ID (público
 - **Un solo sueño abierto**: lo garantiza el backend bajo bloqueo global. Un sueño sin cerrar **no** significa que el bebé siga dormido: pasadas 14 horas se considera un cronómetro olvidado, deja de contar en las horas dormidas y la pantalla principal ofrece corregirlo.
 - **Componentes de la toma**: cada magnitud tiene su columna en la pestaña `Tomas` (`Pecho_Min`, `Extraida_Ml`, `Formula_Ml`). Los minutos y los mililitros no se convierten entre sí en ningún punto: del pecho directo no sabemos cuántos ml ha tomado el bebé.
 - **Día de vida**: periodos de 24 h desde el instante del nacimiento. Un registro cuenta en el periodo en el que empieza, así que una toma que cruza el aniversario horario no se parte en dos.
-- **Ajustes** (nacimiento y objetivos): viven en la pestaña `Bebe`, una sola fila. Son comunes a todos los usuarios y se editan desde la pantalla de Ajustes o a mano en la hoja. Los objetivos los ponen los padres; la aplicación no propone ninguno ni da recomendaciones de alimentación.
+- **Datos del bebé** (nacimiento y peso al nacer): viven en la pestaña `Bebe`, una sola fila. Son comunes a todos los usuarios y se editan desde la pantalla de Ajustes o a mano en la hoja.
+- **Nada de recomendaciones**: la aplicación no propone objetivos de alimentación, no dice si un peso es normal ni avisa de que lleváis mucho sin registrar. Muestra lo registrado y deja el juicio a los padres y al pediatra.
+- **Hueco entre tomas**: se mide de inicio a inicio, que es como se cuenta lo de "cada tres horas".
 - **Edición manual de la hoja**: tolerada. Las columnas se localizan por cabecera —puedes reordenarlas o añadir las tuyas—, las etiquetas admiten variantes sin acentos, las fechas aceptan `dd/MM/yyyy`, las horas sueltas (`HH:mm`) se combinan con la columna `Fecha`, un fin menor que el inicio se interpreta como cruce de medianoche y una casilla marcada con `x` cuenta como `TRUE`. La duración se recalcula siempre desde el intervalo.
 - **Borrado**: lógico (columna `Eliminado`), para que la hoja conserve el histórico.
 - **Latencia**: Apps Script tarda 1–3 s por operación; la interfaz muestra el estado de guardado y solo confirma cuando la hoja ha escrito.
@@ -162,7 +166,5 @@ Entre los pasos 3a y 3b hay unos minutos en los que la aplicación puede dar err
 ## Funcionalidad futura
 
 Cola local sin conexión con sincronización, recordatorios, estadísticas semanales/mensuales, ventanas de sueño ([diseño](docs/prediccion-sueno-tomas.md)), medicación, hitos y exportaciones.
-
-**Peso y perfil del bebé** son la siguiente fase y sí requieren cambiar la hoja: la dependencia está analizada en [docs/perfil-y-peso.md](docs/perfil-y-peso.md).
 
 Añadir un tipo de evento nuevo requiere: una entrada en los mapas de etiquetas del backend (`Logic.js`), un formulario y los textos de resumen en el frontend.

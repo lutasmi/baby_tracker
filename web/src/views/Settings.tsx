@@ -5,13 +5,13 @@ import { AmountField, ScreenTitle } from '../components/ui'
 import { handleAuthError, navigateReplace, useDay, useNow } from '../hooks'
 import { isValidDate } from '../lib/dates'
 import { lifeDayNumber } from '../lib/lifeday'
+import { formatKg } from '../lib/records'
 import { showToast } from '../toast'
-import type { Goals } from '../types'
 
 interface FormState {
   date: string // 'yyyy-MM-dd'
   time: string // 'HH:mm'
-  goals: Goals
+  birthWeightG: number
 }
 
 export function SettingsView() {
@@ -23,7 +23,7 @@ export function SettingsView() {
   if (!data && loading) {
     return (
       <>
-        <ScreenTitle title="Ajustes" />
+        <ScreenTitle title="Datos del bebé" />
         <main class="app-main">
           <div class="loading-screen">
             <div class="spinner" />
@@ -33,14 +33,13 @@ export function SettingsView() {
     )
   }
 
-  const settings = data?.settings ?? { birth: null, goals: { pees: 0, poops: 0, milkMl: 0 } }
+  const settings = data?.settings ?? { birth: null, birthWeightG: 0 }
   const s: FormState = state ?? {
     date: settings.birth ? settings.birth.slice(0, 10) : '',
     time: settings.birth ? settings.birth.slice(11, 16) : '',
-    goals: { ...settings.goals },
+    birthWeightG: settings.birthWeightG,
   }
   const set = (patch: Partial<FormState>) => setState({ ...s, ...patch })
-  const setGoals = (patch: Partial<Goals>) => set({ goals: { ...s.goals, ...patch } })
 
   const birth = s.date && s.time ? `${s.date} ${s.time}` : null
   const problem = birthProblem(s, now)
@@ -50,13 +49,13 @@ export function SettingsView() {
     if (problem) return
     setSaving(true)
     try {
-      await getApi().updateSettings({ birth, goals: s.goals })
-      showToast('Ajustes guardados ✓')
+      await getApi().updateSettings({ birth, birthWeightG: s.birthWeightG })
+      showToast('Guardado ✓')
       navigateReplace('#/')
     } catch (err) {
       if (!handleAuthError(err)) {
         showToast(
-          err instanceof ApiError ? err.message : 'No se pudieron guardar los ajustes.',
+          err instanceof ApiError ? err.message : 'No se pudieron guardar los datos.',
           'error'
         )
       }
@@ -67,7 +66,7 @@ export function SettingsView() {
 
   return (
     <>
-      <ScreenTitle title="Ajustes" />
+      <ScreenTitle title="Datos del bebé" />
       <main class="app-main">
         <form
           class="form"
@@ -103,57 +102,32 @@ export function SettingsView() {
           </div>
 
           <div class="card">
-            <div class="card-title">Objetivos del día de vida</div>
+            <div class="card-title">Peso al nacer</div>
             <p class="field-hint">
-              Los ponéis vosotros. La aplicación no propone ninguno: solo muestra el progreso
-              frente a lo que hayáis decidido. A 0 se oculta el progreso.
+              Es la referencia con la que se compara cada pesada. Sin él se sigue pudiendo
+              registrar el peso, pero no la variación.
             </p>
-
-            <div class="field" style="margin-top:14px">
-              <span class="field-label">💧 Pises al día</span>
+            <div style="margin-top:14px">
               <AmountField
-                value={s.goals.pees}
-                onChange={(pees) => setGoals({ pees })}
-                unit="pises"
-                presets={[4, 5, 6, 7, 8]}
-                max={50}
+                value={s.birthWeightG}
+                onChange={(birthWeightG) => set({ birthWeightG })}
+                unit="g"
+                max={30000}
+                step={10}
               />
-            </div>
-
-            <div class="field" style="margin-top:14px">
-              <span class="field-label">💩 Cacas al día</span>
-              <AmountField
-                value={s.goals.poops}
-                onChange={(poops) => setGoals({ poops })}
-                unit="cacas"
-                presets={[1, 2, 3, 4, 5]}
-                max={50}
-              />
-            </div>
-
-            <div class="field" style="margin-top:14px">
-              <span class="field-label">🥛 Leche cuantificable al día</span>
-              <AmountField
-                value={s.goals.milkMl}
-                onChange={(milkMl) => setGoals({ milkMl })}
-                unit="ml"
-                presets={[200, 300, 400, 500, 600]}
-                max={5000}
-              />
-              <p class="field-hint">
-                Fórmula más leche materna extraída. El pecho directo no cuenta aquí porque no
-                sabemos cuántos ml ha tomado.
-              </p>
+              {s.birthWeightG > 0 && (
+                <p class="field-hint">= {formatKg(s.birthWeightG)}</p>
+              )}
             </div>
           </div>
 
-          <p class="field-hint">Los ajustes son comunes: los ve todo el que usa la aplicación.</p>
+          <p class="field-hint">Estos datos son comunes: los ve todo el que usa la aplicación.</p>
 
           {problem && <div class="banner banner-warn">{problem}</div>}
 
           <div class="form-actions">
             <button type="submit" class="btn btn-primary btn-lg" disabled={saving || !!problem}>
-              {saving ? 'Guardando…' : 'Guardar ajustes'}
+              {saving ? 'Guardando…' : 'Guardar'}
             </button>
           </div>
         </form>

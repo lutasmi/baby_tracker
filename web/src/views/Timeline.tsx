@@ -1,7 +1,7 @@
 import { ErrorCard } from '../components/ui'
 import { navigate, navigateReplace, useDay, useNow } from '../hooks'
 import { addDays, formatDateHuman, formatDuration, isValidDate } from '../lib/dates'
-import { daySummary } from '../lib/derive'
+import { daySummary, feedGaps } from '../lib/derive'
 import { recordDetail, recordIcon, recordTimeLabel, recordTitle } from '../lib/summary'
 import { userName } from '../store'
 import type { BabyRecord } from '../types'
@@ -67,9 +67,12 @@ export function Timeline({ date }: { date?: string }) {
               </div>
             ) : (
               <div class="tl-list">
-                {data.records.map((r) => (
-                  <TimelineItem key={r.id} record={r} day={day} />
-                ))}
+                {(() => {
+                  const gaps = feedGaps(data.records, data.previousFeed)
+                  return data.records.map((r) => (
+                    <TimelineItem key={r.id} record={r} day={day} gapMin={gaps.get(r.id) ?? null} />
+                  ))
+                })()}
               </div>
             )}
 
@@ -124,12 +127,24 @@ function DaySummaryCard({
   )
 }
 
-function TimelineItem({ record, day }: { record: BabyRecord; day: string }) {
+function TimelineItem({
+  record,
+  day,
+  gapMin,
+}: {
+  record: BabyRecord
+  day: string
+  gapMin: number | null
+}) {
   return (
     <button class="tl-item" onClick={() => navigate(`#/editar/${encodeURIComponent(record.id)}`)}>
       <span class={`tl-icon ${record.type}`}>{recordIcon(record)}</span>
       <span class="tl-body">
-        <span class="tl-title">{recordTitle(record)}</span>
+        <span class="tl-title">
+          {recordTitle(record)}
+          {/* Hueco desde la toma anterior, de inicio a inicio. */}
+          {gapMin != null && <span class="tl-gap">+{formatDuration(gapMin)}</span>}
+        </span>
         <span class="tl-detail" style="display:block">
           {recordDetail(record) || ' '}
         </span>

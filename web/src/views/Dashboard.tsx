@@ -1,11 +1,17 @@
 import { useState } from 'preact/hooks'
 import { getApi } from '../api'
 import { ApiError } from '../api/types'
-import { ErrorCard, GoalBar } from '../components/ui'
+import { ErrorCard } from '../components/ui'
 import { handleAuthError, navigate, useDay, useNow } from '../hooks'
 import { diffMinutes, formatAgo, formatDuration, nowMadrid, timeOf } from '../lib/dates'
 import { babyStatus, guessSleepKind, sleepMinutesOnDate } from '../lib/derive'
-import { newId } from '../lib/records'
+import {
+  formatGrams,
+  formatKg,
+  formatPercent,
+  newId,
+  weightChange,
+} from '../lib/records'
 import { recordDetail, recordIcon } from '../lib/summary'
 import { userName } from '../store'
 import { showToast } from '../toast'
@@ -123,6 +129,8 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
               onEndSleep={endSleep}
             />
 
+            <WeightCard data={data} />
+
             <button class="btn btn-lg" onClick={() => navigate('#/cronologia')}>
               📋 Cronología del día
             </button>
@@ -141,6 +149,8 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
     </>
   )
 }
+
+const editRoute = (id: string) => `#/editar/${encodeURIComponent(id)}`
 
 // ---------------------------------------------------------------------------
 // Día de vida: el bloque principal de la pantalla
@@ -170,7 +180,6 @@ function LifeDayCard({
   }
 
   const t = lifeDay.totals
-  const goals = settings.goals
   const elapsed = diffMinutes(lifeDay.start, now)
 
   return (
@@ -186,19 +195,15 @@ function LifeDayCard({
       </div>
 
       <div class="kpi-row">
-        <KpiTile icon="💧" label="Pises" value={t.pees} goal={goals.pees} />
-        <KpiTile icon="💩" label="Cacas" value={t.poops} goal={goals.poops} />
+        <KpiTile icon="💧" label="Pises" value={t.pees} />
+        <KpiTile icon="💩" label="Cacas" value={t.poops} />
       </div>
 
       <div class="kpi-milk">
         <div class="kpi-milk-head">
           <span>🥛 Leche cuantificable</span>
-          <strong>
-            {t.milkMl}
-            {goals.milkMl > 0 && <span class="kpi-goal"> / {goals.milkMl}</span>} ml
-          </strong>
+          <strong>{t.milkMl} ml</strong>
         </div>
-        <GoalBar value={t.milkMl} goal={goals.milkMl} />
         <div class="kpi-breakdown">
           <span>🍼 {t.formulaMl} ml fórmula</span>
           <span>🥛 {t.expressedMl} ml extraída</span>
@@ -219,33 +224,19 @@ function LifeDayCard({
   )
 }
 
-function KpiTile({
-  icon,
-  label,
-  value,
-  goal,
-}: {
-  icon: string
-  label: string
-  value: number
-  goal: number
-}) {
+function KpiTile({ icon, label, value }: { icon: string; label: string; value: number }) {
   return (
     <div class="kpi-tile">
       <div class="kpi-label">
         {icon} {label}
       </div>
-      <div class="kpi-value">
-        {value}
-        {goal > 0 && <span class="kpi-goal"> / {goal}</span>}
-      </div>
-      <GoalBar value={value} goal={goal} />
+      <div class="kpi-value">{value}</div>
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Lo registrado: última toma, último pañal, sueño
+// Lo registrado: sueño, última toma, último pañal, última caca
 // ---------------------------------------------------------------------------
 
 function RegisteredCard({
@@ -265,52 +256,40 @@ function RegisteredCard({
 }) {
   const status = babyStatus(data.openSleep, data.last.sleepEnd, now)
   const asleep = status.state === 'asleep' && data.openSleep
+  const sleepRecord = asleep ? data.openSleep : data.last.sleepEnd
 
   return (
     <div class="card">
       <div class="card-title">Lo registrado</div>
       <div class="stat-list">
-        <div class="stat-item">
-          <span class="icon">{asleep ? '😴' : status.state === 'awake' ? '☀️' : '👶'}</span>
-          <div class="stat-main">
-            <div class="stat-label">
-              {asleep ? 'Último sueño' : 'Último despertar'}
-              {status.since ? ` · ${timeOf(status.since)}` : ''}
-            </div>
-            <div class="stat-value">
-              {asleep
-                ? 'Sin cerrar'
-                : status.state === 'awake'
-                  ? 'Despierto'
-                  : 'Sin sueños registrados'}
-            </div>
-          </div>
-          {status.since && (
-            <span class="stat-ago">{formatDuration(diffMinutes(status.since, now))}</span>
-          )}
-        </div>
+        <StatRow
+          icon={asleep ? '😴' : status.state === 'awake' ? '☀️' : '👶'}
+          label={`${asleep ? 'Último sueño' : 'Último despertar'}${
+            status.since ? ` · ${timeOf(status.since)}` : ''
+          }`}
+          value={
+            asleep ? 'Sin cerrar' : status.state === 'awake' ? 'Despierto' : 'Sin sueños registrados'
+          }
+          right={status.since ? formatDuration(diffMinutes(status.since, now)) : null}
+          editId={sleepRecord?.id}
+        />
 
-        <LastRecordStat label="Última toma" record={data.last.feed} now={now} />
-        <LastRecordStat label="Último pañal" record={data.last.diaper} now={now} />
+        <LastRecordRow label="Última toma" record={data.last.feed} now={now} />
+        <LastRecordRow label="Último pañal" record={data.last.diaper} now={now} />
+        {/* La caca se sigue aparte: un pañal de solo pis no dice nada de ella. */}
+        <LastRecordRow label="Última caca" record={data.last.poop} now={now} emptyText="Sin cacas" />
 
-        <div class="stat-item">
-          <span class="icon">🌙</span>
-          <div class="stat-main">
-            <div class="stat-label">Dormido hoy (día natural)</div>
-            <div class="stat-value">
-              {formatDuration(sleepMinutesOnDate(data.records, today, now))}
-            </div>
-          </div>
-        </div>
+        <StatRow
+          icon="🌙"
+          label="Dormido hoy (día natural)"
+          value={formatDuration(sleepMinutesOnDate(data.records, today, now))}
+        />
       </div>
 
       {status.staleTimer && data.openSleep && (
         <div class="banner banner-note">
           <span>Hay un sueño abierto desde las {timeOf(data.openSleep.start)} sin hora de fin.</span>
-          <button
-            class="banner-retry"
-            onClick={() => navigate(`#/editar/${encodeURIComponent(data.openSleep!.id)}`)}
-          >
+          <button class="banner-retry" onClick={() => navigate(editRoute(data.openSleep!.id))}>
             Corregir
           </button>
         </div>
@@ -328,36 +307,107 @@ function RegisteredCard({
   )
 }
 
-function LastRecordStat({
+/**
+ * Fila de la tarjeta. Con `editId` se convierte en botón y abre el registro
+ * para corregirlo: lo último anotado es lo que más se corrige.
+ */
+function StatRow({
+  icon,
+  label,
+  value,
+  right,
+  editId,
+}: {
+  icon: string
+  label: string
+  value: string
+  right?: string | null
+  editId?: string
+}) {
+  const body = (
+    <>
+      <span class="icon">{icon}</span>
+      <div class="stat-main">
+        <div class="stat-label">{label}</div>
+        <div class="stat-value">{value}</div>
+      </div>
+      {right && <span class="stat-ago">{right}</span>}
+      {editId && <span class="stat-edit">›</span>}
+    </>
+  )
+  if (!editId) return <div class="stat-item">{body}</div>
+  return (
+    <button class="stat-item stat-item-link" onClick={() => navigate(editRoute(editId))}>
+      {body}
+    </button>
+  )
+}
+
+function LastRecordRow({
   label,
   record,
   now,
+  emptyText = 'Sin registros',
 }: {
   label: string
   record: BabyRecord | null
   now: string
+  emptyText?: string
 }) {
-  if (!record) {
-    return (
-      <div class="stat-item">
-        <span class="icon">—</span>
-        <div class="stat-main">
-          <div class="stat-label">{label}</div>
-          <div class="stat-value">Sin registros</div>
-        </div>
-      </div>
-    )
-  }
+  if (!record) return <StatRow icon="—" label={label} value={emptyText} />
   return (
-    <div class="stat-item">
-      <span class="icon">{recordIcon(record)}</span>
-      <div class="stat-main">
-        <div class="stat-label">
-          {label} · {timeOf(record.start)} · {userName(record.createdBy)}
+    <StatRow
+      icon={recordIcon(record)}
+      label={`${label} · ${timeOf(record.start)} · ${userName(record.createdBy)}`}
+      value={recordDetail(record) || '—'}
+      right={formatAgo(diffMinutes(record.start, now))}
+      editId={record.id}
+    />
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Peso
+// ---------------------------------------------------------------------------
+
+function WeightCard({ data }: { data: DayData }) {
+  const last = data.last.weight
+  const birth = data.settings.birthWeightG
+  const change = last ? weightChange(last.grams, birth) : null
+
+  return (
+    <div class="card weight-card">
+      <div class="card-title">Peso</div>
+      {last ? (
+        <>
+          <div class="weight-row">
+            <button class="weight-main" onClick={() => navigate(editRoute(last.id))}>
+              <div class="weight-value">{formatKg(last.grams)}</div>
+              <div class="weight-when">
+                {last.start.slice(0, 10) === data.date ? 'hoy' : last.start.slice(0, 10)} ·{' '}
+                {timeOf(last.start)}
+              </div>
+            </button>
+            {change && (
+              <div class="weight-change">
+                <div class="weight-diff">{formatGrams(change.diffG)}</div>
+                <div class="weight-pct">{formatPercent(change.percent)}</div>
+                <div class="weight-since">desde el nacimiento</div>
+              </div>
+            )}
+          </div>
+          {birth > 0 && <div class="weight-birth">Al nacer {formatKg(birth)}</div>}
+        </>
+      ) : (
+        <div class="weight-empty">
+          {birth > 0
+            ? `Al nacer ${formatKg(birth)}. Todavía no hay ninguna pesada.`
+            : 'Todavía no hay ninguna pesada. El peso al nacer se indica en Ajustes.'}
         </div>
-        <div class="stat-value">{recordDetail(record) || '—'}</div>
-      </div>
-      <span class="stat-ago">{formatAgo(diffMinutes(record.start, now))}</span>
+      )}
+      <button class="btn" style="margin-top:12px" onClick={() => navigate('#/nuevo/peso')}>
+        ⚖️ Añadir pesada
+      </button>
     </div>
   )
 }

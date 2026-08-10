@@ -16,8 +16,9 @@ una columna a una pestaña.
 | `Tomas` | Tomas, con sus componentes |
 | `Panales` | Cambios de pañal |
 | `Banos` | Baños y aseos |
+| `Peso` | Pesadas |
 | `Usuarios` | Quién puede entrar |
-| `Bebe` | Nacimiento y objetivos diarios (una sola fila) |
+| `Bebe` | Nacimiento y peso al nacer (una sola fila) |
 
 ### Columnas comunes a los registros
 
@@ -59,8 +60,12 @@ editas una hora a mano la duración se corrige sola.
 
 **`Banos`** — `Tipo` (Baño completo · Aseo rápido), `Duracion_Min`
 
-**`Bebe`** — `Fecha_Nacimiento`, `Hora_Nacimiento`, `Objetivo_Pises`,
-`Objetivo_Cacas`, `Objetivo_Leche_Ml`
+**`Peso`** — `Gramos`
+
+> En gramos, que es como se lee la báscula, y se muestra en kilos. La variación
+> respecto al nacimiento se calcula, no se guarda.
+
+**`Bebe`** — `Fecha_Nacimiento`, `Hora_Nacimiento`, `Peso_Nacimiento_G`
 
 ## Dónde se declara todo esto
 
@@ -99,6 +104,18 @@ Los pasos 1 y 2 son el modelo de datos completo. Los pasos 3 y 4 son la
 interfaz, y no hay forma de ahorrárselos: un campo que no se puede introducir
 ni se ve no sirve de nada.
 
+El tipo `weight` es el ejemplo más corto de lo anterior: se añadió después, y
+en el backend son estas seis líneas.
+
+```js
+weight: {
+  sheet: 'Peso',
+  label: 'Peso',
+  interval: false,
+  fields: [{ key: 'grams', column: 'Gramos', kind: 'int', max: 30000, required: true }],
+}
+```
+
 ## Cómo añadir un tipo de registro
 
 1. Una entrada nueva en `RECORD_TYPES` con su pestaña y sus campos.
@@ -125,7 +142,7 @@ los sitios donde falta tratarlo.
 
 ## Rendimiento
 
-Cada petición lee las cuatro pestañas de registros, más `Usuarios` y `Bebe`.
+Cada petición lee las cinco pestañas de registros, más `Usuarios` y `Bebe`.
 Con el volumen de un bebé son unas décimas de segundo sobre los 1-3 s que ya
 tarda Apps Script.
 

@@ -4,6 +4,7 @@ import {
   babyStatus,
   daySummary,
   feedDefaults,
+  feedGaps,
   guessSleepKind,
   isStaleSleep,
   sleepMinutesOnDate,
@@ -120,5 +121,30 @@ describe('feedDefaults', () => {
       breastSide: 'derecho',
     })
     expect(feedDefaults(aFeed({ breastMin: 15, breastSide: 'ambos' })).breastSide).toBe('ambos')
+  })
+})
+
+describe('feedGaps', () => {
+  it('mide el hueco de inicio a inicio entre tomas consecutivas', () => {
+    const records = [
+      aFeed({ id: 'a', start: '2026-08-07 06:00', end: '2026-08-07 06:20' }),
+      aDiaper({ start: '2026-08-07 07:00' }),
+      aFeed({ id: 'b', start: '2026-08-07 09:10', end: '2026-08-07 09:30' }),
+    ]
+    const gaps = feedGaps(records, null)
+    // La primera toma del día no tiene con qué compararse.
+    expect(gaps.get('a')).toBeUndefined()
+    expect(gaps.get('b')).toBe(190)
+  })
+
+  it('usa la toma anterior al día para la primera de la madrugada', () => {
+    const anoche = aFeed({ start: '2026-08-06 23:30', end: '2026-08-06 23:50' })
+    const madrugada = aFeed({ id: 'm', start: '2026-08-07 02:45', end: '2026-08-07 03:05' })
+    expect(feedGaps([madrugada], anoche).get('m')).toBe(195)
+  })
+
+  it('ignora lo que no son tomas', () => {
+    const records = [aSleep({ start: '2026-08-07 08:00' }), aDiaper({ start: '2026-08-07 09:00' })]
+    expect(feedGaps(records, null).size).toBe(0)
   })
 })

@@ -56,7 +56,7 @@ const bath = (p = {}) => ({
 describe('declaración de tipos', () => {
   it('cada tipo tiene su propia pestaña', () => {
     const sheets = L.recordTypeNames().map((t) => L.RECORD_TYPES[t].sheet)
-    expect(sheets).toEqual(['Sueno', 'Tomas', 'Panales', 'Banos'])
+    expect(sheets).toEqual(['Sueno', 'Tomas', 'Panales', 'Banos', 'Peso'])
     expect(new Set(sheets).size).toBe(sheets.length)
   })
 
@@ -209,6 +209,36 @@ describe('normalizeAndValidate · pañal y baño', () => {
   it('recorta las notas y rechaza ids vacíos', () => {
     expect(L.normalizeAndValidate(bath({ notes: '  hola  ' }), NOW).notes).toBe('hola')
     expect(() => L.normalizeAndValidate(bath({ id: '  ' }), NOW)).toThrow(/Identificador/)
+  })
+})
+
+describe('normalizeAndValidate · peso', () => {
+  const weight = (p = {}) => ({
+    id: 'uuid-5',
+    type: 'weight',
+    start: '2026-08-07 12:00',
+    grams: 3420,
+    notes: '',
+    ...p,
+  })
+
+  it('guarda el peso en gramos', () => {
+    expect(L.normalizeAndValidate(weight(), NOW).grams).toBe(3420)
+  })
+
+  it('exige un peso mayor que cero', () => {
+    expect(() => L.normalizeAndValidate(weight({ grams: 0 }), NOW)).toThrow(/Gramos/)
+    expect(() => L.normalizeAndValidate(weight({ grams: null }), NOW)).toThrow(/Gramos/)
+  })
+
+  it('rechaza pesos imposibles', () => {
+    expect(() => L.normalizeAndValidate(weight({ grams: 90000 }), NOW)).toThrow(/Gramos/)
+  })
+
+  it('es un registro puntual: va a la columna Hora', () => {
+    expect(L.columnsFor('weight')).toContain('Hora')
+    expect(L.columnsFor('weight')).toContain('Gramos')
+    expect(L.columnsFor('weight')).not.toContain('Hora_Inicio')
   })
 })
 
@@ -443,19 +473,18 @@ describe('día de vida', () => {
 
 describe('ajustes en la pestaña Bebe', () => {
   it('va y vuelve entre ajustes y fila', () => {
-    const settings = L.normalizeSettings({
-      birth: '2026-08-05 09:17',
-      goals: { pees: 6, poops: 3, milkMl: 400 },
-    })
+    const settings = L.normalizeSettings({ birth: '2026-08-05 09:17', birthWeightG: 3420 })
     const row = L.settingsToBabyRow(settings)
     expect(row).toEqual({
       Fecha_Nacimiento: '2026-08-05',
       Hora_Nacimiento: '09:17',
-      Objetivo_Pises: 6,
-      Objetivo_Cacas: 3,
-      Objetivo_Leche_Ml: 400,
+      Peso_Nacimiento_G: 3420,
     })
     expect(L.babyRowToSettings(row)).toEqual(settings)
+  })
+
+  it('rechaza un peso al nacer imposible', () => {
+    expect(() => L.normalizeSettings({ birthWeightG: 90000 })).toThrow(/peso al nacer/)
   })
 
   it('una pestaña vacía da los valores neutros', () => {

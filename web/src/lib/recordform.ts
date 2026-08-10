@@ -38,6 +38,7 @@ export interface FormState {
   pee: boolean
   poop: boolean
   consistency: Consistency | ''
+  grams: number
   notes: string
 }
 
@@ -77,6 +78,7 @@ export function initialState(
     pee: false,
     poop: false,
     consistency: '',
+    grams: 0,
     notes: '',
   }
 
@@ -100,6 +102,7 @@ export function initialState(
       case 'diaper':
         return { ...base, pee: true }
       case 'bath':
+      case 'weight':
         return base
     }
   }
@@ -123,6 +126,8 @@ export function initialState(
       return { ...state, pee: r.pee, poop: r.poop, consistency: r.consistency ?? '' }
     case 'bath':
       return { ...state, bathKind: r.kind, bathDurationMin: r.durationMin }
+    case 'weight':
+      return { ...state, grams: r.grams }
   }
 }
 
@@ -178,6 +183,8 @@ export function buildInput(id: string, type: RecordType, s: FormState): RecordIn
         kind: s.bathKind,
         durationMin: s.bathDurationMin,
       }
+    case 'weight':
+      return { ...common, type: 'weight', grams: s.grams }
   }
 }
 
@@ -208,5 +215,7 @@ export function validate(type: RecordType, s: FormState, now: string): string | 
   if (type === 'diaper' && !s.pee && !s.poop) {
     return 'Marca si ha habido pis, caca o las dos cosas.'
   }
+
+  if (type === 'weight' && !s.grams) return 'Indica el peso en gramos.'
   return null
 }

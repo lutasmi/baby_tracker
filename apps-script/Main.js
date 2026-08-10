@@ -174,21 +174,35 @@ function getDay(req) {
   var now = nowMadrid();
 
   var all = readAllRecords();
+  var dayStart = date + ' 00:00';
   var records = [];
   var openSleep = null;
   var lastFeed = null;
   var lastDiaper = null;
+  var lastPoop = null;
   var lastSleepEnd = null;
+  var lastWeight = null;
+  var previousFeed = null;
 
   for (var i = 0; i < all.length; i++) {
     var r = all[i];
     if (recordTouchesDay(r, date, now)) records.push(r);
     if (isOpenSleep(r)) openSleep = r; // el de inicio más tardío prevalece
-    if (r.type === 'feed' && (!lastFeed || r.start > lastFeed.start)) lastFeed = r;
-    if (r.type === 'diaper' && (!lastDiaper || r.start > lastDiaper.start)) lastDiaper = r;
+    if (r.type === 'feed') {
+      if (!lastFeed || r.start > lastFeed.start) lastFeed = r;
+      // Última toma anterior al día consultado: da el hueco de la primera
+      // toma de la noche, que si no quedaría sin calcular.
+      if (r.start < dayStart && (!previousFeed || r.start > previousFeed.start)) previousFeed = r;
+    }
+    if (r.type === 'diaper') {
+      if (!lastDiaper || r.start > lastDiaper.start) lastDiaper = r;
+      // La caca se sigue aparte: un pañal de solo pis no dice nada de ella.
+      if (r.poop && (!lastPoop || r.start > lastPoop.start)) lastPoop = r;
+    }
     if (r.type === 'sleep' && r.end && (!lastSleepEnd || r.end > lastSleepEnd.end)) {
       lastSleepEnd = r;
     }
+    if (r.type === 'weight' && (!lastWeight || r.start > lastWeight.start)) lastWeight = r;
   }
 
   var settings = readSettings();
@@ -197,7 +211,14 @@ function getDay(req) {
     date: date,
     records: records,
     openSleep: openSleep,
-    last: { feed: lastFeed, diaper: lastDiaper, sleepEnd: lastSleepEnd },
+    last: {
+      feed: lastFeed,
+      diaper: lastDiaper,
+      poop: lastPoop,
+      sleepEnd: lastSleepEnd,
+      weight: lastWeight,
+    },
+    previousFeed: previousFeed,
     users: usersDisplayMap(),
     serverNow: now,
     settings: settings,

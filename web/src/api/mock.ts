@@ -17,6 +17,7 @@ import type {
   RecordType,
   Settings,
   SleepRecord,
+  WeightRecord,
 } from '../types'
 import { ApiError, type Api } from './types'
 
@@ -113,6 +114,15 @@ function seedRecords(): BabyRecord[] {
       notes: '',
       createdAt: `${today} 12:20`,
     },
+    {
+      ...AUDIT,
+      id: 'seed-peso',
+      type: 'weight',
+      start: `${today} 09:00`,
+      grams: 3210,
+      notes: '',
+      createdAt: `${today} 09:00`,
+    },
   ]
 }
 
@@ -123,7 +133,7 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
   // Nacimiento cinco días antes de hoy, para que el día de vida sea visible.
   let settings: Settings = {
     birth: `${addDays(nowMadrid().slice(0, 10), -4)} 09:17`,
-    goals: { pees: 6, poops: 3, milkMl: 400 },
+    birthWeightG: 3420,
   }
 
   const openSleepOther = (exceptId?: string): SleepRecord | null => {
@@ -146,6 +156,9 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
     }
     if (input.type === 'diaper' && !input.pee && !input.poop) {
       throw new ApiError('VALIDATION', 'El pañal tiene que llevar pis, caca o las dos cosas.')
+    }
+    if (input.type === 'weight' && !input.grams) {
+      throw new ApiError('VALIDATION', 'Falta Gramos.')
     }
     if (input.type === 'sleep' && !input.end && openSleepOther(input.id)) {
       throw new ApiError('ACTIVE_SLEEP', 'Ya hay un sueño en curso. Finalízalo antes de empezar otro.')
@@ -197,23 +210,40 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
       }
 
       let lastFeed: FeedRecord | null = null
+      let previousFeed: FeedRecord | null = null
       let lastDiaper: DiaperRecord | null = null
+      let lastPoop: DiaperRecord | null = null
       let lastSleepEnd: SleepRecord | null = null
+      let lastWeight: WeightRecord | null = null
       let openSleep: SleepRecord | null = null
       for (const r of all) {
-        if (r.type === 'feed' && (!lastFeed || r.start > lastFeed.start)) lastFeed = r
-        if (r.type === 'diaper' && (!lastDiaper || r.start > lastDiaper.start)) lastDiaper = r
+        if (r.type === 'feed') {
+          if (!lastFeed || r.start > lastFeed.start) lastFeed = r
+          if (r.start < dayStart && (!previousFeed || r.start > previousFeed.start)) previousFeed = r
+        }
+        if (r.type === 'diaper') {
+          if (!lastDiaper || r.start > lastDiaper.start) lastDiaper = r
+          if (r.poop && (!lastPoop || r.start > lastPoop.start)) lastPoop = r
+        }
         if (r.type === 'sleep') {
           if (!r.end) openSleep = r
           else if (!lastSleepEnd || r.end > lastSleepEnd.end!) lastSleepEnd = r
         }
+        if (r.type === 'weight' && (!lastWeight || r.start > lastWeight.start)) lastWeight = r
       }
 
       return {
         date,
         records: all.filter(touches),
         openSleep,
-        last: { feed: lastFeed, diaper: lastDiaper, sleepEnd: lastSleepEnd },
+        last: {
+          feed: lastFeed,
+          diaper: lastDiaper,
+          poop: lastPoop,
+          sleepEnd: lastSleepEnd,
+          weight: lastWeight,
+        },
+        previousFeed,
         users: USERS,
         serverNow: now,
         settings,

@@ -19,6 +19,32 @@ export function milkMlOf(r: FeedRecord): number {
   return r.expressedMl + r.formulaMl
 }
 
+/** '3420' -> '3,420 kg'. La báscula da gramos; el peso se lee en kilos. */
+export function formatKg(grams: number): string {
+  return `${(grams / 1000).toFixed(3).replace('.', ',')} kg`
+}
+
+/** Variación respecto al peso al nacer, en gramos y en porcentaje. */
+export function weightChange(
+  grams: number,
+  birthWeightG: number
+): { diffG: number; percent: number } | null {
+  if (!birthWeightG || !grams) return null
+  const diffG = grams - birthWeightG
+  return { diffG, percent: (diffG / birthWeightG) * 100 }
+}
+
+/** '-210' -> '−210 g'; '+40' -> '+40 g'. Con el signo menos tipográfico. */
+export function formatGrams(diffG: number): string {
+  const sign = diffG < 0 ? '−' : '+'
+  return `${sign}${Math.abs(diffG)} g`
+}
+
+export function formatPercent(percent: number): string {
+  const sign = percent < 0 ? '−' : '+'
+  return `${sign}${Math.abs(percent).toFixed(1).replace('.', ',')} %`
+}
+
 /** Una toma necesita al menos un componente para tener sentido. */
 export function feedIsEmpty(r: {
   breastMin: number

@@ -20,7 +20,7 @@ export function findCachedRecord(id: string): BabyRecord | null {
       if (r.id === id) return r
     }
     if (day.openSleep?.id === id) return day.openSleep
-    for (const r of [day.last.feed, day.last.diaper, day.last.sleepEnd]) {
+    for (const r of [day.last.feed, day.last.diaper, day.last.poop, day.last.sleepEnd, day.last.weight, day.previousFeed]) {
       if (r?.id === id) return r
     }
   }

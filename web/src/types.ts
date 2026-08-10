@@ -7,7 +7,7 @@
 //
 // Las fechas-hora son siempre hora local de Madrid: 'yyyy-MM-dd HH:mm'.
 
-export type RecordType = 'sleep' | 'feed' | 'diaper' | 'bath'
+export type RecordType = 'sleep' | 'feed' | 'diaper' | 'bath' | 'weight'
 
 export type SleepKind = 'siesta' | 'nocturno'
 export type BathKind = 'completo' | 'aseo'
@@ -63,7 +63,13 @@ export interface BathRecord extends RecordBase {
   durationMin: number
 }
 
-export type BabyRecord = SleepRecord | FeedRecord | DiaperRecord | BathRecord
+/** Una pesada. Se guarda en gramos: es la unidad en la que se lee la báscula. */
+export interface WeightRecord extends RecordBase {
+  type: 'weight'
+  grams: number
+}
+
+export type BabyRecord = SleepRecord | FeedRecord | DiaperRecord | BathRecord | WeightRecord
 
 /** Registros con intervalo, para el código que trata inicio y fin. */
 export type IntervalRecord = SleepRecord | FeedRecord
@@ -96,6 +102,7 @@ export type RecordInput =
   | Omit<FeedRecord, Audit>
   | Omit<DiaperRecord, Audit>
   | Omit<BathRecord, Audit>
+  | Omit<WeightRecord, Audit>
 
 // --- Usuarios y ajustes -------------------------------------------------------
 
@@ -104,16 +111,10 @@ export interface User {
   name: string
 }
 
-/** Un objetivo a 0 significa "sin objetivo": no se muestra progreso. */
-export interface Goals {
-  pees: number
-  poops: number
-  milkMl: number
-}
-
 export interface Settings {
   birth: string | null // 'yyyy-MM-dd HH:mm'
-  goals: Goals
+  /** Peso al nacer en gramos; 0 si no se ha indicado. */
+  birthWeightG: number
 }
 
 // --- Día de vida --------------------------------------------------------------
@@ -153,8 +154,16 @@ export interface DayData {
   last: {
     feed: FeedRecord | null
     diaper: DiaperRecord | null
+    /** Último pañal *con caca*: un pañal de solo pis no dice nada de ella. */
+    poop: DiaperRecord | null
     sleepEnd: SleepRecord | null // último sueño finalizado
+    weight: WeightRecord | null
   }
+  /**
+   * Última toma anterior al día consultado. Da el hueco de la primera toma de
+   * la noche, que si no quedaría sin calcular.
+   */
+  previousFeed: FeedRecord | null
   users: Record<string, string> // email -> nombre visible
   serverNow: string
   settings: Settings

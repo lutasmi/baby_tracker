@@ -48,10 +48,7 @@ const sleep = (id: string, start: string, end: string | null): RecordInput => ({
 
 beforeEach(async () => {
   api = createMockApi({ latencyMs: 0 })
-  await api.updateSettings({
-    birth: `${TODAY} 00:01`,
-    goals: { pees: 6, poops: 3, milkMl: 400 },
-  })
+  await api.updateSettings({ birth: `${TODAY} 00:01`, birthWeightG: 3420 })
 })
 
 describe('registro y totales del día de vida', () => {

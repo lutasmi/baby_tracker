@@ -11,7 +11,7 @@ import {
   type ComponentKey,
   type FormState,
 } from '../lib/recordform'
-import { newId } from '../lib/records'
+import { formatKg, newId } from '../lib/records'
 import { recordTitle } from '../lib/summary'
 import { findCachedRecord } from '../store'
 import { showToast } from '../toast'
@@ -22,6 +22,7 @@ const NEW_TITLES: Record<RecordType, string> = {
   feed: 'Registrar toma',
   diaper: 'Registrar pañal',
   bath: 'Registrar baño',
+  weight: 'Registrar peso',
 }
 
 const COMPONENT_CHIPS: { key: ComponentKey; label: string }[] = [
@@ -129,9 +130,18 @@ function RecordForm({ type, existing }: { type: RecordType; existing: BabyRecord
           }}
         >
           {type === 'sleep' && <SleepFields s={s} set={set} now={now} />}
-          {type === 'feed' && <FeedFields s={s} set={set} toggle={toggleComponent} now={now} />}
+          {type === 'feed' && (
+            <FeedFields
+              s={s}
+              set={set}
+              toggle={toggleComponent}
+              now={now}
+              previousFeedStart={existing ? null : (data?.last.feed?.start ?? null)}
+            />
+          )}
           {type === 'diaper' && <DiaperFields s={s} set={set} now={now} />}
           {type === 'bath' && <BathFields s={s} set={set} now={now} />}
+          {type === 'weight' && <WeightFields s={s} set={set} now={now} />}
 
           <div class="field">
             <span class="field-label">Nota (opcional)</span>
@@ -215,10 +225,18 @@ function FeedFields({
   set,
   toggle,
   now,
-}: FieldProps & { toggle: (key: ComponentKey) => void }) {
+  previousFeedStart,
+}: FieldProps & { toggle: (key: ComponentKey) => void; previousFeedStart: string | null }) {
   const duration = diffMinutes(s.start, s.end)
+  // De inicio a inicio, que es como se cuenta lo de "cada tres horas".
+  const sincePrevious = previousFeedStart ? diffMinutes(previousFeedStart, s.start) : null
   return (
     <>
+      {sincePrevious != null && sincePrevious >= 0 && (
+        <div class="gap-line">
+          <strong>{formatDuration(sincePrevious)}</strong> desde la toma anterior
+        </div>
+      )}
       <MomentField label="Inicio" value={s.start} now={now} onChange={(start) => set({ start })} />
       <MomentField label="Fin" value={s.end} now={now} onChange={(end) => set({ end })} />
       {duration >= 0 && <DurationLine minutes={duration} />}
@@ -353,6 +371,25 @@ function BathFields({ s, set, now }: FieldProps) {
           presets={[5, 10, 15, 20, 30]}
           max={240}
         />
+      </div>
+    </>
+  )
+}
+
+function WeightFields({ s, set, now }: FieldProps) {
+  return (
+    <>
+      <MomentField label="Hora" value={s.start} now={now} onChange={(start) => set({ start })} />
+      <div class="field">
+        <span class="field-label">Peso</span>
+        <AmountField
+          value={s.grams}
+          onChange={(grams) => set({ grams })}
+          unit="g"
+          max={30000}
+          step={10}
+        />
+        {s.grams > 0 && <div class="field-hint">= {formatKg(s.grams)}</div>}
       </div>
     </>
   )
