@@ -49,7 +49,9 @@ class FakeRange {
   }
 
   setNumberFormat(format) {
-    this.sheet.formats.set(`${this.row}:${this.column}`, format)
+    // El formato se aplica a una columna entera ('C2:C'), así que se guarda
+    // por columna: es lo que se quiere comprobar en las pruebas.
+    this.sheet.formats.set(this.column, format)
     return this
   }
 }
@@ -99,8 +101,9 @@ class FakeSheet {
   }
 
   getRange(a, b, c, d) {
-    // La notación A1 solo se usa para dar formato a una columna entera.
-    if (typeof a === 'string') return new FakeRange(this, 1, 1, 0, 0)
+    // La notación A1 solo se usa para dar formato a una columna entera
+    // ('C2:C'); se traduce a su número de columna para no perderlo.
+    if (typeof a === 'string') return new FakeRange(this, 2, columnNumber(a), 0, 0)
     return new FakeRange(this, a, b, c ?? 1, d ?? 1)
   }
 
@@ -128,6 +131,15 @@ class FakeSheet {
     }
     return out
   }
+}
+
+/** 'C2:C' -> 3 */
+function columnNumber(a1) {
+  const letters = /^([A-Z]+)/.exec(a1)
+  if (!letters) return 1
+  let n = 0
+  for (const ch of letters[1]) n = n * 26 + (ch.charCodeAt(0) - 64)
+  return n
 }
 
 class FakeSpreadsheet {
@@ -255,6 +267,13 @@ export function createBackend({ now = '2026-08-07 08:00', user = 'ana@example.co
     },
     sheet(name) {
       return backend.spreadsheet().getSheetByName(name)
+    },
+    /** Formato de una columna por su nombre de cabecera: '0' o '@'. */
+    columnFormat(sheetName, columnName) {
+      const sheet = backend.sheet(sheetName)
+      const header = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0]
+      const index = header.indexOf(columnName)
+      return index === -1 ? null : (sheet.formats.get(index + 1) ?? null)
     },
     /** Llama a la API como lo haría el frontend. Devuelve `data` o lanza. */
     call(action, payload = {}) {

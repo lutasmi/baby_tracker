@@ -25,11 +25,7 @@ function setup() {
   ss.setSpreadsheetTimeZone(TZ);
 
   setupSheet(ss, SHEET_USERS, USER_COLUMNS, []);
-  setupSheet(ss, SHEET_BABY, BABY_COLUMNS, [
-    'Objetivo_Pises',
-    'Objetivo_Cacas',
-    'Objetivo_Leche_Ml',
-  ]);
+  setupSheet(ss, SHEET_BABY, BABY_COLUMNS, ['Peso_Nacimiento_G']);
 
   var types = recordTypeNames();
   for (var i = 0; i < types.length; i++) {

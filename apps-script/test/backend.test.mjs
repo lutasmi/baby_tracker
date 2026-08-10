@@ -51,6 +51,23 @@ describe('instalación', () => {
     expect(header('Panales')).not.toContain('Hora_Inicio')
   })
 
+  it('da formato de número a las columnas numéricas y de texto al resto', () => {
+    // Si una columna numérica se queda como texto, Sheets la alinea a la
+    // izquierda y deja de servir para fórmulas o gráficos.
+    expect(backend.columnFormat('Tomas', 'Formula_Ml')).toBe('0')
+    expect(backend.columnFormat('Tomas', 'Extraida_Ml')).toBe('0')
+    expect(backend.columnFormat('Tomas', 'Pecho_Min')).toBe('0')
+    expect(backend.columnFormat('Tomas', 'Duracion_Min')).toBe('0')
+    expect(backend.columnFormat('Peso', 'Gramos')).toBe('0')
+    expect(backend.columnFormat('Bebe', 'Peso_Nacimiento_G')).toBe('0')
+
+    // Las horas se guardan como texto para que Sheets no las reinterprete.
+    expect(backend.columnFormat('Tomas', 'Hora_Inicio')).toBe('@')
+    expect(backend.columnFormat('Panales', 'Hora')).toBe('@')
+    expect(backend.columnFormat('Bebe', 'Fecha_Nacimiento')).toBe('@')
+    expect(backend.columnFormat('Bebe', 'Hora_Nacimiento')).toBe('@')
+  })
+
   it('da de alta al usuario que instala', () => {
     expect(backend.sheet('Usuarios').asObjects()[0]).toMatchObject({
       Email: 'ana@example.com',
