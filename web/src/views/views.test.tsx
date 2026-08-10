@@ -72,14 +72,14 @@ describe('Dashboard · día de vida', () => {
       day({ records: [caca, toma, pis], last: { ...day().last, pee: pis, poop: caca, feed: toma } })
     )
     // Tres "hace ..." distintos: el contador dice cómo va el día y esto si toca ya.
-    expect(html).toContain('Última toma hace')
+    expect(html).toContain('Última toma')
     expect((html.match(/hace /g) ?? []).length).toBeGreaterThanOrEqual(3)
   })
 
   it('sin registros los contadores lo dicen sin dejar hueco en blanco', () => {
     const html = renderDashboard(day())
     expect(html).toContain('sin registros')
-    expect(html).toContain('Sin tomas registradas todavía')
+    expect(html).toContain('Sin tomas')
   })
 
   it('desglosa fórmula y extraída sin mezclarlas con los minutos de pecho', () => {
@@ -130,38 +130,39 @@ describe('Dashboard · peso', () => {
 })
 
 describe('Dashboard · lo registrado', () => {
-  it('resume la última toma con su desglose y deja corregirla', () => {
+  it('la última toma dice cuánto hace y a qué hora, y se puede corregir', () => {
     const ultima = aFeed({
       start: `${TODAY} 09:12`,
       end: `${TODAY} 09:41`,
       durationMin: 29,
       formulaMl: 35,
     })
-    const html = renderDashboard(
-      day({ records: [ultima], last: { ...day().last, feed: ultima } })
-    )
-    expect(html).toContain('35 ml fórmula')
-    expect(html).toContain('09:12')
-    // La fila es pulsable para editar lo último registrado.
-    expect(html).toContain('stat-item-link')
+    const html = renderDashboard(day({ records: [ultima], last: { ...day().last, feed: ultima } }))
+    expect(html).toContain('Última toma')
+    expect(html).toContain('a las 09:12')
+    // La casilla es pulsable para corregir lo último registrado.
+    expect(html).toContain('kpi-tile-link')
   })
 
-  it('sigue la última caca aparte del último pañal', () => {
+  it('los contadores de pises y cacas abren su último registro', () => {
     const pis = aDiaper({ start: `${TODAY} 12:00`, pee: true, poop: false })
     const caca = aDiaper({ start: `${TODAY} 02:00`, pee: true, poop: true })
     const html = renderDashboard(
-      day({ records: [caca, pis], last: { ...day().last, diaper: pis, poop: caca } })
+      day({ records: [caca, pis], last: { ...day().last, diaper: pis, pee: pis, poop: caca } })
     )
-    expect(html).toContain('Último pañal')
-    expect(html).toContain('Última caca')
-    expect(html).toContain('02:00')
+    // Sin repetir filas abajo: el contador es a la vez cifra, frescura y acceso.
+    expect((html.match(/kpi-tile-link/g) ?? []).length).toBeGreaterThanOrEqual(2)
+    expect(html).not.toContain('Último pañal')
   })
 
-  it('sin cacas registradas lo dice sin alarmar', () => {
-    const pis = aDiaper({ start: `${TODAY} 12:00`, pee: true, poop: false })
-    const html = renderDashboard(day({ records: [pis], last: { ...day().last, diaper: pis } }))
-    expect(html).toContain('Sin cacas')
-    expect(html).not.toContain('banner-warn')
+  it('el estado del bebé es lo único que habla de ahora mismo', () => {
+    const dormido = aSleep({ start: `${TODAY} 11:00` })
+    const html = renderDashboard(
+      day({ records: [dormido], openSleep: dormido, serverNow: `${TODAY} 11:30` })
+    )
+    expect(html).toContain('¿Cómo vamos?')
+    expect(html).toContain('desde las 11:00')
+    expect(html).toContain('Dormido hoy')
   })
 
   it('un cronómetro olvidado no afirma que el bebé siga dormido', () => {
@@ -190,8 +191,9 @@ describe('Dashboard · lo registrado', () => {
 
   it('sin registros no muestra huecos raros', () => {
     const html = renderDashboard(day({ records: [] }))
-    expect(html).toContain('Sin registros')
-    expect(html).toContain('Sin sueños registrados')
+    expect(html).toContain('sin registros')
+    expect(html).toContain('Sin tomas')
+    expect(html).toContain('sin sueños registrados todavía')
   })
 })
 

@@ -190,11 +190,6 @@ button {
   color: var(--danger);
 }
 
-.btn-ghost {
-  background: transparent;
-  color: var(--primary);
-}
-
 .btn-lg {
   min-height: var(--tap);
   font-size: 17px;
@@ -335,9 +330,64 @@ button {
   margin-top: 2px;
 }
 
-.kpi-goal {
-  font-size: 16px;
-  font-weight: 600;
+/* Casilla pulsable: abre su registro para corregirlo. */
+.kpi-tile-link {
+  width: 100%;
+  text-align: left;
+  min-height: var(--tap);
+}
+
+.kpi-tile-link:active {
+  background: var(--border);
+}
+
+/* Chevron que indica que la fila abre su registro. */
+.stat-edit {
+  color: var(--text-soft);
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* ---------- Estado del bebé ---------- */
+
+.state-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 2px;
+}
+
+.state-row-link {
+  min-height: var(--tap);
+}
+
+.state-row-link:active {
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
+.state-icon {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.state-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.state-name {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.state-since {
+  font-size: 13px;
   color: var(--text-soft);
 }
 
@@ -378,70 +428,6 @@ button {
   margin-top: 10px;
   font-size: 12px;
   color: var(--text-soft);
-}
-
-/* ---------- Resumen de estado (última toma, pañal...) ---------- */
-
-.stat-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 2px;
-}
-
-.stat-item + .stat-item {
-  border-top: 1px solid var(--border);
-}
-
-/* Fila pulsable: abre el registro para corregirlo. */
-.stat-item-link {
-  width: 100%;
-  text-align: left;
-  min-height: var(--tap);
-}
-
-.stat-item-link:active {
-  background: var(--surface-2);
-}
-
-.stat-item .stat-edit {
-  color: var(--text-soft);
-  font-size: 20px;
-  line-height: 1;
-}
-
-.stat-item .icon {
-  font-size: 22px;
-  width: 32px;
-  text-align: center;
-}
-
-.stat-item .stat-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.stat-item .stat-label {
-  font-size: 12px;
-  color: var(--text-soft);
-}
-
-.stat-item .stat-value {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.stat-item .stat-ago {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-soft);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 /* ---------- Formularios ---------- */
@@ -941,28 +927,6 @@ select:focus {
   color: var(--feed);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-
-.tl-summary {
-  display: flex;
-  gap: 14px;
-  justify-content: space-around;
-  flex-wrap: wrap;
-}
-
-.tl-summary .sum-item {
-  text-align: center;
-}
-
-.tl-summary .sum-value {
-  font-size: 17px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.tl-summary .sum-label {
-  font-size: 11px;
-  color: var(--text-soft);
 }
 
 /* ---------- Evolución ---------- */

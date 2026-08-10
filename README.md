@@ -18,9 +18,9 @@ La especificación original está en [docs/especificacion.md](docs/especificacio
 - **Baños**: completo o aseo rápido, con duración opcional.
 - **Tiempo desde la toma anterior**, al registrar una toma y en cada toma de la cronología, para no tener que restar.
 - **Peso**: cada pesada con su hora, y la variación en gramos y en porcentaje respecto al peso al nacer. Se muestra el dato, sin interpretarlo.
-- **Cronología diaria** como línea de tiempo, con la hora a la izquierda, resumen del día natural, cambio de fecha, edición y borrado con confirmación.
+- **Cronología** como línea de tiempo, con la hora a la izquierda y cabecera pegajosa por día. "Ver ayer" encadena el día anterior debajo sin perder de vista el actual, y los huecos entre tomas se calculan de un día al siguiente.
 - **Evolución** por días de vida: pises, cacas y leche en barras comparables, y el histórico de peso con su variación.
-- **Lo último registrado se corrige desde la pantalla principal**: cada fila abre su registro.
+- **Lo último registrado se corrige desde la pantalla principal**: cada contador y cada casilla abren su registro.
 - **Todo es corregible después**: horas, cantidades, componentes de una toma y contenido del pañal, con la misma pantalla con la que se creó.
 - Cada registro guarda **quién lo creó, quién lo modificó y cuándo**.
 - Reintentos seguros: el identificador se genera en el cliente y **repetir una petición nunca duplica** el registro.

@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks'
 import { getApi } from '../api'
 import { ApiError } from '../api/types'
-import { ErrorCard } from '../components/ui'
+import { ErrorCard, StatTile } from '../components/ui'
 import { handleAuthError, navigate, useDay, useNow } from '../hooks'
 import { diffMinutes, formatAgo, formatDuration, nowMadrid, timeOf } from '../lib/dates'
 import { babyStatus, guessSleepKind, sleepMinutesOnDate } from '../lib/derive'
@@ -12,10 +12,8 @@ import {
   newId,
   weightChange,
 } from '../lib/records'
-import { recordDetail, recordIcon } from '../lib/summary'
-import { userName } from '../store'
 import { showToast } from '../toast'
-import type { BabyRecord, DayData, LifeDay, Settings, SleepRecord, User } from '../types'
+import type { DayData, LifeDay, Settings, SleepRecord, User } from '../types'
 
 export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
   const now = useNow()
@@ -125,7 +123,7 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
               </button>
             </div>
 
-            <RegisteredCard
+            <StatusCard
               data={data}
               now={now}
               today={today}
@@ -161,6 +159,7 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
 }
 
 const editRoute = (id: string) => `#/editar/${encodeURIComponent(id)}`
+const goEdit = (id: string) => navigate(editRoute(id))
 
 // ---------------------------------------------------------------------------
 // Día de vida: el bloque principal de la pantalla
@@ -207,19 +206,26 @@ function LifeDayCard({
       </div>
 
       <div class="kpi-row">
-        <KpiTile icon="💧" label="Pises" value={t.pees} since={last.pee?.start} now={now} />
-        <KpiTile icon="💩" label="Cacas" value={t.poops} since={last.poop?.start} now={now} />
+        <StatTile
+          label="💧 Pises"
+          value={String(t.pees)}
+          note={last.pee ? formatAgo(diffMinutes(last.pee.start, now)) : 'sin registros'}
+          editId={last.pee?.id}
+          onEdit={goEdit}
+        />
+        <StatTile
+          label="💩 Cacas"
+          value={String(t.poops)}
+          note={last.poop ? formatAgo(diffMinutes(last.poop.start, now)) : 'sin registros'}
+          editId={last.poop?.id}
+          onEdit={goEdit}
+        />
       </div>
 
       <div class="kpi-milk">
         <div class="kpi-milk-head">
           <span>🥛 Leche cuantificable</span>
           <strong>{t.milkMl} ml</strong>
-        </div>
-        <div class="kpi-fresh">
-          {last.feed
-            ? `Última toma ${formatAgo(diffMinutes(last.feed.start, now))}`
-            : 'Sin tomas registradas todavía'}
         </div>
         <div class="kpi-breakdown">
           <span>🍼 {t.formulaMl} ml fórmula</span>
@@ -241,41 +247,13 @@ function LifeDayCard({
   )
 }
 
-/**
- * Contador del día de vida con el tiempo transcurrido desde el último. El
- * "cuántos van" contesta a cómo va el día; el "hace cuánto", a si toca ya.
- */
-function KpiTile({
-  icon,
-  label,
-  value,
-  since,
-  now,
-}: {
-  icon: string
-  label: string
-  value: number
-  since?: string
-  now: string
-}) {
-  return (
-    <div class="kpi-tile">
-      <div class="kpi-label">
-        {icon} {label}
-      </div>
-      <div class="kpi-value">{value}</div>
-      <div class="kpi-fresh">
-        {since ? formatAgo(diffMinutes(since, now)) : 'sin registros'}
-      </div>
-    </div>
-  )
-}
+
 
 // ---------------------------------------------------------------------------
-// Lo registrado: sueño, última toma, último pañal, última caca
+// Cómo vamos: el estado del bebé y lo que no cabe en los contadores de arriba
 // ---------------------------------------------------------------------------
 
-function RegisteredCard({
+function StatusCard({
   data,
   now,
   today,
@@ -293,39 +271,28 @@ function RegisteredCard({
   const status = babyStatus(data.openSleep, data.last.sleepEnd, now)
   const asleep = status.state === 'asleep' && data.openSleep
   const sleepRecord = asleep ? data.openSleep : data.last.sleepEnd
+  const elapsed = status.since ? formatDuration(diffMinutes(status.since, now)) : null
+
+  const state = asleep ? 'Dormido' : status.state === 'awake' ? 'Despierto' : 'Sin sueños aún'
+  const icon = asleep ? '😴' : status.state === 'awake' ? '☀️' : '👶'
 
   return (
     <div class="card">
-      <div class="card-title">Lo registrado</div>
-      <div class="stat-list">
-        <StatRow
-          icon={asleep ? '😴' : status.state === 'awake' ? '☀️' : '👶'}
-          label={`${asleep ? 'Último sueño' : 'Último despertar'}${
-            status.since ? ` · ${timeOf(status.since)}` : ''
-          }`}
-          value={
-            asleep ? 'Sin cerrar' : status.state === 'awake' ? 'Despierto' : 'Sin sueños registrados'
-          }
-          right={status.since ? formatDuration(diffMinutes(status.since, now)) : null}
-          editId={sleepRecord?.id}
-        />
+      <div class="card-title">¿Cómo vamos?</div>
 
-        <LastRecordRow label="Última toma" record={data.last.feed} now={now} />
-        <LastRecordRow label="Último pañal" record={data.last.diaper} now={now} />
-        {/* La caca se sigue aparte: un pañal de solo pis no dice nada de ella. */}
-        <LastRecordRow label="Última caca" record={data.last.poop} now={now} emptyText="Sin cacas" />
-
-        <StatRow
-          icon="🌙"
-          label="Dormido hoy (día natural)"
-          value={formatDuration(sleepMinutesOnDate(data.records, today, now))}
-        />
-      </div>
+      {/* El estado es lo único de esta pantalla que describe un ahora mismo. */}
+      <SleepState
+        icon={icon}
+        state={state}
+        since={status.since}
+        elapsed={elapsed}
+        editId={sleepRecord?.id}
+      />
 
       {status.staleTimer && data.openSleep && (
         <div class="banner banner-note">
           <span>Hay un sueño abierto desde las {timeOf(data.openSleep.start)} sin hora de fin.</span>
-          <button class="banner-retry" onClick={() => navigate(editRoute(data.openSleep!.id))}>
+          <button class="banner-retry" onClick={() => goEdit(data.openSleep!.id)}>
             Corregir
           </button>
         </div>
@@ -339,66 +306,58 @@ function RegisteredCard({
       >
         {asleep ? '☀️ Se ha despertado' : '🌙 Se ha dormido'}
       </button>
+
+      {/* Pises y cacas no se repiten aquí: sus contadores, arriba, ya llevan
+          cuánto hace del último y abren su registro. */}
+      <div class="kpi-row" style="margin-top:12px">
+        <StatTile
+          label="🍼 Última toma"
+          value={data.last.feed ? formatAgo(diffMinutes(data.last.feed.start, now)) : 'Sin tomas'}
+          note={data.last.feed ? `a las ${timeOf(data.last.feed.start)}` : null}
+          editId={data.last.feed?.id}
+          onEdit={goEdit}
+        />
+        <StatTile
+          label="🌙 Dormido hoy"
+          value={formatDuration(sleepMinutesOnDate(data.records, today, now))}
+          note="día natural"
+        />
+      </div>
     </div>
   )
 }
 
-/**
- * Fila de la tarjeta. Con `editId` se convierte en botón y abre el registro
- * para corregirlo: lo último anotado es lo que más se corrige.
- */
-function StatRow({
+function SleepState({
   icon,
-  label,
-  value,
-  right,
+  state,
+  since,
+  elapsed,
   editId,
 }: {
   icon: string
-  label: string
-  value: string
-  right?: string | null
+  state: string
+  since: string | null
+  elapsed: string | null
   editId?: string
 }) {
   const body = (
     <>
-      <span class="icon">{icon}</span>
-      <div class="stat-main">
-        <div class="stat-label">{label}</div>
-        <div class="stat-value">{value}</div>
-      </div>
-      {right && <span class="stat-ago">{right}</span>}
+      <span class="state-icon">{icon}</span>
+      <span class="state-main">
+        <span class="state-name">{state}</span>
+        <span class="state-since">
+          {since ? `desde las ${timeOf(since)}` : 'sin sueños registrados todavía'}
+          {elapsed && ` · ${elapsed}`}
+        </span>
+      </span>
       {editId && <span class="stat-edit">›</span>}
     </>
   )
-  if (!editId) return <div class="stat-item">{body}</div>
+  if (!editId) return <div class="state-row">{body}</div>
   return (
-    <button class="stat-item stat-item-link" onClick={() => navigate(editRoute(editId))}>
+    <button class="state-row state-row-link" onClick={() => goEdit(editId)}>
       {body}
     </button>
-  )
-}
-
-function LastRecordRow({
-  label,
-  record,
-  now,
-  emptyText = 'Sin registros',
-}: {
-  label: string
-  record: BabyRecord | null
-  now: string
-  emptyText?: string
-}) {
-  if (!record) return <StatRow icon="—" label={label} value={emptyText} />
-  return (
-    <StatRow
-      icon={recordIcon(record)}
-      label={`${label} · ${timeOf(record.start)} · ${userName(record.createdBy)}`}
-      value={recordDetail(record) || '—'}
-      right={formatAgo(diffMinutes(record.start, now))}
-      editId={record.id}
-    />
   )
 }
 

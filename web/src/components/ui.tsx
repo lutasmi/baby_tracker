@@ -80,6 +80,38 @@ export function Toggle({
   )
 }
 
+/**
+ * Casilla con una cifra grande que responde a una pregunta. Con `editId` se
+ * convierte en botón y abre ese registro para corregirlo.
+ */
+export function StatTile({
+  label,
+  value,
+  note,
+  editId,
+  onEdit,
+}: {
+  label: string
+  value: string
+  note?: string | null
+  editId?: string
+  onEdit?: (id: string) => void
+}) {
+  const body = (
+    <>
+      <div class="kpi-label">{label}</div>
+      <div class="kpi-value">{value}</div>
+      {note && <div class="kpi-fresh">{note}</div>}
+    </>
+  )
+  if (!editId || !onEdit) return <div class="kpi-tile">{body}</div>
+  return (
+    <button class="kpi-tile kpi-tile-link" onClick={() => onEdit(editId)}>
+      {body}
+    </button>
+  )
+}
+
 const QUICK_OFFSETS = [5, 15, 30, 60]
 
 /**
