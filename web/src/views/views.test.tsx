@@ -243,10 +243,21 @@ describe('Timeline', () => {
     expect(html).toContain('No hay registros este día')
   })
 
-  it('deja claro que el resumen es del día natural', () => {
-    cacheDay(day({ records: [aFeed({ start: `${TODAY} 10:00` })] }))
+  it('deja claro que se cuentan días naturales y resume cada uno', () => {
+    const toma = aFeed({ start: `${TODAY} 10:00`, end: `${TODAY} 10:20` })
+    cacheDay(day({ records: [toma] }))
     const html = render(<Timeline date={TODAY} />)
-    expect(html).toContain('Resumen del día natural')
+    expect(html).toContain('Días naturales, de 00:00 a 23:59')
+    // Cabecera del día con su resumen, y en singular cuando toca.
+    expect(html).toContain('>Hoy<')
+    expect(html).toContain('1 toma')
+    expect(html).toContain('0 pañales')
+  })
+
+  it('ofrece cargar el día anterior sin salir de la pantalla', () => {
+    cacheDay(day({ records: [aFeed({ start: `${TODAY} 10:00`, end: `${TODAY} 10:20` })] }))
+    const html = render(<Timeline date={TODAY} />)
+    expect(html).toContain('Ver ayer')
   })
 
   it('ancla en su hora de fin lo que viene del día anterior', () => {

@@ -1,18 +1,45 @@
+import { useEffect, useState } from 'preact/hooks'
+import { getApi } from '../api'
+import { ApiError } from '../api/types'
 import { ErrorCard } from '../components/ui'
-import { navigate, navigateReplace, useDay, useNow } from '../hooks'
-import { addDays, formatDateHuman, formatDuration, isValidDate } from '../lib/dates'
+import { handleAuthError, navigate, navigateReplace, useDay, useNow } from '../hooks'
+import { addDays, dateOf, formatDateHuman, formatDuration, isValidDate } from '../lib/dates'
 import { daySummary, feedGaps } from '../lib/derive'
 import { recordDetail, recordIcon, recordTimeParts, recordTitle } from '../lib/summary'
 import { userName } from '../store'
-import type { BabyRecord } from '../types'
+import { showToast } from '../toast'
+import type { BabyRecord, DayData } from '../types'
 
 export function Timeline({ date }: { date?: string }) {
   const now = useNow()
   const today = now.slice(0, 10)
   const day = date && isValidDate(date) ? date : today
   const { data, loading, error, reload } = useDay(day)
+  // Días anteriores traídos con "Ver anteriores". Son histórico: no cambian,
+  // así que se cargan una vez y no se refrescan.
+  const [older, setOlder] = useState<DayData[]>([])
+  const [loadingOlder, setLoadingOlder] = useState(false)
+
+  // Saltar a otra fecha empieza de cero.
+  useEffect(() => setOlder([]), [day])
 
   const goTo = (d: string) => navigateReplace(`#/cronologia/${d}`)
+  const loaded = data ? [data, ...older] : []
+  const oldestDate = loaded.length > 0 ? loaded[loaded.length - 1].date : day
+
+  async function loadOlder() {
+    setLoadingOlder(true)
+    try {
+      const previous = await getApi().getDay(addDays(oldestDate, -1))
+      setOlder((current) => [...current, previous])
+    } catch (err) {
+      if (!handleAuthError(err)) {
+        showToast(err instanceof ApiError ? err.message : 'No se pudo cargar.', 'error')
+      }
+    } finally {
+      setLoadingOlder(false)
+    }
+  }
 
   return (
     <>
@@ -20,7 +47,7 @@ export function Timeline({ date }: { date?: string }) {
         <button class="btn-back" onClick={() => navigate('#/')} aria-label="Inicio">
           ‹
         </button>
-        <h1>{formatDateHuman(day, today)}</h1>
+        <h1>Cronología</h1>
       </div>
 
       <main class="app-main">
@@ -47,6 +74,12 @@ export function Timeline({ date }: { date?: string }) {
           </button>
         </div>
 
+        {/* Aquí manda el calendario; los días de vida rigen la pantalla
+            principal y la evolución. Decirlo una vez evita la confusión. */}
+        <p class="field-hint" style="text-align:center">
+          Días naturales, de 00:00 a 23:59
+        </p>
+
         {!data && loading && (
           <div class="loading-screen">
             <div class="spinner" />
@@ -56,80 +89,106 @@ export function Timeline({ date }: { date?: string }) {
 
         {!data && error && <ErrorCard message={error.message} onRetry={() => void reload()} />}
 
-        {data && (
-          <>
-            <DaySummaryCard records={data.records} day={day} now={now} />
+        {loaded.length > 0 && <Stream days={loaded} today={today} now={now} />}
 
-            {data.records.length === 0 ? (
-              <div class="empty-state">
-                <span class="icon">🗓️</span>
-                No hay registros este día.
-              </div>
-            ) : (
-              <div class="tl-list">
-                {(() => {
-                  const gaps = feedGaps(data.records, data.previousFeed)
-                  return data.records.map((r) => (
-                    <TimelineItem key={r.id} record={r} day={day} gapMin={gaps.get(r.id) ?? null} />
-                  ))
-                })()}
-              </div>
-            )}
+        {loaded.length > 0 && (
+          <button class="btn" disabled={loadingOlder} onClick={() => void loadOlder()}>
+            {loadingOlder
+              ? 'Cargando…'
+              : `↑ Ver ${formatDateHuman(addDays(oldestDate, -1), today).toLowerCase()}`}
+          </button>
+        )}
 
-            {error && (
-              <div class="banner banner-warn">
-                No se pudo actualizar.
-                <button class="banner-retry" onClick={() => void reload()}>
-                  Reintentar
-                </button>
-              </div>
-            )}
-          </>
+        {error && data && (
+          <div class="banner banner-warn">
+            No se pudo actualizar.
+            <button class="banner-retry" onClick={() => void reload()}>
+              Reintentar
+            </button>
+          </div>
         )}
       </main>
     </>
   )
 }
 
-function DaySummaryCard({
+/**
+ * Los días cargados, uno detrás de otro, del más reciente al más antiguo. Se
+ * leen como una sola corriente: muchos registros se entienden por lo que pasó
+ * justo antes, aunque fuera ayer.
+ */
+function Stream({ days, today, now }: { days: DayData[]; today: string; now: string }) {
+  // Cada registro se muestra en el día en que empieza. El día más antiguo
+  // cargado recoge además lo que venía de antes, para no perder el sueño
+  // nocturno que arranca fuera del tramo visible.
+  const sections = days.map((data, index) => ({
+    data,
+    records: data.records.filter(
+      (r) =>
+        dateOf(r.start) === data.date ||
+        (index === days.length - 1 && r.start < `${data.date} 00:00`)
+    ),
+  }))
+
+  // Los huecos entre tomas se calculan sobre toda la corriente, así que la
+  // primera toma de un día se compara con la última del día anterior.
+  const chronological = [...sections].reverse().flatMap((s) => s.records)
+  const gaps = feedGaps(chronological, days[days.length - 1].previousFeed)
+
+  return (
+    <>
+      {sections.map(({ data, records }) => (
+        <section class="day-section" key={data.date}>
+          <DayHeader date={data.date} records={records} today={today} now={now} />
+          {records.length === 0 ? (
+            <div class="empty-state">
+              <span class="icon">🗓️</span>
+              No hay registros este día.
+            </div>
+          ) : (
+            <div class="tl-list">
+              {records.map((r) => (
+                <TimelineItem
+                  key={r.id}
+                  record={r}
+                  day={data.date}
+                  gapMin={gaps.get(r.id) ?? null}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      ))}
+    </>
+  )
+}
+
+/** Cabecera pegajosa: al desplazarse siempre se sabe de qué día se habla. */
+function DayHeader({
+  date,
   records,
-  day,
+  today,
   now,
 }: {
+  date: string
   records: BabyRecord[]
-  day: string
+  today: string
   now: string
 }) {
-  const s = daySummary(records, day, now)
+  const s = daySummary(records, date, now)
   return (
-    <div class="card">
-      {/* Deja claro de qué día se habla: aquí manda el calendario, no el
-          día de vida, que es el que rige la pantalla principal. */}
-      <div class="card-title">Resumen del día natural · 00:00 – 23:59</div>
-      <div class="tl-summary">
-      <div class="sum-item">
-        <div class="sum-value">{formatDuration(s.sleepMin)}</div>
-        <div class="sum-label">dormido</div>
-      </div>
-      <div class="sum-item">
-        <div class="sum-value">
-          {s.feeds}
-          {s.milkMl > 0 && <small> · {s.milkMl} ml</small>}
-          {s.breastMin > 0 && <small> · {s.breastMin} min</small>}
-        </div>
-        <div class="sum-label">tomas</div>
-      </div>
-      <div class="sum-item">
-        <div class="sum-value">{s.diapers}</div>
-        <div class="sum-label">pañales</div>
-      </div>
-      <div class="sum-item">
-        <div class="sum-value">{s.baths}</div>
-        <div class="sum-label">baños</div>
-      </div>
-      </div>
+    <div class="day-header">
+      <span class="day-name">{formatDateHuman(date, today)}</span>
+      <span class="day-summary">
+        {formatDuration(s.sleepMin)} dormido · {plural(s.feeds, 'toma', 'tomas')}
+        {s.milkMl > 0 && ` · ${s.milkMl} ml`} · {plural(s.diapers, 'pañal', 'pañales')}
+      </span>
     </div>
   )
+}
+
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`
 }
 
 function TimelineItem({
