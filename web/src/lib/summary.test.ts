@@ -97,43 +97,71 @@ describe('recordDetail', () => {
 })
 
 describe('recordTimeParts', () => {
-  const day = '2026-08-07'
+  // Un día natural: de las 00:00 a las 00:00 del siguiente.
+  const day = { start: '2026-08-07 00:00', end: '2026-08-08 00:00' }
 
-  it('registro puntual: solo la hora', () => {
-    expect(recordTimeParts(aDiaper({ start: '2026-08-07 08:10' }), day)).toEqual({
+  it('un registro puntual enseña solo su hora', () => {
+    expect(recordTimeParts(aDiaper({ start: '2026-08-07 08:10' }), day)).toMatchObject({
       time: '08:10',
       note: null,
     })
-    expect(recordTimeParts(aBath({ start: '2026-08-07 19:30' }), day)).toEqual({
+    expect(recordTimeParts(aBath({ start: '2026-08-07 19:30' }), day)).toMatchObject({
       time: '19:30',
       note: null,
     })
   })
 
-  it('intervalo dentro del día: hora de inicio y hasta cuándo', () => {
-    const r = aFeed({ start: '2026-08-07 14:30', end: '2026-08-07 15:45' })
-    expect(recordTimeParts(r, day)).toEqual({ time: '14:30', note: '→ 15:45' })
+  it('un intervalo enseña de cuándo a cuándo', () => {
+    const r = aSleep({ start: '2026-08-07 14:30', end: '2026-08-07 15:45' })
+    expect(recordTimeParts(r, day)).toMatchObject({ time: '14:30', note: '→ 15:45' })
   })
 
   it('una toma puntual no muestra un rango vacío', () => {
     const r = aFeed({ start: '2026-08-07 14:30', end: '2026-08-07 14:30' })
-    expect(recordTimeParts(r, day)).toEqual({ time: '14:30', note: null })
+    expect(recordTimeParts(r, day)).toMatchObject({ time: '14:30', note: null })
   })
 
-  it('lo que viene del día anterior se ancla en su hora de fin', () => {
+  it('lo que empezó antes del tramo se ancla en su hora de fin', () => {
     const r = aSleep({ start: '2026-08-06 21:30', end: '2026-08-07 07:00' })
-    expect(recordTimeParts(r, day)).toEqual({ time: '07:00', note: 'de antes' })
+    expect(recordTimeParts(r, day)).toMatchObject({ time: '07:00', note: 'de antes' })
   })
 
-  it('lo que sigue al día siguiente se marca como tal', () => {
+  it('lo que se prolonga más allá del tramo se marca como tal', () => {
     const r = aSleep({ start: '2026-08-07 21:30', end: '2026-08-08 07:00' })
-    expect(recordTimeParts(r, day)).toEqual({ time: '21:30', note: 'sigue' })
+    expect(recordTimeParts(r, day)).toMatchObject({ time: '21:30', note: 'sigue' })
   })
 
   it('un sueño sin cerrar lo dice, sin afirmar que siga durmiendo', () => {
-    expect(recordTimeParts(aSleep({ start: '2026-08-07 21:30' }), day)).toEqual({
+    expect(recordTimeParts(aSleep({ start: '2026-08-07 21:30' }), day)).toMatchObject({
       time: '21:30',
       note: 'sin cerrar',
+    })
+  })
+
+  describe('en un día de vida, que cae a caballo de dos fechas', () => {
+    const tramo = { start: '2026-08-10 22:40', end: '2026-08-11 22:40' }
+
+    it('un registro de la madrugada siguiente no "viene de antes"', () => {
+      const toma = aFeed({ start: '2026-08-11 08:00', end: '2026-08-11 08:20' })
+      expect(recordTimeParts(toma, tramo)).toMatchObject({ time: '08:00', note: '→ 08:20' })
+    })
+
+    it('dice en qué fecha cae cada uno, para poder separarlos en la lista', () => {
+      const antes = aFeed({ start: '2026-08-10 23:00', end: '2026-08-10 23:20' })
+      const despues = aFeed({ start: '2026-08-11 08:00', end: '2026-08-11 08:20' })
+      expect(recordTimeParts(antes, tramo).date).toBe('2026-08-10')
+      expect(recordTimeParts(despues, tramo).date).toBe('2026-08-11')
+    })
+
+    it('lo que venía de antes del tramo sí lo dice, aunque sea del mismo día', () => {
+      // Un sueño que empezó a las 21:00, antes de que arrancara el día de vida.
+      const sueno = aSleep({ start: '2026-08-10 21:00', end: '2026-08-10 23:30' })
+      expect(recordTimeParts(sueno, tramo)).toMatchObject({ time: '23:30', note: 'de antes' })
+    })
+
+    it('lo que sigue después del tramo también, aunque sea del mismo día', () => {
+      const sueno = aSleep({ start: '2026-08-11 22:00', end: '2026-08-12 06:00' })
+      expect(recordTimeParts(sueno, tramo)).toMatchObject({ time: '22:00', note: 'sigue' })
     })
   })
 })

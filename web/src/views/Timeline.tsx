@@ -1,3 +1,4 @@
+import { Fragment } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { ErrorCard, Seg } from '../components/ui'
 import { navigate, navigateReplace, useDay, useDayMode, useDays, useNow } from '../hooks'
@@ -7,13 +8,13 @@ import {
   dateOf,
   formatDateHuman,
   formatDuration,
+  formatSpan,
   isValidDate,
-  timeOf,
 } from '../lib/dates'
 import { daySummary, feedGaps } from '../lib/derive'
 import { lifeDayNumber, lifeDayRange } from '../lib/lifeday'
-import { recordDetail, recordIcon, recordTimeParts, recordTitle } from '../lib/summary'
-import { filterByType, windowRecords } from '../lib/timeline'
+import { recordDetail, recordIcon, recordTitle } from '../lib/summary'
+import { filterByType, timelineRows, windowRecords } from '../lib/timeline'
 import type { DayMode } from '../prefs'
 import { userName } from '../store'
 import type { BabyRecord, DayData, RecordType } from '../types'
@@ -202,7 +203,8 @@ function lifeSections(
     out.push({
       key: `vida-${number}`,
       title: `Día de vida ${number}`,
-      subtitle: `${formatDateHuman(dateOf(range.start), today)} ${timeOf(range.start)} → ${timeOf(range.end)}`,
+      // Las dos fechas: el tramo acaba en la del día siguiente.
+      subtitle: formatSpan(range.start, range.end),
       start: range.start,
       end: range.end,
     })
@@ -261,13 +263,18 @@ function Stream({
             </div>
           ) : (
             <div class="tl-list">
-              {visible.map((r) => (
-                <TimelineItem
-                  key={r.id}
-                  record={r}
-                  day={dateOf(section.start)}
-                  gapMin={gaps.get(r.id) ?? null}
-                />
+              {timelineRows(visible, section).map(({ record, when, dayBreak }) => (
+                <Fragment key={record.id}>
+                  {/* Dónde cambia la fecha dentro del tramo. */}
+                  {dayBreak && (
+                    <div class="tl-daybreak">{formatDateHuman(dayBreak, dateOf(now))}</div>
+                  )}
+                  <TimelineItem
+                    record={record}
+                    when={when}
+                    gapMin={gaps.get(record.id) ?? null}
+                  />
+                </Fragment>
               ))}
             </div>
           )}
@@ -288,7 +295,7 @@ function SectionHeader({
   records: BabyRecord[]
   now: string
 }) {
-  const s = daySummary(records, dateOf(section.start), now)
+  const s = daySummary(records, section, now)
   return (
     <div class="day-header">
       <span class="day-name">
@@ -308,14 +315,13 @@ function plural(count: number, one: string, many: string): string {
 
 function TimelineItem({
   record,
-  day,
+  when,
   gapMin,
 }: {
   record: BabyRecord
-  day: string
+  when: { time: string; note: string | null }
   gapMin: number | null
 }) {
-  const when = recordTimeParts(record, day)
   const detail = recordDetail(record)
   const who = userName(record.updatedBy ?? record.createdBy)
 

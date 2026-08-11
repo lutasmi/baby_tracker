@@ -7,8 +7,9 @@
 // segundo es mucho más probable que lo primero.
 
 import type { BabyRecord, FeedRecord, SleepRecord } from '../types'
-import { diffMinutes, minutesInDay, timeOf } from './dates'
+import { diffMinutes, overlapMinutes, timeOf } from './dates'
 import { isHydration } from './lifeday'
+import type { TimeWindow } from './summary'
 import { milkMlOf } from './records'
 
 /**
@@ -52,18 +53,18 @@ export function babyStatus(
 }
 
 /**
- * Minutos dormidos durante un día natural, recortando los sueños que cruzan la
- * medianoche. Un sueño en curso cuenta hasta "ahora"; uno que lleva demasiado
- * tiempo abierto no cuenta, porque sumarlo daría una cifra inventada.
+ * Minutos dormidos dentro de un tramo, recortando los sueños que lo desbordan.
+ * Un sueño en curso cuenta hasta "ahora"; uno que lleva demasiado tiempo
+ * abierto no cuenta, porque sumarlo daría una cifra inventada.
  */
-export function sleepMinutesOnDate(records: BabyRecord[], date: string, now: string): number {
+export function sleepMinutesIn(records: BabyRecord[], window: TimeWindow, now: string): number {
   let total = 0
   for (const r of records) {
     if (r.type !== 'sleep') continue
     if (isStaleSleep(r, now)) continue
     const end = r.end ?? now
     if (diffMinutes(r.start, end) <= 0) continue
-    total += minutesInDay(r.start, end, date)
+    total += overlapMinutes(r.start, end, window.start, window.end)
   }
   return total
 }
@@ -77,9 +78,14 @@ export interface DaySummary {
   baths: number
 }
 
-/** Resumen del día natural: lo que aparece en la cabecera de la cronología. */
-export function daySummary(records: BabyRecord[], date: string, now: string): DaySummary {
-  const startsOn = (r: BabyRecord) => r.start.slice(0, 10) === date
+/**
+ * Resumen de un tramo: lo que aparece en la cabecera de la cronología.
+ *
+ * El tramo puede ser un día natural o un día de vida, y este último cae a
+ * caballo de dos fechas: contar por fecha dejaba fuera media lista.
+ */
+export function daySummary(records: BabyRecord[], window: TimeWindow, now: string): DaySummary {
+  const startsOn = (r: BabyRecord) => r.start >= window.start && r.start < window.end
   let feeds = 0
   let milkMl = 0
   let breastMin = 0
@@ -98,7 +104,7 @@ export function daySummary(records: BabyRecord[], date: string, now: string): Da
       baths++
     }
   }
-  return { sleepMin: sleepMinutesOnDate(records, date, now), feeds, milkMl, breastMin, diapers, baths }
+  return { sleepMin: sleepMinutesIn(records, window, now), feeds, milkMl, breastMin, diapers, baths }
 }
 
 /** Entre las 20:00 y las 07:59 se asume sueño nocturno; el resto, siesta. */

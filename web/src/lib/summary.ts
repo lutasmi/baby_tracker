@@ -103,25 +103,46 @@ export function recordDetail(r: BabyRecord): string {
   return parts.join(' · ')
 }
 
+/** El tramo que se está leyendo: un día natural o un día de vida. */
+export interface TimeWindow {
+  start: string
+  /** Exclusivo. */
+  end: string
+}
+
 /**
  * Cómo se muestra la hora en la columna izquierda de la cronología: una hora
  * grande y, debajo, la matización que haga falta.
  *
  *   14:30            registro puntual
- *   14:30 → 15:45    empieza y acaba el mismo día
- *   07:00 de antes   venía del día anterior
+ *   14:30 → 15:45    empieza y acaba dentro del tramo
+ *   07:00 de antes   empezó antes del tramo y acabó dentro
+ *   21:30 sigue      se prolonga más allá del tramo
  *   21:30 sin cerrar sueño que sigue abierto
+ *
+ * Se compara con **el tramo**, no con una fecha: un día de vida va de las 22:40
+ * de un día a las 22:40 del siguiente, así que media lista cae en la fecha de
+ * después y llamarla "de antes" es justo al revés de lo que pasó.
+ *
+ * `date` es el día natural del instante que se está enseñando, para poder
+ * separar en la lista dónde cambia la fecha.
  */
-export function recordTimeParts(r: BabyRecord, date: string): { time: string; note: string | null } {
+export function recordTimeParts(
+  r: BabyRecord,
+  window: TimeWindow
+): { time: string; note: string | null; date: string } {
   const end = endOf(r)
-  const startsToday = dateOf(r.start) === date
 
-  if (!startsToday) {
-    const endsToday = end != null && dateOf(end) === date
-    return { time: timeOf(endsToday ? end! : r.start), note: 'de antes' }
+  if (r.start < window.start) {
+    // Venía de antes: lo que cae dentro del tramo es su final.
+    const endsInside = end != null && end > window.start && end < window.end
+    const shown = endsInside ? end! : r.start
+    return { time: timeOf(shown), note: 'de antes', date: dateOf(shown) }
   }
-  if (end && dateOf(end) !== date) return { time: timeOf(r.start), note: 'sigue' }
-  if (end && end !== r.start) return { time: timeOf(r.start), note: `→ ${timeOf(end)}` }
-  if (!end && r.type === 'sleep') return { time: timeOf(r.start), note: 'sin cerrar' }
-  return { time: timeOf(r.start), note: null }
+
+  const date = dateOf(r.start)
+  if (end && end >= window.end) return { time: timeOf(r.start), note: 'sigue', date: date }
+  if (end && end !== r.start) return { time: timeOf(r.start), note: `→ ${timeOf(end)}`, date: date }
+  if (!end && r.type === 'sleep') return { time: timeOf(r.start), note: 'sin cerrar', date: date }
+  return { time: timeOf(r.start), note: null, date: date }
 }

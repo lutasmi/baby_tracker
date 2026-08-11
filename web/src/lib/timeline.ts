@@ -5,6 +5,10 @@
 // dos veces cuando se encadenan periodos consecutivos.
 
 import type { BabyRecord, DayData, RecordType } from '../types'
+import { dateOf } from './dates'
+import { recordTimeParts, type TimeWindow } from './summary'
+
+type TimeParts = ReturnType<typeof recordTimeParts>
 
 /**
  * Registros de los días cargados que empiezan dentro de [start, end).
@@ -42,6 +46,26 @@ export function windowRecords(
 export function filterByType(records: BabyRecord[], types: RecordType[]): BabyRecord[] {
   if (types.length === 0) return records
   return records.filter((r) => types.includes(r.type))
+}
+
+/**
+ * Las filas de un tramo, con la fecha marcada donde cambia.
+ *
+ * Un día de vida cae a caballo de dos días naturales, así que en mitad de la
+ * lista se pasa de una fecha a otra. Sin decirlo, a las 03:00 no hay forma de
+ * saber si eso fue anoche o esta madrugada.
+ */
+export function timelineRows(
+  records: BabyRecord[],
+  window: TimeWindow
+): { record: BabyRecord; when: TimeParts; dayBreak: string | null }[] {
+  let previous = dateOf(window.start)
+  return records.map((record) => {
+    const when = recordTimeParts(record, window)
+    const dayBreak = when.date === previous ? null : when.date
+    previous = when.date
+    return { record: record, when: when, dayBreak: dayBreak }
+  })
 }
 
 /** ¿El registro llega hasta `moment` o más allá? */

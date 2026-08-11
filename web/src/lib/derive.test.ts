@@ -7,7 +7,7 @@ import {
   feedGaps,
   guessSleepKind,
   isStaleSleep,
-  sleepMinutesOnDate,
+  sleepMinutesIn,
 } from './derive'
 
 describe('babyStatus', () => {
@@ -45,33 +45,35 @@ describe('babyStatus', () => {
   })
 })
 
-describe('sleepMinutesOnDate', () => {
-  const day = '2026-08-07'
+describe('sleepMinutesIn', () => {
+  const day = { start: '2026-08-07 00:00', end: '2026-08-08 00:00' }
 
   it('suma solo la parte del sueño nocturno que cae en el día', () => {
     const records = [
       aSleep({ start: '2026-08-06 21:30', end: '2026-08-07 07:00' }), // 420 hoy
       aSleep({ start: '2026-08-07 10:00', end: '2026-08-07 11:30' }), // 90
     ]
-    expect(sleepMinutesOnDate(records, day, '2026-08-07 12:00')).toBe(510)
+    expect(sleepMinutesIn(records, day, '2026-08-07 12:00')).toBe(510)
   })
 
   it('cuenta el sueño en curso hasta ahora', () => {
-    expect(sleepMinutesOnDate([aSleep({ start: '2026-08-07 14:00' })], day, '2026-08-07 14:45')).toBe(45)
+    expect(sleepMinutesIn([aSleep({ start: '2026-08-07 14:00' })], day, '2026-08-07 14:45')).toBe(45)
   })
 
   it('no suma un sueño sin cerrar desde hace demasiado', () => {
     // Sumarlo daría "20 h dormido hoy" por un cronómetro que nadie detuvo.
-    expect(sleepMinutesOnDate([aSleep({ start: '2026-08-07 00:00' })], day, '2026-08-07 20:00')).toBe(0)
+    expect(sleepMinutesIn([aSleep({ start: '2026-08-07 00:00' })], day, '2026-08-07 20:00')).toBe(0)
   })
 
   it('ignora lo que no es sueño', () => {
     const records = [aFeed({ start: '2026-08-07 09:00' }), aDiaper({ start: '2026-08-07 09:30' })]
-    expect(sleepMinutesOnDate(records, day, '2026-08-07 12:00')).toBe(0)
+    expect(sleepMinutesIn(records, day, '2026-08-07 12:00')).toBe(0)
   })
 })
 
 describe('daySummary', () => {
+  const DIA = { start: '2026-08-07 00:00', end: '2026-08-08 00:00' }
+
   it('separa los ml cuantificables de los minutos de pecho', () => {
     const records = [
       aFeed({ start: '2026-08-07 09:00', formulaMl: 120 }),
@@ -82,8 +84,26 @@ describe('daySummary', () => {
       // De otro día: no cuenta.
       aFeed({ start: '2026-08-06 09:00', formulaMl: 999 }),
     ]
-    const s = daySummary(records, '2026-08-07', '2026-08-07 20:00')
+    const s = daySummary(records, DIA, '2026-08-07 20:00')
     expect(s).toMatchObject({ feeds: 3, milkMl: 270, breastMin: 20, diapers: 1, baths: 1 })
+  })
+
+  it('un día de vida cuenta sus dos fechas, no solo la primera', () => {
+    // El tramo empieza a las 22:40 y sigue toda la mañana siguiente: contar
+    // por fecha dejaba fuera media lista.
+    const tramo = { start: '2026-08-10 22:40', end: '2026-08-11 22:40' }
+    const records = [
+      aFeed({ start: '2026-08-10 23:00', formulaMl: 60 }),
+      aFeed({ start: '2026-08-11 03:30', formulaMl: 60 }),
+      aFeed({ start: '2026-08-11 09:00', formulaMl: 60 }),
+      aDiaper({ start: '2026-08-11 10:00' }),
+      aSleep({ start: '2026-08-10 23:30', end: '2026-08-11 06:30' }),
+      // Fuera del tramo por los pelos: la toma de después del corte.
+      aFeed({ start: '2026-08-11 23:00', formulaMl: 999 }),
+    ]
+    const s = daySummary(records, tramo, '2026-08-11 20:00')
+    expect(s).toMatchObject({ feeds: 3, milkMl: 180, diapers: 1 })
+    expect(s.sleepMin).toBe(7 * 60)
   })
 })
 

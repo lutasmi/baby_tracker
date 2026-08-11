@@ -353,8 +353,69 @@ describe('Timeline', () => {
     cacheDay(day({ records: [aFeed({ start: `${TODAY} 10:00`, end: `${TODAY} 10:20` })] }))
     const html = render(<Timeline date={TODAY} />)
     expect(html).toContain('Día natural')
-    // En modo día de vida la cabecera muestra el tramo horario real.
-    expect(html).toContain('00:00 → 00:00')
+    // En modo día de vida la cabecera muestra el tramo con sus dos fechas.
+    expect(html).toMatch(/\d{1,2} \w{3} \d{2}:\d{2} → \d{1,2} \w{3} \d{2}:\d{2}/)
+  })
+
+  it('un día de vida a caballo de dos fechas no llama "de antes" a la madrugada', () => {
+    // El fallo que hacía ilegible la cronología: el tramo empieza a las 22:40
+    // de un día y todo lo de la mañana siguiente salía marcado como pasado.
+    const nacimiento = `${addDays(TODAY, -2)} 22:40`
+    const anoche = aFeed({ start: `${addDays(TODAY, -1)} 23:00`, end: `${addDays(TODAY, -1)} 23:20` })
+    const madrugada = aFeed({ start: `${TODAY} 03:30`, end: `${TODAY} 03:50` })
+    cacheDay(
+      day({
+        settings: { birth: nacimiento, birthWeightG: 3420 },
+        records: [anoche, madrugada],
+      })
+    )
+    cacheDay(
+      day({ date: addDays(TODAY, -1), settings: { birth: nacimiento, birthWeightG: 3420 }, records: [anoche, madrugada] })
+    )
+    const html = render(<Timeline date={TODAY} />)
+    expect(html).toContain('03:30')
+    expect(html).not.toContain('de antes')
+    // Y se ve dónde cambia la fecha dentro del tramo.
+    expect(html).toContain('tl-daybreak')
+  })
+
+  it('un tramo que cruza la medianoche se lee entero y en orden', () => {
+    // El caso real: día de vida que empieza a las 22:40 y llega hasta la noche
+    // siguiente. Antes, todo lo de después de medianoche salía como "de antes"
+    // y el resumen de la cabecera solo contaba la primera fecha.
+    const AYER = addDays(TODAY, -1)
+    const nacimiento = `${addDays(TODAY, -2)} 22:40`
+    const records = [
+      aSleep({ start: `${AYER} 21:00`, end: `${AYER} 23:10`, kind: 'nocturno' }),
+      aFeed({ start: `${AYER} 23:20`, end: `${AYER} 23:40`, formulaMl: 60 }),
+      aFeed({ start: `${TODAY} 02:20`, end: `${TODAY} 02:45`, formulaMl: 60 }),
+      aDiaper({ start: `${TODAY} 03:00`, pee: true, poop: true }),
+      aFeed({ start: `${TODAY} 06:00`, end: `${TODAY} 06:20`, formulaMl: 60 }),
+    ]
+    const settings = { birth: nacimiento, birthWeightG: 3420 }
+    cacheDay(day({ settings, records }))
+    cacheDay(day({ date: AYER, settings, records }))
+
+    const html = render(<Timeline date={TODAY} />)
+
+    // Las tres tomas del tramo y el pañal, ninguno marcado como pasado.
+    for (const hora of ['23:20', '02:20', '03:00', '06:00']) expect(html).toContain(hora)
+    // "De antes" solo lo lleva el sueño que empezó antes de que abriera el
+    // tramo, anclado en su hora de fin, que es lo que cae dentro.
+    expect((html.match(/de antes/g) ?? []).length).toBe(1)
+    expect(html).toContain('<span class="tl-time">23:10</span><span class="tl-note">de antes</span>')
+    // En orden: primero lo de anoche, luego la madrugada.
+    expect(html.indexOf('23:20')).toBeLessThan(html.indexOf('02:20'))
+    // Con la fecha marcada donde cambia.
+    expect(html).toContain('tl-daybreak')
+    // El resumen cuenta las dos fechas: tres tomas, un pañal, 180 ml.
+    expect(html).toContain('3 tomas')
+    expect(html).toContain('1 pañal')
+    expect(html).toContain('180 ml')
+    // Y el sueño que venía de antes del tramo suma solo lo que cae dentro.
+    expect(html).toContain('30 min dormido')
+    // Los huecos entre tomas cruzan la medianoche sin perderse.
+    expect(html).toContain('3 h desde la anterior')
   })
 
   it('ancla en su hora de fin lo que viene del día anterior', () => {

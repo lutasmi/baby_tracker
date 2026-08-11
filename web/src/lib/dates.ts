@@ -94,10 +94,18 @@ export function addDays(date: string, days: number): string {
  * siguiente.
  */
 export function minutesInDay(start: string, end: string, date: string): number {
-  const dayStart = toUtcMs(`${date} 00:00`)
-  const dayEnd = dayStart + 86400000
-  const s = Math.max(toUtcMs(start), dayStart)
-  const e = Math.min(toUtcMs(end), dayEnd)
+  return overlapMinutes(start, end, `${date} 00:00`, addDays(date, 1) + ' 00:00')
+}
+
+/** Minutos que un intervalo pasa dentro de otro. 0 si no se tocan. */
+export function overlapMinutes(
+  start: string,
+  end: string,
+  windowStart: string,
+  windowEnd: string
+): number {
+  const s = Math.max(toUtcMs(start), toUtcMs(windowStart))
+  const e = Math.min(toUtcMs(end), toUtcMs(windowEnd))
   return Math.max(0, Math.round((e - s) / 60000))
 }
 

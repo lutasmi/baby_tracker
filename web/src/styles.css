@@ -497,6 +497,25 @@ button {
   color: var(--text-soft);
 }
 
+/* Dónde cambia la fecha dentro de un tramo: un día de vida empieza por la
+   noche y sigue toda la mañana siguiente. */
+.tl-daybreak {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 2px 62px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.tl-daybreak::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
 /* ---------- Formularios ---------- */
 
 .form {
