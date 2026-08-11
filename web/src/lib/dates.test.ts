@@ -6,6 +6,7 @@ import {
   formatAgo,
   formatDateHuman,
   formatDuration,
+  formatSpan,
   isValidDate,
   isValidDt,
   minutesInDay,
@@ -105,5 +106,16 @@ describe('formato para personas', () => {
     expect(formatDateHuman('2026-07-15', '2026-07-15')).toBe('Hoy')
     expect(formatDateHuman('2026-07-14', '2026-07-15')).toBe('Ayer')
     expect(formatDateHuman('2026-07-13', '2026-07-15')).toBe('lunes 13 jul')
+  })
+})
+
+describe('formatSpan', () => {
+  it('nombra las dos fechas del tramo, que casi nunca son la misma', () => {
+    // Un día de vida empieza a la hora del nacimiento y acaba al día siguiente.
+    expect(formatSpan('2026-08-09 09:17', '2026-08-10 09:17')).toBe('9 ago 09:17 → 10 ago 09:17')
+  })
+
+  it('cruza el cambio de mes sin despistarse', () => {
+    expect(formatSpan('2026-07-31 22:40', '2026-08-01 22:40')).toBe('31 jul 22:40 → 1 ago 22:40')
   })
 })

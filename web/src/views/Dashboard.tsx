@@ -11,6 +11,7 @@ import {
   diffMinutes,
   formatAgo,
   formatDateHuman,
+  formatSpan,
   formatDuration,
   nowMadrid,
   timeOf,
@@ -233,7 +234,9 @@ function periodOf(data: DayData, mode: DayMode, back: number, today: string): Pe
     const { start, end } = lifeDayRange(data.settings.birth, number)
     return {
       title: `Día de vida ${number}`,
-      subtitle: `${formatDateHuman(dateOf(start), today)} desde las ${timeOf(start)}`,
+      // Las dos fechas, no solo la de inicio: navegando hacia atrás, "día de
+      // vida 6" no dice nada si no sabes a qué días del calendario cae.
+      subtitle: formatSpan(start, end),
       start,
       end,
     }

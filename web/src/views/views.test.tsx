@@ -509,6 +509,9 @@ describe('Dashboard · navegar a tramos anteriores', () => {
   it('muestra el tramo en curso y deja retroceder', () => {
     const html = renderDashboard(diaCompleto())
     expect(html).toContain('Día de vida 3')
+    // Con las dos fechas del calendario: el número de día de vida solo no dice
+    // a qué días corresponde, y menos aún navegando hacia atrás.
+    expect(html).toMatch(/\d{1,2} \w{3} \d{2}:\d{2} → \d{1,2} \w{3} \d{2}:\d{2}/)
     expect(html).toContain('aria-label="Tramo anterior"')
     // Ya estamos en el más reciente: no hay hacia dónde avanzar.
     expect(html).toContain('aria-label="Tramo siguiente" disabled')

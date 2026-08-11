@@ -125,6 +125,22 @@ export function formatAgo(minutes: number): string {
 const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
+/** '2026-08-09' -> '9 ago'. Sin el día de la semana, para frases cortas. */
+export function formatDayMonth(date: string): string {
+  const d = new Date(toUtcMs(`${date} 00:00`))
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
+}
+
+/**
+ * Un tramo con fecha y hora en los dos extremos: '9 ago 09:17 → 10 ago 09:17'.
+ *
+ * Los días de vida caen a caballo de dos fechas del calendario, así que decir
+ * solo cuál es la de inicio deja a medias la pregunta de en qué día estamos.
+ */
+export function formatSpan(start: string, end: string): string {
+  return `${formatDayMonth(dateOf(start))} ${timeOf(start)} → ${formatDayMonth(dateOf(end))} ${timeOf(end)}`
+}
+
 /** 'Hoy', 'Ayer' o 'martes 15 jul'. */
 export function formatDateHuman(date: string, today: string): string {
   if (date === today) return 'Hoy'
