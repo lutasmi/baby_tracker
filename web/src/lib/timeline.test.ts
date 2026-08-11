@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { aBath, aDay, aDiaper, aFeed, aSleep } from '../test-fixtures'
-import { filterByType, windowRecords } from './timeline'
+import { filterByType, timelineRows, windowRecords } from './timeline'
 
 describe('windowRecords', () => {
   const noche = aSleep({ start: '2026-08-06 21:30', end: '2026-08-07 07:00' })
@@ -78,6 +78,36 @@ describe('tramos encadenados', () => {
     expect(windowRecords(conSueno, primero.start, primero.end).map((r) => r.id)).toEqual(['n'])
     // En el siguiente no se repite: ya se ha contado.
     expect(windowRecords(conSueno, segundo.start, segundo.end)).toEqual([])
+  })
+})
+
+describe('timelineRows', () => {
+  const dia = { start: '2026-08-07 00:00', end: '2026-08-08 00:00' }
+
+  it('ordena por la hora que se enseña, no por la que tiene guardada', () => {
+    // El sueño de anoche se enseña a las 07:00, que es cuando acabó y lo
+    // único que cae dentro del día. Colocarlo por su inicio lo mandaba al
+    // principio de la lista, delante de las 00:30.
+    const noche = aSleep({ id: 'n', start: '2026-08-06 21:30', end: '2026-08-07 07:00' })
+    const madrugada = aFeed({ id: 'm', start: '2026-08-07 00:30', end: '2026-08-07 00:50' })
+    const manana = aFeed({ id: 'x', start: '2026-08-07 09:00', end: '2026-08-07 09:20' })
+
+    const rows = timelineRows([noche, madrugada, manana], dia)
+    expect(rows.map((r) => r.record.id)).toEqual(['m', 'n', 'x'])
+    expect(rows.map((r) => r.when.time)).toEqual(['00:30', '07:00', '09:00'])
+  })
+
+  it('marca dónde cambia la fecha dentro del tramo, y solo ahí', () => {
+    const tramo = { start: '2026-08-10 22:40', end: '2026-08-11 22:40' }
+    const rows = timelineRows(
+      [
+        aFeed({ id: 'a', start: '2026-08-10 23:00', end: '2026-08-10 23:20' }),
+        aFeed({ id: 'b', start: '2026-08-11 03:00', end: '2026-08-11 03:20' }),
+        aFeed({ id: 'c', start: '2026-08-11 09:00', end: '2026-08-11 09:20' }),
+      ],
+      tramo
+    )
+    expect(rows.map((r) => r.dayBreak)).toEqual([null, '2026-08-11', null])
   })
 })
 

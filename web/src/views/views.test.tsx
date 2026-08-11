@@ -343,10 +343,29 @@ describe('Timeline', () => {
     expect(html).not.toContain('Ver todo')
   })
 
-  it('ofrece encadenar tramos anteriores sin salir de la pantalla', () => {
+  it('ofrece encadenar tramos anteriores, con la flecha hacia donde aparecen', () => {
     cacheDay(day({ records: [aFeed({ start: `${TODAY} 10:00`, end: `${TODAY} 10:20` })] }))
     const html = render(<Timeline date={TODAY} />)
-    expect(html).toContain('Ver anteriores')
+    // Los anteriores se añaden debajo: la flecha apunta abajo.
+    expect(html).toContain('↓ Ver anteriores')
+    // Y estando en el tramo en curso no hay nada más reciente que ver.
+    expect(html).not.toContain('Ver posteriores')
+  })
+
+  it('en un tramo pasado deja volver hacia el presente', () => {
+    const AYER = addDays(TODAY, -1)
+    cacheDay(day({ date: AYER, records: [aFeed({ start: `${AYER} 10:00`, end: `${AYER} 10:20` })] }))
+    const html = render(<Timeline date={AYER} />)
+    expect(html).toContain('↑ Ver posteriores')
+    expect(html).toContain('↓ Ver anteriores')
+  })
+
+  it('el primer día de vida no ofrece seguir hacia atrás', () => {
+    const nacimiento = `${TODAY} 00:00`
+    cacheDay(day({ settings: { birth: nacimiento, birthWeightG: 3420 }, records: [] }))
+    const html = render(<Timeline date={TODAY} />)
+    expect(html).toContain('Día de vida 1')
+    expect(html).not.toContain('Ver anteriores')
   })
 
   it('deja elegir el calendario y lo dice en la cabecera del tramo', () => {

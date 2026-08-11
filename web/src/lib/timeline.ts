@@ -49,21 +49,37 @@ export function filterByType(records: BabyRecord[], types: RecordType[]): BabyRe
 }
 
 /**
- * Las filas de un tramo, con la fecha marcada donde cambia.
+ * Las filas de un tramo: en el orden en que se leen y con la fecha marcada
+ * donde cambia.
  *
- * Un día de vida cae a caballo de dos días naturales, así que en mitad de la
- * lista se pasa de una fecha a otra. Sin decirlo, a las 03:00 no hay forma de
- * saber si eso fue anoche o esta madrugada.
+ * Se ordenan por **la hora que se enseña**, que no siempre es la de inicio: lo
+ * que venía de antes del tramo se ancla en su hora de fin, y colocarlo por su
+ * inicio lo mandaba al principio de la lista con una hora de la mañana.
+ *
+ * La fecha se marca porque un día de vida cae a caballo de dos días naturales:
+ * sin eso, a las 03:00 no hay forma de saber si fue anoche o esta madrugada.
  */
 export function timelineRows(
   records: BabyRecord[],
   window: TimeWindow
 ): { record: BabyRecord; when: TimeParts; dayBreak: string | null }[] {
+  const rows = records
+    .map((record) => ({ record: record, when: recordTimeParts(record, window) }))
+    .sort((a, b) =>
+      a.when.at === b.when.at
+        ? a.record.id < b.record.id
+          ? -1
+          : 1
+        : a.when.at < b.when.at
+          ? -1
+          : 1
+    )
+
   let previous = dateOf(window.start)
-  return records.map((record) => {
-    const when = recordTimeParts(record, window)
-    const dayBreak = when.date === previous ? null : when.date
-    previous = when.date
+  return rows.map(({ record, when }) => {
+    const date = dateOf(when.at)
+    const dayBreak = date === previous ? null : date
+    previous = date
     return { record: record, when: when, dayBreak: dayBreak }
   })
 }

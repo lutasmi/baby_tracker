@@ -146,11 +146,14 @@ describe('recordTimeParts', () => {
       expect(recordTimeParts(toma, tramo)).toMatchObject({ time: '08:00', note: '→ 08:20' })
     })
 
-    it('dice en qué fecha cae cada uno, para poder separarlos en la lista', () => {
+    it('dice qué instante está enseñando, que es con lo que se ordena', () => {
       const antes = aFeed({ start: '2026-08-10 23:00', end: '2026-08-10 23:20' })
       const despues = aFeed({ start: '2026-08-11 08:00', end: '2026-08-11 08:20' })
-      expect(recordTimeParts(antes, tramo).date).toBe('2026-08-10')
-      expect(recordTimeParts(despues, tramo).date).toBe('2026-08-11')
+      expect(recordTimeParts(antes, tramo).at).toBe('2026-08-10 23:00')
+      expect(recordTimeParts(despues, tramo).at).toBe('2026-08-11 08:00')
+      // Lo que venía de antes se enseña —y se ordena— por su hora de fin.
+      const sueno = aSleep({ start: '2026-08-10 21:00', end: '2026-08-10 23:30' })
+      expect(recordTimeParts(sueno, tramo).at).toBe('2026-08-10 23:30')
     })
 
     it('lo que venía de antes del tramo sí lo dice, aunque sea del mismo día', () => {

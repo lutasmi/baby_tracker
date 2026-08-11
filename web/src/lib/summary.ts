@@ -2,7 +2,7 @@
 
 import type { BabyRecord, DiaperRecord, FeedRecord } from '../types'
 import { durationOf, endOf } from '../types'
-import { dateOf, formatDuration, timeOf } from './dates'
+import { formatDuration, timeOf } from './dates'
 import { isHydration } from './lifeday'
 import { formatKg } from './records'
 
@@ -124,25 +124,25 @@ export interface TimeWindow {
  * de un día a las 22:40 del siguiente, así que media lista cae en la fecha de
  * después y llamarla "de antes" es justo al revés de lo que pasó.
  *
- * `date` es el día natural del instante que se está enseñando, para poder
- * separar en la lista dónde cambia la fecha.
+ * `at` es el instante que se está enseñando —que no siempre es el inicio—, y
+ * con él se ordena la lista y se sabe dónde cambia la fecha.
  */
 export function recordTimeParts(
   r: BabyRecord,
   window: TimeWindow
-): { time: string; note: string | null; date: string } {
+): { time: string; note: string | null; at: string } {
   const end = endOf(r)
 
   if (r.start < window.start) {
     // Venía de antes: lo que cae dentro del tramo es su final.
     const endsInside = end != null && end > window.start && end < window.end
     const shown = endsInside ? end! : r.start
-    return { time: timeOf(shown), note: 'de antes', date: dateOf(shown) }
+    return { time: timeOf(shown), note: 'de antes', at: shown }
   }
 
-  const date = dateOf(r.start)
-  if (end && end >= window.end) return { time: timeOf(r.start), note: 'sigue', date: date }
-  if (end && end !== r.start) return { time: timeOf(r.start), note: `→ ${timeOf(end)}`, date: date }
-  if (!end && r.type === 'sleep') return { time: timeOf(r.start), note: 'sin cerrar', date: date }
-  return { time: timeOf(r.start), note: null, date: date }
+  const at = r.start
+  if (end && end >= window.end) return { time: timeOf(at), note: 'sigue', at: at }
+  if (end && end !== r.start) return { time: timeOf(at), note: `→ ${timeOf(end)}`, at: at }
+  if (!end && r.type === 'sleep') return { time: timeOf(at), note: 'sin cerrar', at: at }
+  return { time: timeOf(at), note: null, at: at }
 }

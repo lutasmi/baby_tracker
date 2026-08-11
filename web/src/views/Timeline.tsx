@@ -35,6 +35,8 @@ interface Section {
   subtitle: string
   start: string
   end: string
+  /** Número de día de vida; ausente en los días naturales. */
+  number?: number
 }
 
 export function Timeline({ date }: { date?: string }) {
@@ -43,13 +45,17 @@ export function Timeline({ date }: { date?: string }) {
   const day = date && isValidDate(date) ? date : today
   const { data, loading, error, reload } = useDay(day)
   const [mode, setMode] = useDayMode()
-  // Cuántos tramos anteriores se han pedido con "Ver anteriores".
+  // Cuántos tramos se han añadido hacia atrás y hacia delante.
   const [extra, setExtra] = useState(0)
+  const [ahead, setAhead] = useState(0)
   // Tipos que se quieren ver. Vacío es verlo todo, que es lo habitual.
   const [types, setTypes] = useState<RecordType[]>([])
 
   // Cambiar de fecha o de calendario empieza de cero.
-  useEffect(() => setExtra(0), [day, mode])
+  useEffect(() => {
+    setExtra(0)
+    setAhead(0)
+  }, [day, mode])
 
   const toggleType = (t: RecordType) =>
     setTypes(types.includes(t) ? types.filter((x) => x !== t) : [...types, t])
@@ -58,8 +64,13 @@ export function Timeline({ date }: { date?: string }) {
   const birth = data?.settings.birth ?? null
   const useLife = mode === 'life' && birth != null
   const sections = useLife
-    ? lifeSections(birth, day, today, now, extra)
-    : naturalSections(day, today, extra)
+    ? lifeSections(birth, day, today, now, extra, ahead)
+    : naturalSections(day, today, extra, ahead)
+  // Hacia delante se para en el tramo en curso; hacia atrás, en el primero.
+  const hayPosteriores = useLife
+    ? sections.length > 0 && sections[0].number! < lifeDayNumber(birth, now)
+    : sections.length > 0 && dateOf(sections[0].start) < today
+  const hayAnteriores = !useLife || (sections[sections.length - 1]?.number ?? 1) > 1
 
   // Un día de vida cae casi siempre a caballo de dos días naturales.
   const dates = [...new Set(sections.flatMap((s) => datesOf(s)))].sort().reverse()
@@ -144,11 +155,19 @@ export function Timeline({ date }: { date?: string }) {
 
         {!data && error && <ErrorCard message={error.message} onRetry={() => void reload()} />}
 
+        {/* Los tramos más recientes se añaden arriba y los más antiguos abajo,
+            que es hacia donde apunta cada flecha. */}
+        {data && hayPosteriores && (
+          <button class="btn" disabled={loadingDays} onClick={() => setAhead(ahead + 1)}>
+            {loadingDays ? 'Cargando…' : '↑ Ver posteriores'}
+          </button>
+        )}
+
         {data && <Stream sections={sections} days={days} now={now} types={types} />}
 
-        {data && (
+        {data && hayAnteriores && (
           <button class="btn" disabled={loadingDays} onClick={() => setExtra(extra + 1)}>
-            {loadingDays ? 'Cargando…' : '↑ Ver anteriores'}
+            {loadingDays ? 'Cargando…' : '↓ Ver anteriores'}
           </button>
         )}
 
@@ -172,10 +191,11 @@ function datesOf(section: Section): string[] {
   return first === last ? [first] : [first, last]
 }
 
-function naturalSections(day: string, today: string, extra: number): Section[] {
+function naturalSections(day: string, today: string, extra: number, ahead: number): Section[] {
+  // Del más reciente al más antiguo, sin pasar de hoy.
+  const first = minDate(addDays(day, ahead), today)
   const out: Section[] = []
-  for (let i = 0; i <= extra; i++) {
-    const d = addDays(day, -i)
+  for (let d = first; d >= addDays(day, -extra); d = addDays(d, -1)) {
     out.push({
       key: d,
       title: formatDateHuman(d, today),
@@ -187,21 +207,26 @@ function naturalSections(day: string, today: string, extra: number): Section[] {
   return out
 }
 
+const minDate = (a: string, b: string) => (a < b ? a : b)
+
 function lifeSections(
   birth: string,
   day: string,
   today: string,
   now: string,
-  extra: number
+  extra: number,
+  ahead: number
 ): Section[] {
   // El día de vida que contiene la fecha elegida (o el actual, si es hoy).
-  const anchor = Math.max(1, lifeDayNumber(birth, day === today ? now : `${day} 12:00`))
+  const current = Math.max(1, lifeDayNumber(birth, now))
+  const anchor = Math.min(current, Math.max(1, lifeDayNumber(birth, day === today ? now : `${day} 12:00`)))
+  const first = Math.min(current, anchor + ahead)
   const out: Section[] = []
-  for (let i = 0; i <= extra && anchor - i >= 1; i++) {
-    const number = anchor - i
+  for (let number = first; number >= Math.max(1, anchor - extra); number--) {
     const range = lifeDayRange(birth, number)
     out.push({
       key: `vida-${number}`,
+      number: number,
       title: `Día de vida ${number}`,
       // Las dos fechas: el tramo acaba en la del día siguiente.
       subtitle: formatSpan(range.start, range.end),
