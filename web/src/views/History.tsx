@@ -26,11 +26,19 @@ const METRICS: { value: Metric; label: string }[] = [
 const DAYS = 14
 const editRoute = (id: string) => `#/editar/${encodeURIComponent(id)}`
 
-export function HistoryView() {
+/** Qué métrica abrir según la ruta: #/evolucion/peso entra por el peso. */
+export const METRIC_ROUTES: Record<string, Metric> = {
+  pises: 'pees',
+  cacas: 'poops',
+  leche: 'milk',
+  peso: 'weight',
+}
+
+export function HistoryView({ metric: initial }: { metric?: Metric } = {}) {
   const [history, setHistory] = useState<History | null>(null)
   const [settings, setSettings] = useState<Settings | null>(null)
   const [error, setError] = useState<ApiError | null>(null)
-  const [metric, setMetric] = useState<Metric>('pees')
+  const [metric, setMetric] = useState<Metric>(initial ?? 'pees')
 
   useEffect(() => {
     let cancelled = false

@@ -360,6 +360,17 @@ function PeriodCard({
           <span>🥛 Leche cuantificable</span>
           <strong>{t.milkMl} ml</strong>
         </div>
+        {/* Cuánto hace de la última toma: es lo que se mira para saber si
+            toca ya, igual que en los contadores de pises y cacas. */}
+        {showFreshness &&
+          (last.feed ? (
+            <button class="kpi-fresh kpi-fresh-link" onClick={() => goEdit(last.feed!.id)}>
+              Última toma {formatAgo(diffMinutes(last.feed.start, now))}
+              <span class="stat-edit">›</span>
+            </button>
+          ) : (
+            <div class="kpi-fresh">Sin tomas registradas todavía</div>
+          ))}
         <div class="kpi-breakdown">
           <span>🍼 {t.formulaMl} ml fórmula</span>
           <span>🥛 {t.expressedMl} ml extraída</span>
@@ -482,9 +493,16 @@ function WeightCard({ data }: { data: DayData }) {
             : 'Todavía no hay ninguna pesada. El peso al nacer se indica en Ajustes.'}
         </div>
       )}
-      <button class="btn" style="margin-top:12px" onClick={() => navigate('#/nuevo/peso')}>
-        ⚖️ Añadir pesada
-      </button>
+      {/* Pesar es cosa de cada dos o tres días: merece su acceso directo en
+          lugar de tener que buscar la pesada en la cronología. */}
+      <div class="nav-pair" style="margin-top:12px">
+        <button class="btn" onClick={() => navigate('#/nuevo/peso')}>
+          ⚖️ Añadir pesada
+        </button>
+        <button class="btn" onClick={() => navigate('#/evolucion/peso')}>
+          📋 Ver pesadas
+        </button>
+      </div>
     </div>
   )
 }

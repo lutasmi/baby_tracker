@@ -22,7 +22,7 @@ La especificación original está en [docs/especificacion.md](docs/especificacio
 - **Pañales**: pis y caca son casillas independientes, así que un pañal puede llevar las dos. Cada uno con su detalle opcional —cuánto pis, y cómo era la caca, pedete incluido—, que solo se pregunta si hubo aquello a lo que se refiere.
 - **Baños**: completo o aseo rápido, con duración opcional.
 - **Tiempo desde la toma anterior**, al registrar una toma y en cada toma de la cronología, para no tener que restar.
-- **Peso**: cada pesada con su hora, y la variación en gramos y en porcentaje respecto al peso al nacer. Se muestra el dato, sin interpretarlo.
+- **Peso**: cada pesada con su hora, y la variación en gramos y en porcentaje respecto al peso al nacer. Se muestra el dato, sin interpretarlo. Tiene acceso directo desde la pantalla principal, tanto para añadir como para revisar el histórico.
 - **Cronología** como línea de tiempo, con la hora a la izquierda y cabecera pegajosa por tramo. "Ver anteriores" encadena el tramo previo debajo sin perder de vista el actual, y los huecos entre tomas se calculan de un tramo al siguiente.
 - **Evolución** por días de vida: pises, cacas y leche en barras comparables, y el peso en una gráfica de eje temporal real, verde por encima del peso al nacer y roja por debajo, con la diferencia en porcentaje en barras y en el eje derecho.
 - **Lo último registrado se corrige desde la pantalla principal**: cada contador y cada casilla abren su registro.

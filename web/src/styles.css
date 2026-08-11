@@ -344,6 +344,27 @@ button {
   margin-top: 2px;
 }
 
+/* La línea de frescura también abre su registro. */
+.kpi-fresh-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  min-height: 36px;
+  color: var(--text-soft);
+}
+
+.kpi-fresh-link:active {
+  background: var(--border);
+  border-radius: 8px;
+}
+
+.kpi-fresh-link .stat-edit {
+  margin-left: auto;
+  font-size: 16px;
+}
+
 /* Casilla pulsable: abre su registro para corregirlo. */
 .kpi-tile-link {
   width: 100%;

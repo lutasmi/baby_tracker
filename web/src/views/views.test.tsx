@@ -11,7 +11,7 @@ import { aDay, aDiaper, aFeed, aHistoryDay, aSleep, aWeight, someTotals } from '
 import type { DayData } from '../types'
 import { WeightChart } from '../components/WeightChart'
 import { Dashboard } from './Dashboard'
-import { BarList, WeightList } from './History'
+import { BarList, HistoryView, WeightList } from './History'
 import { EditRecord, NewRecord } from './RecordForm'
 import { SettingsView } from './Settings'
 import { Timeline } from './Timeline'
@@ -492,5 +492,32 @@ describe('Dashboard · navegar a tramos anteriores', () => {
     const html = render(<Timeline date={TODAY} />)
     expect(html).toContain('pis mucho')
     expect(html).toContain('pedete')
+  })
+})
+
+describe('Dashboard · accesos que faltaban', () => {
+  it('dice cuánto hace de la última toma, y lleva a corregirla', () => {
+    const toma = aFeed({ start: `${TODAY} 10:30`, end: `${TODAY} 10:50`, formulaMl: 60 })
+    const html = renderDashboard(
+      day({ records: [toma], last: { ...day().last, feed: toma } })
+    )
+    expect(html).toContain('Última toma hace')
+    expect(html).toContain('kpi-fresh-link')
+  })
+
+  it('sin tomas lo dice sin dejar el hueco vacío', () => {
+    expect(renderDashboard(day())).toContain('Sin tomas registradas todavía')
+  })
+
+  it('el peso tiene acceso directo a sus registros', () => {
+    const html = renderDashboard(day())
+    expect(html).toContain('Ver pesadas')
+    expect(html).toContain('Añadir pesada')
+  })
+
+  it('la evolución puede abrirse directamente por el peso', () => {
+    const html = render(<HistoryView metric="weight" />)
+    // La pestaña de peso ya viene elegida, sin tener que buscarla.
+    expect(html).toContain('<button type="button" class="on">⚖️ Peso</button>')
   })
 })
