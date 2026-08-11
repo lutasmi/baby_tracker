@@ -16,6 +16,21 @@ describe('recordTitle', () => {
     expect(recordTitle(aDiaper({ pee: false, poop: true }))).toBe('Pañal · caca')
     expect(recordTitle(aDiaper({ pee: true, poop: true }))).toBe('Pañal · pis y caca')
   })
+
+  it('nombra el pedete y la hidratación por lo que son', () => {
+    // No cuentan como caca ni como toma en ningún contador; desde la
+    // cronología no se vería por qué si se llamaran igual que ellas.
+    expect(recordTitle(aDiaper({ pee: false, poop: true, consistency: 'pedete' }))).toBe(
+      'Pañal · pedete'
+    )
+    expect(recordTitle(aDiaper({ pee: true, poop: true, consistency: 'pedete' }))).toBe(
+      'Pañal · pis y pedete'
+    )
+    expect(recordTitle(aFeed({ breastMin: 2, breastSide: 'izquierdo' }))).toBe('Toma · hidratación')
+    expect(recordTitle(aFeed({ breastMin: 20, breastSide: 'izquierdo' }))).toBe('Toma')
+    // Un biberón es una toma aunque dure poco.
+    expect(recordTitle(aFeed({ formulaMl: 30 }))).toBe('Toma')
+  })
 })
 
 describe('recordIcon', () => {
@@ -54,6 +69,11 @@ describe('recordDetail', () => {
       formulaMl: 37,
     })
     expect(recordDetail(r)).toBe('30 min · 17 min pecho izq. · 28 ml extraída · 37 ml fórmula')
+  })
+
+  it('no repite el pedete: ya está en el título', () => {
+    const r = aDiaper({ pee: true, peeAmount: 'mucho', poop: true, consistency: 'pedete' })
+    expect(recordDetail(r)).toBe('pis mucho')
   })
 
   it('describe un pañal con consistencia y nota', () => {

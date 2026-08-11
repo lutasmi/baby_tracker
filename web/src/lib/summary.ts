@@ -1,8 +1,9 @@
 // Textos e iconos con los que se muestra cada registro en la interfaz.
 
-import type { BabyRecord, FeedRecord } from '../types'
+import type { BabyRecord, DiaperRecord, FeedRecord } from '../types'
 import { durationOf, endOf } from '../types'
 import { dateOf, formatDuration, timeOf } from './dates'
+import { isHydration } from './lifeday'
 import { formatKg } from './records'
 
 const SLEEP_LABELS: Record<string, string> = { siesta: 'Siesta', nocturno: 'Sueño nocturno' }
@@ -45,9 +46,11 @@ export function recordTitle(r: BabyRecord): string {
       return SLEEP_LABELS[r.kind] ?? 'Sueño'
     case 'feed':
       // Una toma puede combinar componentes: el desglose va en el detalle.
-      return 'Toma'
+      // Si fue un ratito al pecho se dice aquí, porque no cuenta como toma en
+      // ningún contador y desde la cronología no se vería por qué.
+      return isHydration(r) ? 'Toma · hidratación' : 'Toma'
     case 'diaper':
-      return `Pañal · ${diaperContent(r.pee, r.poop)}`
+      return `Pañal · ${diaperContent(r)}`
     case 'bath':
       return BATH_LABELS[r.kind] ?? 'Baño'
     case 'weight':
@@ -55,9 +58,11 @@ export function recordTitle(r: BabyRecord): string {
   }
 }
 
-function diaperContent(pee: boolean, poop: boolean): string {
-  if (pee && poop) return 'pis y caca'
-  return poop ? 'caca' : 'pis'
+function diaperContent(r: DiaperRecord): string {
+  // Un pedete no es una caca y no cuenta como tal: se nombra por lo que es.
+  const solido = r.consistency === 'pedete' ? 'pedete' : 'caca'
+  if (r.pee && r.poop) return `pis y ${solido}`
+  return r.poop ? solido : 'pis'
 }
 
 /** Partes legibles del desglose de una toma: ['17 min pecho', '28 ml extraída']. */
@@ -84,8 +89,8 @@ export function recordDetail(r: BabyRecord): string {
     parts.push(...feedParts(r))
   } else if (r.type === 'diaper') {
     if (r.peeAmount) parts.push(`pis ${PEE_LABELS[r.peeAmount] ?? r.peeAmount}`)
-    if (r.consistency === 'pedete') parts.push('pedete')
-    else if (r.consistency) {
+    // El pedete ya está en el título; repetirlo aquí sobraría.
+    if (r.consistency && r.consistency !== 'pedete') {
       parts.push(`consistencia ${CONSISTENCY_LABELS[r.consistency] ?? r.consistency}`)
     }
   } else if (r.type === 'weight') {
