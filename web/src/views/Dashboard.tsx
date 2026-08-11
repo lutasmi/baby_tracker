@@ -16,7 +16,7 @@ import {
   timeOf,
 } from '../lib/dates'
 import { babyStatus, isStaleSleep } from '../lib/derive'
-import { lifeDayRange, lifeDayTotals } from '../lib/lifeday'
+import { lifeDayRange, lifeDayTotals, periodCounts, type PeriodCounts } from '../lib/lifeday'
 import { windowRecords } from '../lib/timeline'
 import { formatGrams, formatKg, formatPercent, weightChange } from '../lib/records'
 import type { DayMode } from '../prefs'
@@ -93,6 +93,7 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
     }
   }
   const totals = period ? lifeDayTotals(records, period.start, period.end) : null
+  const counts = period ? periodCounts(records, period.start, period.end) : null
 
   return (
     <>
@@ -153,6 +154,7 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
             />
 
             <PeriodCard
+              counts={counts!}
               period={period}
               totals={totals!}
               last={data.last}
@@ -303,12 +305,14 @@ function PeriodNav({
 function PeriodCard({
   period,
   totals: t,
+  counts: c,
   last,
   now,
   showFreshness,
 }: {
   period: Period
   totals: LifeDayTotals
+  counts: PeriodCounts
   last: DayData['last']
   now: string
   /** El "hace cuánto" solo tiene sentido mirando el tramo en curso. */
@@ -326,7 +330,9 @@ function PeriodCard({
         </div>
       )}
 
-      <div class="kpi-row">
+      {/* Los pañales: el pedete va aparte porque no es lo mismo esperar una
+          caca que haber tenido solo gases. */}
+      <div class="kpi-row kpi-row-3">
         <StatTile
           label="💧 Pises"
           value={String(t.pees)}
@@ -342,7 +348,7 @@ function PeriodCard({
         />
         <StatTile
           label="💩 Cacas"
-          value={String(t.poops)}
+          value={String(c.poops)}
           note={
             !showFreshness
               ? null
@@ -353,6 +359,26 @@ function PeriodCard({
           editId={showFreshness ? last.poop?.id : undefined}
           onEdit={goEdit}
         />
+        <StatTile label="💨 Pedetes" value={String(c.pedetes)} />
+      </div>
+
+      {/* Las tomas: un ratito al pecho no es una comida, y sumarlo a las demás
+          estropearía el número que se mira para saber si toca. */}
+      <div class="kpi-row">
+        <StatTile
+          label="🍼 Tomas"
+          value={String(c.feeds)}
+          note={
+            !showFreshness
+              ? null
+              : last.feed
+                ? formatAgo(diffMinutes(last.feed.start, now))
+                : 'sin registros'
+          }
+          editId={showFreshness ? last.feed?.id : undefined}
+          onEdit={goEdit}
+        />
+        <StatTile label="💦 Hidratación" value={String(c.hydrations)} />
       </div>
 
       <div class="kpi-milk">
@@ -360,17 +386,6 @@ function PeriodCard({
           <span>🥛 Leche cuantificable</span>
           <strong>{t.milkMl} ml</strong>
         </div>
-        {/* Cuánto hace de la última toma: es lo que se mira para saber si
-            toca ya, igual que en los contadores de pises y cacas. */}
-        {showFreshness &&
-          (last.feed ? (
-            <button class="kpi-fresh kpi-fresh-link" onClick={() => goEdit(last.feed!.id)}>
-              Última toma {formatAgo(diffMinutes(last.feed.start, now))}
-              <span class="stat-edit">›</span>
-            </button>
-          ) : (
-            <div class="kpi-fresh">Sin tomas registradas todavía</div>
-          ))}
         <div class="kpi-breakdown">
           <span>🍼 {t.formulaMl} ml fórmula</span>
           <span>🥛 {t.expressedMl} ml extraída</span>
@@ -384,8 +399,7 @@ function PeriodCard({
       </div>
 
       <div class="kpi-feeds">
-        {t.feeds === 0 ? 'Sin tomas' : `${t.feeds} tomas`} ·{' '}
-        {t.diapers === 0 ? 'sin pañales' : `${t.diapers} pañales`}
+        {t.diapers === 0 ? 'Sin pañales' : `${t.diapers} pañales`}
       </div>
     </div>
   )

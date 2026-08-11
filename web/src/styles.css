@@ -318,6 +318,15 @@ button {
   gap: 10px;
 }
 
+/* Los tres contadores del pañal caben en una fila: sus cifras son de un dígito. */
+.kpi-row-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.kpi-row + .kpi-row {
+  margin-top: 10px;
+}
+
 .kpi-tile {
   background: var(--surface-2);
   border-radius: var(--radius-sm);

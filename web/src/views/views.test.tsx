@@ -64,6 +64,21 @@ function diaCompleto(): DayData {
   })
 }
 
+/** El número que muestra un contador de la pantalla de inicio. */
+function kpi(html: string, label: string): string {
+  const match = html.match(new RegExp(`${label}</div><div class="kpi-value">([^<]*)</div>`))
+  if (!match) throw new Error(`No se encontró el contador "${label}"`)
+  return match[1]
+}
+
+/** El "hace cuánto" de un contador, o '' si no lo muestra. */
+function kpiNote(html: string, label: string): string {
+  const match = html.match(
+    new RegExp(`${label}</div><div class="kpi-value">[^<]*</div><div class="kpi-fresh">([^<]*)</div>`)
+  )
+  return match ? match[1] : ''
+}
+
 function renderDashboard(d: DayData): string {
   cacheDay(d)
   return render(<Dashboard user={USER} onLogout={() => {}} />)
@@ -103,7 +118,7 @@ describe('Dashboard · día de vida', () => {
   it('sin registros los contadores lo dicen sin dejar hueco en blanco', () => {
     const html = renderDashboard(day())
     expect(html).toContain('sin registros')
-    expect(html).toContain('Sin tomas')
+    expect(html).toContain('Sin pañales')
   })
 
   it('desglosa fórmula y extraída sin mezclarlas con los minutos de pecho', () => {
@@ -522,18 +537,66 @@ describe('Dashboard · navegar a tramos anteriores', () => {
   })
 })
 
-describe('Dashboard · accesos que faltaban', () => {
-  it('dice cuánto hace de la última toma, y lleva a corregirla', () => {
-    const toma = aFeed({ start: `${TODAY} 10:30`, end: `${TODAY} 10:50`, formulaMl: 60 })
+describe('Dashboard · lo que cada contador separa', () => {
+  it('una toma corta al pecho cuenta como hidratación, no como toma', () => {
     const html = renderDashboard(
-      day({ records: [toma], last: { ...day().last, feed: toma } })
+      day({
+        records: [
+          aFeed({ start: `${TODAY} 08:00`, end: `${TODAY} 08:20`, breastMin: 20, breastSide: 'izquierdo' }),
+          aFeed({ start: `${TODAY} 10:00`, end: `${TODAY} 10:03`, breastMin: 3, breastSide: 'derecho' }),
+          aFeed({ start: `${TODAY} 12:00`, end: `${TODAY} 12:02`, breastMin: 2, breastSide: 'izquierdo' }),
+        ],
+      })
     )
-    expect(html).toContain('Última toma hace')
-    expect(html).toContain('kpi-fresh-link')
+    expect(kpi(html, '🍼 Tomas')).toBe('1')
+    expect(kpi(html, '💦 Hidratación')).toBe('2')
   })
 
-  it('sin tomas lo dice sin dejar el hueco vacío', () => {
-    expect(renderDashboard(day())).toContain('Sin tomas registradas todavía')
+  it('un biberón es una toma aunque se anotara sin hora de fin', () => {
+    // Lo que come es la cantidad, no el tiempo: un biberón puntual dura 0 min.
+    const html = renderDashboard(
+      day({
+        records: [
+          aFeed({ start: `${TODAY} 09:00`, end: `${TODAY} 09:00`, durationMin: 0, formulaMl: 60 }),
+        ],
+      })
+    )
+    expect(kpi(html, '🍼 Tomas')).toBe('1')
+    expect(kpi(html, '💦 Hidratación')).toBe('0')
+  })
+
+  it('los pedetes van aparte de las cacas', () => {
+    const html = renderDashboard(
+      day({
+        records: [
+          aDiaper({ start: `${TODAY} 08:00`, pee: true, poop: true, consistency: 'pastosa' }),
+          aDiaper({ start: `${TODAY} 11:00`, pee: false, poop: true, consistency: 'pedete' }),
+          aDiaper({ start: `${TODAY} 14:00`, pee: false, poop: true, consistency: 'pedete' }),
+          // Una caca sin anotar cómo era sigue siendo una caca.
+          aDiaper({ start: `${TODAY} 17:00`, pee: false, poop: true }),
+        ],
+      })
+    )
+    expect(kpi(html, '💩 Cacas')).toBe('2')
+    expect(kpi(html, '💨 Pedetes')).toBe('2')
+    expect(kpi(html, '💧 Pises')).toBe('1')
+  })
+})
+
+describe('Dashboard · accesos que faltaban', () => {
+  it('el contador de tomas dice cuánto hace de la última y lleva a corregirla', () => {
+    const toma = aFeed({ start: `${TODAY} 10:30`, end: `${TODAY} 10:50`, formulaMl: 60 })
+    const html = renderDashboard(day({ records: [toma], last: { ...day().last, feed: toma } }))
+    // Igual que pises y cacas: cifra, cuánto hace y acceso a corregirlo.
+    expect(kpi(html, '🍼 Tomas')).toBe('1')
+    expect(kpiNote(html, '🍼 Tomas')).toMatch(/^(hace |ahora mismo)/)
+    expect(html).toContain('kpi-tile-link')
+  })
+
+  it('sin tomas el contador lo dice, sin dejar el hueco vacío', () => {
+    const html = renderDashboard(day())
+    expect(kpi(html, '🍼 Tomas')).toBe('0')
+    expect(kpiNote(html, '🍼 Tomas')).toBe('sin registros')
   })
 
   it('el peso tiene acceso directo a sus registros', () => {

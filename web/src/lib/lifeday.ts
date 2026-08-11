@@ -7,7 +7,7 @@
 // completo; aquí está la aritmética para etiquetar, para la vista previa de los
 // ajustes y para el modo demo.
 
-import type { BabyRecord, LifeDayTotals } from '../types'
+import type { BabyRecord, FeedRecord, LifeDayTotals } from '../types'
 import { addMinutes, diffMinutes } from './dates'
 
 const DAY_MIN = 24 * 60
@@ -60,4 +60,52 @@ export function lifeDayTotals(records: BabyRecord[], start: string, end: string)
   // Leche cuantificable: el pecho directo no entra porque no sabemos los ml.
   t.milkMl = t.expressedMl + t.formulaMl
   return t
+}
+
+// --- Contadores de la pantalla de inicio -------------------------------------
+//
+// Van aparte de `LifeDayTotals` a propósito: ese tipo es lo que devuelve la API
+// y lo que usa la evolución. Esto es solo cómo se presentan los KPIs, y separa
+// dos cosas que sumadas dicen menos de lo que dicen por separado.
+
+/**
+ * Por debajo de estos minutos, un rato al pecho es consuelo o hidratación más
+ * que una comida. Contarlo como una toma más desvirtúa justo el número que se
+ * mira para saber si toca.
+ */
+export const HYDRATION_MAX_MIN = 5
+
+/**
+ * Una toma que fue solo un ratito al pecho.
+ *
+ * Un biberón cuenta siempre como toma, aunque se anotara sin hora de fin y
+ * dure cero minutos: lo que come es la cantidad, no el tiempo.
+ */
+export function isHydration(r: FeedRecord): boolean {
+  return r.expressedMl + r.formulaMl === 0 && r.breastMin < HYDRATION_MAX_MIN
+}
+
+export interface PeriodCounts {
+  /** Tomas de verdad: con biberón, o con pecho suficiente. */
+  feeds: number
+  hydrations: number
+  /** Cacas de verdad: las que no son un pedete. */
+  poops: number
+  pedetes: number
+}
+
+/** Cuenta los registros del periodo separando tomas e hidratación, cacas y pedetes. */
+export function periodCounts(records: BabyRecord[], start: string, end: string): PeriodCounts {
+  const c: PeriodCounts = { feeds: 0, hydrations: 0, poops: 0, pedetes: 0 }
+  for (const r of records) {
+    if (r.start < start || r.start >= end) continue
+    if (r.type === 'feed') {
+      if (isHydration(r)) c.hydrations++
+      else c.feeds++
+    } else if (r.type === 'diaper' && r.poop) {
+      if (r.consistency === 'pedete') c.pedetes++
+      else c.poops++
+    }
+  }
+  return c
 }
