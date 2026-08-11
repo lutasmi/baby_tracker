@@ -5,7 +5,7 @@
 
 import { addDays, addMinutes, diffMinutes, nowMadrid } from '../lib/dates'
 import { STALE_SLEEP_MIN } from '../lib/derive'
-import { lifeDayNumber, lifeDayRange, lifeDayTotals } from '../lib/lifeday'
+import { isHydration, isRealPoop, lifeDayNumber, lifeDayRange, lifeDayTotals } from '../lib/lifeday'
 import { deriveFeed, feedIsEmpty, itemMinutes, newId } from '../lib/records'
 import type {
   BabyRecord,
@@ -253,13 +253,15 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
       let openSleep: SleepRecord | null = null
       for (const r of all) {
         if (r.type === 'feed') {
-          if (!lastFeed || r.start > lastFeed.start) lastFeed = r
+          // Ni la hidratación cuenta como última toma ni el pedete como última
+          // caca: el reloj que se mira es el de lo que se está esperando.
+          if (!isHydration(r) && (!lastFeed || r.start > lastFeed.start)) lastFeed = r
           if (r.start < dayStart && (!previousFeed || r.start > previousFeed.start)) previousFeed = r
         }
         if (r.type === 'diaper') {
           if (!lastDiaper || r.start > lastDiaper.start) lastDiaper = r
           if (r.pee && (!lastPee || r.start > lastPee.start)) lastPee = r
-          if (r.poop && (!lastPoop || r.start > lastPoop.start)) lastPoop = r
+          if (isRealPoop(r) && (!lastPoop || r.start > lastPoop.start)) lastPoop = r
         }
         if (r.type === 'sleep') {
           if (!r.end) openSleep = r

@@ -119,6 +119,35 @@ describe('registro y totales del día de vida', () => {
   })
 })
 
+describe('lo último de cada cosa', () => {
+  it('la hidratación no reinicia el reloj de la última toma', async () => {
+    // Después de las tomas que ya trae el simulador de serie.
+    await api.createRecord(feed('t-real', [bibe(`${TODAY} 20:00`, 60)]))
+    await api.createRecord(feed('t-consuelo', [tetada(`${TODAY} 21:00`, `${TODAY} 21:03`)]))
+    const { last } = await api.getDay(TODAY)
+    expect(last.feed?.id).toBe('t-real')
+  })
+
+  it('el pedete no reinicia el de la última caca, pero sí es un pañal', async () => {
+    await api.createRecord(diaper('p-caca', `${TODAY} 19:00`, false, true))
+    const pedete: RecordInput = {
+      id: 'p-pedete',
+      type: 'diaper',
+      start: `${TODAY} 22:00`,
+      pee: false,
+      peeAmount: null,
+      poop: true,
+      consistency: 'pedete',
+      notes: '',
+    }
+    await api.createRecord(pedete)
+
+    const { last } = await api.getDay(TODAY)
+    expect(last.poop?.id).toBe('p-caca')
+    expect(last.diaper?.id).toBe('p-pedete')
+  })
+})
+
 describe('sueño', () => {
   it('registra una siesta pasada con inicio y fin', async () => {
     const siesta = await api.createRecord(sleep('s1', `${TODAY} 11:37`, `${TODAY} 12:54`))

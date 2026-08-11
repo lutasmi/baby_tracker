@@ -7,7 +7,7 @@
 // completo; aquí está la aritmética para etiquetar, para la vista previa de los
 // ajustes y para el modo demo.
 
-import type { BabyRecord, FeedRecord, LifeDayTotals } from '../types'
+import type { BabyRecord, DiaperRecord, FeedRecord, LifeDayTotals } from '../types'
 import { addMinutes, diffMinutes } from './dates'
 
 const DAY_MIN = 24 * 60
@@ -85,6 +85,11 @@ export function isHydration(r: FeedRecord): boolean {
   return r.expressedMl + r.formulaMl === 0 && r.breastMin < HYDRATION_MAX_MIN
 }
 
+/** Un pañal con caca de verdad; el pedete son gases, no una caca. */
+export function isRealPoop(r: DiaperRecord): boolean {
+  return r.poop && r.consistency !== 'pedete'
+}
+
 export interface PeriodCounts {
   /** Tomas de verdad: con biberón, o con pecho suficiente. */
   feeds: number
@@ -103,8 +108,8 @@ export function periodCounts(records: BabyRecord[], start: string, end: string):
       if (isHydration(r)) c.hydrations++
       else c.feeds++
     } else if (r.type === 'diaper' && r.poop) {
-      if (r.consistency === 'pedete') c.pedetes++
-      else c.poops++
+      if (isRealPoop(r)) c.poops++
+      else c.pedetes++
     }
   }
   return c

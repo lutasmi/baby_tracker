@@ -744,6 +744,31 @@ function rowToFeedItems(row) {
   return { feedId: id, items: items, meta: meta, deleted: deleted, legacyEnd: end };
 }
 
+/**
+ * Por debajo de estos minutos, un rato al pecho es consuelo o hidratación más
+ * que una comida.
+ */
+var HYDRATION_MAX_MIN = 5;
+
+/**
+ * Una toma que fue solo un ratito al pecho.
+ *
+ * Importa para "cuánto hace de la última toma": si estás mirando si toca
+ * comer, un consuelo de tres minutos no reinicia el reloj. Un biberón cuenta
+ * siempre como toma, aunque se anotara sin hora de fin y dure cero minutos:
+ * lo que come es la cantidad, no el tiempo.
+ */
+function isHydration(record) {
+  if (record.type !== 'feed') return false;
+  var ml = (record.expressedMl || 0) + (record.formulaMl || 0);
+  return ml === 0 && (record.breastMin || 0) < HYDRATION_MAX_MIN;
+}
+
+/** Un pañal con caca de verdad; el pedete son gases, no una caca. */
+function isRealPoop(record) {
+  return record.type === 'diaper' && !!record.poop && record.consistency !== 'pedete';
+}
+
 /** Junta las filas de la pestaña Tomas en tomas completas. */
 function groupFeedRows(parsedRows) {
   var order = [];
@@ -1041,6 +1066,9 @@ if (typeof module !== 'undefined' && module.exports) {
     breastMinutesOf: breastMinutesOf,
     breastSideOfItems: breastSideOfItems,
     itemMinutes: itemMinutes,
+    isHydration: isHydration,
+    isRealPoop: isRealPoop,
+    HYDRATION_MAX_MIN: HYDRATION_MAX_MIN,
     isOpenSleep: isOpenSleep,
     effectiveEnd: effectiveEnd,
     recordTouchesDay: recordTouchesDay,

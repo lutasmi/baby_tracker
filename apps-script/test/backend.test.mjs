@@ -329,6 +329,52 @@ describe('un día de uso', () => {
     })
   })
 
+  it('la hidratación no cuenta como última toma ni el pedete como última caca', () => {
+    liveTheDay()
+    backend.setNow(`${DAY} 16:30`)
+    // Un ratito al pecho para calmarlo y un pañal con solo gases.
+    backend.call(
+      'createRecord',
+      feed('consuelo', [tetada('c1', `${DAY} 16:10`, `${DAY} 16:13`, 'izquierdo')])
+    )
+    backend.call(
+      'createRecord',
+      record({
+        id: 'pedete-1',
+        type: 'diaper',
+        start: `${DAY} 16:15`,
+        pee: false,
+        poop: true,
+        consistency: 'pedete',
+        notes: '',
+      })
+    )
+
+    const { last } = backend.call('getDay', { date: DAY })
+    // El reloj de "cuánto hace" no lo reinicia ninguna de las dos cosas.
+    expect(last.feed.id).toBe('toma-2')
+    expect(last.poop.id).toBe('panal-1')
+    // Pero el último pañal sí es el de los gases: es un pañal como otro.
+    expect(last.diaper.id).toBe('pedete-1')
+  })
+
+  it('una tetada larga sí cuenta como última toma', () => {
+    liveTheDay()
+    backend.setNow(`${DAY} 16:30`)
+    backend.call(
+      'createRecord',
+      feed('tetada-larga', [tetada('t1', `${DAY} 16:00`, `${DAY} 16:20`, 'derecho')])
+    )
+    expect(backend.call('getDay', { date: DAY }).last.feed.id).toBe('tetada-larga')
+  })
+
+  it('un biberón corto cuenta como toma: lo que come es la cantidad', () => {
+    liveTheDay()
+    backend.setNow(`${DAY} 16:30`)
+    backend.call('createRecord', feed('bibe-rapido', [bibe('b1', `${DAY} 16:05`, 40)]))
+    expect(backend.call('getDay', { date: DAY }).last.feed.id).toBe('bibe-rapido')
+  })
+
   it('sigue la última caca aparte del último pañal', () => {
     liveTheDay()
     backend.setNow(`${DAY} 16:05`)

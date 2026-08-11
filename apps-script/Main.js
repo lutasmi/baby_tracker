@@ -192,7 +192,10 @@ function getDay(req) {
     if (recordTouchesDay(r, date, now)) records.push(r);
     if (isOpenSleep(r)) openSleep = r; // el de inicio más tardío prevalece
     if (r.type === 'feed') {
-      if (!lastFeed || r.start > lastFeed.start) lastFeed = r;
+      // La hidratación no cuenta como "última toma": el reloj que se mira para
+      // saber si toca comer no lo reinicia un consuelo de tres minutos, igual
+      // que no lo cuenta el contador de la pantalla.
+      if (!isHydration(r) && (!lastFeed || r.start > lastFeed.start)) lastFeed = r;
       // Última toma anterior al día consultado: da el hueco de la primera
       // toma de la noche, que si no quedaría sin calcular.
       if (r.start < dayStart && (!previousFeed || r.start > previousFeed.start)) previousFeed = r;
@@ -202,7 +205,8 @@ function getDay(req) {
       // Pis y caca se siguen por separado: un pañal de solo pis no dice nada
       // de la caca, y es justo lo que se vigila las primeras semanas.
       if (r.pee && (!lastPee || r.start > lastPee.start)) lastPee = r;
-      if (r.poop && (!lastPoop || r.start > lastPoop.start)) lastPoop = r;
+      // Y el pedete tampoco cuenta como "última caca": son gases.
+      if (isRealPoop(r) && (!lastPoop || r.start > lastPoop.start)) lastPoop = r;
     }
     if (r.type === 'sleep' && r.end && (!lastSleepEnd || r.end > lastSleepEnd.end)) {
       lastSleepEnd = r;
