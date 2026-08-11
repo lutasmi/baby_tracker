@@ -12,7 +12,7 @@ import {
   initialState,
   newSession,
   nextSide,
-  timesFromSessions,
+  feedTimes,
   validate,
   type BreastSession,
   type FormState,
@@ -233,7 +233,7 @@ describe('cálculos de las tetadas', () => {
   })
 
   it('las horas de la toma salen de la primera y la última tetada', () => {
-    expect(timesFromSessions(feedState({ sessions: [IZQ, DER] }))).toEqual({
+    expect(feedTimes(feedState({ sessions: [IZQ, DER] }))).toEqual({
       start: '2026-08-07 11:42',
       end: '2026-08-07 12:13',
     })
@@ -241,7 +241,7 @@ describe('cálculos de las tetadas', () => {
 
   it('sin tetadas manda la hora que se haya puesto', () => {
     const s = { ...feedState({ formulaMl: 60 }), start: '2026-08-07 13:13', end: '2026-08-07 13:13' }
-    expect(timesFromSessions(s)).toEqual({ start: '2026-08-07 13:13', end: '2026-08-07 13:13' })
+    expect(feedTimes(s)).toEqual({ start: '2026-08-07 13:13', end: '2026-08-07 13:13' })
   })
 })
 
@@ -364,7 +364,7 @@ describe('hora de fin del biberón', () => {
       ...feedState({ formulaMl: 60 }),
       start: '2026-08-07 13:13',
       end: '2026-08-07 13:33',
-      hasEnd: true,
+      manualTimes: true,
     }
     expect(validate('feed', s, NOW)).toBeNull()
     expect(buildInput('id', 'feed', s)).toMatchObject({
@@ -382,13 +382,13 @@ describe('hora de fin del biberón', () => {
       formulaMl: 60,
     })
     const s = initialState('feed', previa, null, NOW)
-    expect(s.hasEnd).toBe(true)
+    expect(s.manualTimes).toBe(true)
     expect(buildInput(previa.id, 'feed', s)).toMatchObject({ end: '2026-08-07 13:33' })
   })
 
   it('un biberón puntual se reabre sin pedir el fin', () => {
     const previa = aFeed({ start: '2026-08-07 13:13', end: '2026-08-07 13:13', formulaMl: 60 })
-    expect(initialState('feed', previa, null, NOW).hasEnd).toBe(false)
+    expect(initialState('feed', previa, null, NOW).manualTimes).toBe(false)
   })
 })
 
@@ -412,6 +412,64 @@ describe('detalle del pañal', () => {
     expect(initialState('diaper', panal, null, NOW)).toMatchObject({
       peeAmount: 'poco',
       consistency: 'pedete',
+    })
+  })
+})
+
+describe('horas de la toma puestas a mano', () => {
+  it('reabrir y guardar sin tocar nada no recorta la toma', () => {
+    // La tetada resumen dura 21 min desde las 11:42, o sea hasta las 12:03,
+    // pero la toma llegó hasta las 12:13 porque después vino un biberón.
+    const previa = aFeed({
+      start: '2026-08-07 11:42',
+      end: '2026-08-07 12:13',
+      durationMin: 31,
+      breastMin: 21,
+      breastSide: 'ambos',
+      formulaMl: 60,
+    })
+    const s = initialState('feed', previa, null, NOW)
+    expect(s.manualTimes).toBe(true)
+    expect(buildInput(previa.id, 'feed', s)).toMatchObject({
+      start: '2026-08-07 11:42',
+      end: '2026-08-07 12:13',
+      durationMin: 31,
+      breastMin: 21,
+    })
+  })
+
+  it('una toma cuyo intervalo sí coincide con la tetada no necesita horas a mano', () => {
+    const previa = aFeed({
+      start: '2026-08-07 11:42',
+      end: '2026-08-07 12:03',
+      durationMin: 21,
+      breastMin: 21,
+      breastSide: 'izquierdo',
+    })
+    expect(initialState('feed', previa, null, NOW).manualTimes).toBe(false)
+  })
+
+  it('con tetadas, ajustar el final a mano manda sobre lo derivado', () => {
+    const s = {
+      ...feedState({ sessions: [IZQ, DER], formulaMl: 60 }),
+      manualTimes: true,
+      start: '2026-08-07 11:42',
+      end: '2026-08-07 12:30', // el biberón alargó la toma
+    }
+    expect(validate('feed', s, NOW)).toBeNull()
+    expect(buildInput('id', 'feed', s)).toMatchObject({
+      start: '2026-08-07 11:42',
+      end: '2026-08-07 12:30',
+      durationMin: 48,
+      breastMin: 21, // los minutos de pecho siguen siendo los de las tetadas
+    })
+  })
+
+  it('quitar el ajuste devuelve las horas a las tetadas', () => {
+    const s = feedState({ sessions: [IZQ, DER] })
+    expect(feedTimes({ ...s, manualTimes: false })).toEqual({
+      start: '2026-08-07 11:42',
+      end: '2026-08-07 12:13',
     })
   })
 })

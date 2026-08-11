@@ -55,8 +55,13 @@ export interface FormState {
   poop: boolean
   peeAmount: PeeAmount | ''
   consistency: Consistency | ''
-  /** El biberón es puntual salvo que se pida una hora de fin a propósito. */
-  hasEnd: boolean
+  /**
+   * Las horas de la toma están puestas a mano en lugar de salir de las
+   * tetadas. Pasa al pedir la hora de fin de un biberón, al ajustar el final
+   * porque después vino un biberón, y al reabrir una toma cuyo intervalo no
+   * coincide con la suma de sus tetadas.
+   */
+  manualTimes: boolean
   grams: number
   notes: string
 }
@@ -115,21 +120,23 @@ export function breastSideOf(sessions: BreastSession[]): BreastSide | null {
 }
 
 /**
- * Horas de la toma derivadas de sus tetadas: empieza con la primera y acaba
- * con la última.
+ * Horas de la toma: salen de sus tetadas —de la primera a la última— salvo que
+ * se hayan puesto a mano.
  *
  * Sin tetadas la toma es puntual y el fin es el propio inicio: un biberón se
  * anota "a las 13:13", no "de 13:13 a la hora que fuera cuando lo apuntaste".
  */
-export function timesFromSessions(state: FormState): { start: string; end: string } {
-  if (state.sessions.length === 0) {
-    return { start: state.start, end: state.hasEnd ? state.end : state.start }
-  }
-  const starts = state.sessions.map((s) => s.start)
-  const ends = state.sessions.map((s) => s.end)
+export function feedTimes(state: FormState): { start: string; end: string } {
+  if (state.manualTimes) return { start: state.start, end: state.end }
+  if (state.sessions.length === 0) return { start: state.start, end: state.start }
+  return sessionSpan(state.sessions)
+}
+
+/** De la primera tetada a la última. */
+export function sessionSpan(sessions: BreastSession[]): { start: string; end: string } {
   return {
-    start: starts.reduce((a, b) => (a < b ? a : b)),
-    end: ends.reduce((a, b) => (a > b ? a : b)),
+    start: sessions.map((s) => s.start).reduce((a, b) => (a < b ? a : b)),
+    end: sessions.map((s) => s.end).reduce((a, b) => (a > b ? a : b)),
   }
 }
 
@@ -137,7 +144,7 @@ export function timesFromSessions(state: FormState): { start: string; end: strin
 export function feedSummary(state: FormState): string {
   const minutes = breastMinutes(state.sessions)
   const ml = effectiveMl(state)
-  const { start, end } = timesFromSessions(state)
+  const { start, end } = feedTimes(state)
   const parts: string[] = []
   if (minutes > 0) parts.push(`${minutes} min de pecho`)
   if (ml.expressedMl > 0) parts.push(`${ml.expressedMl} ml de extraída`)
@@ -170,7 +177,7 @@ export function initialState(
     poop: false,
     peeAmount: '',
     consistency: '',
-    hasEnd: false,
+    manualTimes: false,
     grams: 0,
     notes: '',
   }
@@ -205,29 +212,34 @@ export function initialState(
   switch (r.type) {
     case 'sleep':
       return { ...state, end: r.end ?? now, sleepOpen: !r.end, sleepKind: r.kind }
-    case 'feed':
+    case 'feed': {
+      // De la hoja vuelve el total, no cada tetada: se reconstruye una sola
+      // que las resume, y desde ahí se puede corregir o volver a separar.
+      const sessions =
+        r.breastMin > 0
+          ? [
+              {
+                key: newId(),
+                side: r.breastSide ?? 'ambos',
+                start: r.start,
+                end: addMinutes(r.start, r.breastMin),
+              },
+            ]
+          : []
+      // Si el intervalo guardado no coincide con el de esa tetada resumen
+      // —porque hubo pausas, o un biberón después—, mandan las horas
+      // guardadas: reabrir y guardar sin tocar nada no puede recortar la toma.
+      const derivedEnd = sessions.length > 0 ? sessions[0].end : r.start
       return {
         ...state,
         end: r.end ?? now,
-        // De la hoja vuelve el total, no cada tetada: se reconstruye una sola
-        // que las resume, y desde ahí se puede corregir o volver a separar.
-        sessions:
-          r.breastMin > 0
-            ? [
-                {
-                  key: newId(),
-                  side: r.breastSide ?? 'ambos',
-                  start: r.start,
-                  end: addMinutes(r.start, r.breastMin),
-                },
-              ]
-            : [],
+        sessions,
         expressedMl: r.expressedMl,
         formulaMl: r.formulaMl,
         active: activeKeysOf(r),
-        // Un biberón que duró un rato conserva su fin al reabrirlo.
-        hasEnd: r.breastMin === 0 && r.end != null && r.end !== r.start,
+        manualTimes: (r.end ?? r.start) !== derivedEnd,
       }
+    }
     case 'diaper':
       return {
         ...state,
@@ -280,7 +292,7 @@ export function buildInput(id: string, type: RecordType, s: FormState): RecordIn
     case 'feed': {
       // Las horas salen de las tetadas cuando las hay; si no, manda la que se
       // haya puesto a mano y la toma es puntual.
-      const { start, end } = timesFromSessions(s)
+      const { start, end } = feedTimes(s)
       return {
         ...common,
         type: 'feed',
@@ -340,7 +352,7 @@ export function validate(type: RecordType, s: FormState, now: string): string | 
       if (sessionMinutes(session) <= 0) return 'Cada tetada tiene que acabar después de empezar.'
     }
 
-    const { start, end } = timesFromSessions(s)
+    const { start, end } = feedTimes(s)
     const dur = diffMinutes(start, end)
     if (dur < 0) return 'El fin no puede ser anterior al inicio.'
     if (dur > 24 * 60) return 'Una toma no puede durar más de 24 horas.'

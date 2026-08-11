@@ -11,7 +11,7 @@ import {
   newSession,
   nextSide,
   sessionMinutes,
-  timesFromSessions,
+  feedTimes,
   validate,
   type BreastSession,
   type ComponentKey,
@@ -250,7 +250,7 @@ function FeedFields({
   previousFeedStart: string | null
   lastSide: BreastSide | null
 }) {
-  const times = timesFromSessions(s)
+  const times = feedTimes(s)
   // De inicio a inicio, que es como se cuenta lo de "cada tres horas".
   const sincePrevious = previousFeedStart ? diffMinutes(previousFeedStart, times.start) : null
   const summary = feedSummary(s)
@@ -364,39 +364,35 @@ function FeedFields({
         </div>
       )}
 
-      {/* Sin tetadas la toma es puntual y basta con una hora: "biberón de 60
-          ml a las 13:13". Con tetadas, las horas ya salen de ellas. */}
-      {s.sessions.length === 0 ? (
+      {/* Las horas de la toma. Salen de las tetadas cuando las hay; si no, es
+          puntual: "biberón de 60 ml a las 13:13". Y siempre se pueden poner a
+          mano, que es lo que hace falta cuando el biberón viene después del
+          pecho y alarga la toma. */}
+      {s.manualTimes ? (
         <>
-          <MomentField label="Hora" value={s.start} now={now} onChange={(start) => set({ start })} />
-          {/* No es lo mismo un biberón en tres minutos que en veinte, aunque
-              la cantidad sea la misma; pero solo se pide si interesa. */}
-          {s.hasEnd ? (
-            <>
-              <MomentField
-                label="Terminó"
-                value={s.end}
-                now={now}
-                onChange={(end) => set({ end })}
-              />
-              <button type="button" class="btn-link" onClick={() => set({ hasEnd: false })}>
-                Quitar la hora de fin
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              class="btn-link"
-              onClick={() => set({ hasEnd: true, end: s.start })}
-            >
-              + Añadir hora de fin
-            </button>
-          )}
+          <MomentField label="Empezó" value={s.start} now={now} onChange={(start) => set({ start })} />
+          <MomentField label="Terminó" value={s.end} now={now} onChange={(end) => set({ end })} />
+          <button type="button" class="btn-link" onClick={() => set({ manualTimes: false })}>
+            {s.sessions.length > 0 ? 'Volver a calcularlas de las tetadas' : 'Quitar la hora de fin'}
+          </button>
         </>
       ) : (
-        <div class="duration-line">
-          Toma de <strong>{timeOf(times.start)}</strong> a <strong>{timeOf(times.end)}</strong>
-        </div>
+        <>
+          {s.sessions.length === 0 ? (
+            <MomentField label="Hora" value={s.start} now={now} onChange={(start) => set({ start })} />
+          ) : (
+            <div class="duration-line">
+              Toma de <strong>{timeOf(times.start)}</strong> a <strong>{timeOf(times.end)}</strong>
+            </div>
+          )}
+          <button
+            type="button"
+            class="btn-link"
+            onClick={() => set({ manualTimes: true, start: times.start, end: times.end })}
+          >
+            {s.sessions.length > 0 ? 'Ajustar las horas de la toma' : '+ Añadir hora de fin'}
+          </button>
+        </>
       )}
 
       {summary && <p class="field-hint feed-summary">{summary}</p>}
