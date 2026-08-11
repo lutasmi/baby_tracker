@@ -83,7 +83,11 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
   const period = data ? periodOf(data, mode, back, today) : null
   const isCurrent = back === 0
   // Un tramo pasado casi siempre cae a caballo de dos días naturales.
-  const { days: pastDays } = useDays(isCurrent || !period ? [] : datesOf(period))
+  const {
+    days: pastDays,
+    failed: failedDays,
+    retry: retryDays,
+  } = useDays(isCurrent || !period ? [] : datesOf(period))
 
   let records: BabyRecord[] = []
   if (data && period) {
@@ -152,6 +156,17 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
               canGoBack={canGoBack(data, mode, back)}
               onChange={setBack}
             />
+
+            {/* Un día que no llega dejaría los contadores por debajo de lo que
+                de verdad hubo, y sin avisar parecerían ciertos. */}
+            {failedDays.length > 0 && (
+              <div class="banner banner-warn">
+                Faltan datos de este tramo: no se pudo cargar todo.
+                <button class="banner-retry" onClick={retryDays}>
+                  Reintentar
+                </button>
+              </div>
+            )}
 
             <PeriodCard
               period={period}

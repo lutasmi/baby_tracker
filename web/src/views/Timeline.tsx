@@ -74,7 +74,7 @@ export function Timeline({ date }: { date?: string }) {
 
   // Un día de vida cae casi siempre a caballo de dos días naturales.
   const dates = [...new Set(sections.flatMap((s) => datesOf(s)))].sort().reverse()
-  const { days, loading: loadingDays } = useDays(dates)
+  const { days, loading: loadingDays, failed, retry } = useDays(dates)
 
   return (
     <>
@@ -161,6 +161,19 @@ export function Timeline({ date }: { date?: string }) {
           <button class="btn" disabled={loadingDays} onClick={() => setAhead(ahead + 1)}>
             {loadingDays ? 'Cargando…' : '↑ Ver posteriores'}
           </button>
+        )}
+
+        {/* Un día que no llega no puede desaparecer sin más: lo que se lee
+            arriba estaría incompleto sin saberlo. */}
+        {failed.length > 0 && (
+          <div class="banner banner-warn">
+            No se pudo cargar {failed.length === 1 ? 'el día' : 'los días'}{' '}
+            {failed.map((d) => formatDateHuman(d, today).toLowerCase()).join(', ')}. Falta lo de
+            {failed.length === 1 ? ' esa fecha' : ' esas fechas'}.
+            <button class="banner-retry" onClick={retry}>
+              Reintentar
+            </button>
+          </div>
         )}
 
         {data && <Stream sections={sections} days={days} now={now} types={types} />}

@@ -287,12 +287,22 @@ horas.
 
 - **Se requiere conexión.** Sin internet aparece un aviso permanente. El service
   worker cachea la aplicación —para que abra al instante— pero no los datos.
+- **Los fallos pasajeros se reintentan solos**: hasta dos veces, esperando 0,4 s
+  y 1,2 s. Se reintenta lo que puede mejorar —la red, un 500, un 429, un error
+  interno del servidor— y no lo que no: validación, sesión o configuración se
+  muestran de inmediato. Sin conexión tampoco se insiste.
+- **Reintentar nunca duplica.** El identificador lo genera el móvil antes de
+  enviar: si la misma petición llega dos veces, la segunda devuelve lo ya
+  guardado. Por eso guardar también se puede reintentar sin riesgo.
 - **Nada se da por guardado sin confirmación**: el botón queda en "Guardando…"
   hasta que la hoja responde, y un fallo se muestra con el mensaje del backend y
   la opción de reintentar. Apps Script tarda 1-3 s por operación.
-- **Reintentar nunca duplica.** El identificador lo genera el móvil antes de
-  enviar: si la misma petición llega dos veces, la segunda devuelve lo ya
-  guardado.
+- **Un día que no carga se dice**, en lugar de desaparecer de la lista: la
+  cronología y la pantalla principal avisan de qué falta y ofrecen reintentar
+  solo eso. Lo que sí llegó se pinta igualmente.
+- **Un fallo pintando no deja la pantalla en negro**: se muestra qué ocurrió,
+  con botones para reintentar o volver al inicio, y el detalle queda en la
+  consola. Cambiar de pantalla también lo reinicia.
 - **Lo último cargado se pinta al instante** mientras se refresca por detrás, de
   modo que volver a una pantalla no deja la vista en blanco.
 - **Borrar es lógico**: la fila se marca en la columna `Eliminado` y deja de

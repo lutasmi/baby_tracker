@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { getApi } from './api'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { useOnline, useRoute } from './hooks'
 import { clearSession, loadSession, saveSession, type Session } from './session'
 import { clearDayCache } from './store'
@@ -15,6 +16,9 @@ import { Timeline } from './views/Timeline'
 export function App() {
   const [session, setSession] = useState<Session | null>(() => loadSession())
   const online = useOnline()
+  // La ruta se lee aquí para que cambiar de pantalla reinicie la red de
+  // seguridad: un error en una no puede dejar atrapada a la siguiente.
+  const route = useRoute()
 
   // La capa de API avisa cuando la sesión caduca o se revoca.
   useEffect(() => {
@@ -57,7 +61,9 @@ export function App() {
   return (
     <div class="app">
       {!online && <div class="banner banner-offline">📡 Sin conexión a internet</div>}
-      <Screen session={session} onLogout={handleLogout} />
+      <ErrorBoundary resetKey={route}>
+        <Screen session={session} onLogout={handleLogout} route={route} />
+      </ErrorBoundary>
       <ToastHost />
     </div>
   )
@@ -71,9 +77,15 @@ const FORM_TYPES: Record<string, RecordType> = {
   peso: 'weight',
 }
 
-function Screen({ session, onLogout }: { session: Session; onLogout: () => void }) {
-  const route = useRoute()
-
+function Screen({
+  session,
+  onLogout,
+  route,
+}: {
+  session: Session
+  onLogout: () => void
+  route: string
+}) {
   if (route.startsWith('#/nuevo/')) {
     const type = FORM_TYPES[route.slice('#/nuevo/'.length)]
     if (type) return <NewRecord type={type} />

@@ -4,7 +4,8 @@ import { ApiError } from './api/types'
 import { nowMadrid } from './lib/dates'
 import { clearSession } from './session'
 import { loadDayMode, saveDayMode, type DayMode } from './prefs'
-import { cacheDay, getCachedDay } from './store'
+import { loadDays } from './lib/dayload'
+import { fetchDay, getCachedDay } from './store'
 import type { DayData } from './types'
 
 // --- Navegación por hash (el botón atrás del móvil funciona) ---------------
@@ -99,8 +100,7 @@ export function useDay(date: string): DayState {
 
   const reload = useCallback(async () => {
     try {
-      const fresh = await getApi().getDay(date)
-      cacheDay(fresh)
+      const fresh = await fetchDay(date, (d) => getApi().getDay(d))
       setData(fresh)
       setError(null)
     } catch (err) {
@@ -152,7 +152,21 @@ export function useDayMode(): [DayMode, (mode: DayMode) => void] {
  * Un día de vida cae casi siempre a caballo de dos días naturales, así que la
  * cronología necesita poder pedir varios de golpe.
  */
-export function useDays(dates: string[]): { days: DayData[]; loading: boolean } {
+export interface DaysState {
+  days: DayData[]
+  loading: boolean
+  /** Fechas que no se pudieron cargar, para decirlo en vez de omitirlas. */
+  failed: string[]
+  /** Vuelve a pedir solo lo que falló. */
+  retry: () => void
+}
+
+/**
+ * Varios días a la vez. Se piden **en paralelo** y la lista se actualiza según
+ * llega cada uno, en lugar de esperar al último: con cuatro días, la diferencia
+ * es entre ver algo al segundo o a los doce.
+ */
+export function useDays(dates: string[]): DaysState {
   const key = dates.join(',')
   const collect = useCallback(
     () => (key ? key.split(',') : []).map(getCachedDay).filter((d): d is DayData => d != null),
@@ -160,33 +174,40 @@ export function useDays(dates: string[]): { days: DayData[]; loading: boolean } 
   )
   const [days, setDays] = useState<DayData[]>(collect)
   const [loading, setLoading] = useState(false)
+  const [failed, setFailed] = useState<string[]>([])
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let cancelled = false
     const wanted = key ? key.split(',') : []
     const missing = wanted.filter((d) => !getCachedDay(d))
+    setDays(collect())
     if (missing.length === 0) {
-      setDays(collect())
+      setFailed([])
       return
     }
+
     setLoading(true)
     void (async () => {
-      for (const date of missing) {
-        try {
-          cacheDay(await getApi().getDay(date))
-        } catch (err) {
-          handleAuthError(err)
+      const load = await loadDays(
+        (d) => fetchDay(d, (fecha) => getApi().getDay(fecha)),
+        missing,
+        // Cada día que llega se pinta ya, sin esperar a sus compañeros.
+        () => {
+          if (!cancelled) setDays(collect())
         }
-      }
+      )
+      for (const f of load.failed) handleAuthError(f.error)
       if (!cancelled) {
         setDays(collect())
+        setFailed(load.failed.map((f) => f.date))
         setLoading(false)
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [key, collect])
+  }, [key, collect, attempt])
 
-  return { days, loading }
+  return { days, loading, failed, retry: () => setAttempt((n) => n + 1) }
 }

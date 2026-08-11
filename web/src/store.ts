@@ -39,4 +39,26 @@ export function userName(email: string | null): string {
 
 export function clearDayCache(): void {
   dayCache.clear()
+  inFlight.clear()
+}
+
+// Peticiones en curso, por fecha. La pantalla principal y la cronología piden
+// el mismo día a la vez más de una vez: sin esto son dos viajes de 1-3 s para
+// traer lo mismo.
+const inFlight = new Map<string, Promise<DayData>>()
+
+/** Pide un día y lo guarda en la caché, sin repetir una petición en curso. */
+export function fetchDay(date: string, getDay: (d: string) => Promise<DayData>): Promise<DayData> {
+  const curso = inFlight.get(date)
+  if (curso) return curso
+
+  const peticion = getDay(date)
+    .then((day) => {
+      cacheDay(day)
+      return day
+    })
+    .finally(() => inFlight.delete(date))
+
+  inFlight.set(date, peticion)
+  return peticion
 }

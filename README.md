@@ -153,7 +153,8 @@ Esto es cómo se sostiene por debajo.
 - **Escrituras bajo bloqueo global** de Apps Script: dos móviles guardando a la vez no se pisan.
 - **Borrado lógico**: la fila se marca en la columna `Eliminado` y deja de leerse, pero la hoja conserva el histórico.
 - **Edición manual de la hoja**: tolerada. Las columnas se localizan por cabecera —se pueden reordenar o añadir otras—, las etiquetas admiten variantes sin acentos, las fechas aceptan `dd/MM/yyyy`, las horas sueltas (`HH:mm`) se combinan con la columna `Fecha`, un fin menor que el inicio se interpreta como cruce de medianoche y una casilla marcada con `x` cuenta como `TRUE`. Las duraciones y los totales se recalculan siempre al leer.
-- **Latencia**: Apps Script tarda 1-3 s por operación. La interfaz pinta lo último cargado mientras refresca y solo confirma cuando la hoja ha escrito.
+- **Latencia**: Apps Script tarda 1-3 s por operación. La interfaz pinta lo último cargado mientras refresca y solo confirma cuando la hoja ha escrito. Los días que hacen falta a la vez se piden **en paralelo** y se pintan según llegan, y una misma fecha nunca se pide dos veces a la vez.
+- **Tolerancia a fallos**: los errores pasajeros se reintentan solos (dos veces, con espera creciente); los definitivos se muestran al momento. Un día que no carga se señala en vez de omitirse, y un fallo pintando muestra una salida en lugar de dejar la pantalla en negro.
 - **Sin conexión**: se requiere internet. El service worker cachea la aplicación, no los datos.
 - **Rendimiento**: cada petición lee las cinco pestañas de registros más `Usuarios` y `Bebe`. Con el volumen de un bebé son décimas de segundo; si algún día se nota, la salida está descrita en [docs/modelo-de-datos.md](docs/modelo-de-datos.md#rendimiento).
 

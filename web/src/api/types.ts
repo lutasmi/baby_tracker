@@ -20,12 +20,22 @@ export type ApiErrorCode =
 
 export class ApiError extends Error {
   code: ApiErrorCode
+  /**
+   * Si el fallo puede desaparecer al repetir la petición. Lo pasajero se
+   * reintenta solo; lo definitivo —validación, sesión, configuración— no
+   * mejora por insistir y se le enseña al usuario cuanto antes.
+   */
+  retryable: boolean
 
-  constructor(code: ApiErrorCode, message: string) {
+  constructor(code: ApiErrorCode, message: string, retryable = RETRYABLE_BY_DEFAULT.has(code)) {
     super(message)
     this.code = code
+    this.retryable = retryable
   }
 }
+
+/** Sin más información, estos dos son los que suelen ser pasajeros. */
+const RETRYABLE_BY_DEFAULT = new Set<ApiErrorCode>(['NETWORK', 'INTERNAL'])
 
 export interface Api {
   login(idToken: string): Promise<{ token: string; user: User }>
