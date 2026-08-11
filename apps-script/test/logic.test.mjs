@@ -177,6 +177,15 @@ describe('normalizeAndValidate · toma', () => {
     const r = L.normalizeAndValidate(feed({ formulaMl: 60, breastSide: 'izquierdo' }), NOW)
     expect(r.breastSide).toBeNull()
   })
+
+  it('admite no recordar qué pecho fue', () => {
+    const r = L.normalizeAndValidate(
+      feed({ start: '2026-08-07 03:00', end: '2026-08-07 03:20', breastMin: 20, breastSide: 'desconocido' }),
+      NOW
+    )
+    expect(r.breastSide).toBe('desconocido')
+    expect(L.recordToRow(r, false).Pecho_Lado).toBe('No recuerdo')
+  })
 })
 
 describe('normalizeAndValidate · pañal y baño', () => {
@@ -195,9 +204,22 @@ describe('normalizeAndValidate · pañal y baño', () => {
     expect(r.consistency).toBeNull()
   })
 
-  it('conserva la consistencia cuando hay caca', () => {
-    const r = L.normalizeAndValidate(diaper({ poop: true, consistency: 'pastosa' }), NOW)
-    expect(r.consistency).toBe('pastosa')
+  it('conserva la consistencia cuando hay caca, incluido el pedete', () => {
+    expect(L.normalizeAndValidate(diaper({ poop: true, consistency: 'pastosa' }), NOW).consistency).toBe('pastosa')
+    expect(L.normalizeAndValidate(diaper({ poop: true, consistency: 'pedete' }), NOW).consistency).toBe('pedete')
+  })
+
+  it('el pis lleva su propia cantidad', () => {
+    const r = L.normalizeAndValidate(diaper({ pee: true, peeAmount: 'mucho' }), NOW)
+    expect(r.peeAmount).toBe('mucho')
+    expect(() => L.normalizeAndValidate(diaper({ pee: true, peeAmount: 'enorme' }), NOW)).toThrow(
+      /Pis_Cantidad/
+    )
+  })
+
+  it('descarta la cantidad de pis si no hubo pis', () => {
+    const r = L.normalizeAndValidate(diaper({ poop: true, peeAmount: 'mucho' }), NOW)
+    expect(r.peeAmount).toBeNull()
   })
 
   it('valida la duración opcional del baño', () => {

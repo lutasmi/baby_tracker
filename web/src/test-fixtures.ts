@@ -60,6 +60,7 @@ export function aDiaper(p: Partial<DiaperRecord> = {}): DiaperRecord {
     type: 'diaper',
     start: '2026-08-07 08:00',
     pee: true,
+    peeAmount: null,
     poop: false,
     consistency: null,
     notes: '',

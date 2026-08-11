@@ -21,7 +21,15 @@ import { formatKg, newId } from '../lib/records'
 import { recordTitle } from '../lib/summary'
 import { findCachedRecord } from '../store'
 import { showToast } from '../toast'
-import type { BabyRecord, BathKind, BreastSide, Consistency, RecordType, SleepKind } from '../types'
+import type {
+  BabyRecord,
+  BathKind,
+  BreastSide,
+  Consistency,
+  PeeAmount,
+  RecordType,
+  SleepKind,
+} from '../types'
 
 const NEW_TITLES: Record<RecordType, string> = {
   sleep: 'Registrar sueño',
@@ -281,6 +289,8 @@ function FeedFields({
                 { value: 'izquierdo', label: 'Izq.' },
                 { value: 'derecho', label: 'Der.' },
                 { value: 'ambos', label: 'Ambos' },
+                // De madrugada vale más no saberlo que inventárselo.
+                { value: 'desconocido', label: 'No recuerdo' },
               ]}
               value={session.side}
               onChange={(side) => setSession(session.key, { side })}
@@ -357,7 +367,32 @@ function FeedFields({
       {/* Sin tetadas la toma es puntual y basta con una hora: "biberón de 60
           ml a las 13:13". Con tetadas, las horas ya salen de ellas. */}
       {s.sessions.length === 0 ? (
-        <MomentField label="Hora" value={s.start} now={now} onChange={(start) => set({ start })} />
+        <>
+          <MomentField label="Hora" value={s.start} now={now} onChange={(start) => set({ start })} />
+          {/* No es lo mismo un biberón en tres minutos que en veinte, aunque
+              la cantidad sea la misma; pero solo se pide si interesa. */}
+          {s.hasEnd ? (
+            <>
+              <MomentField
+                label="Terminó"
+                value={s.end}
+                now={now}
+                onChange={(end) => set({ end })}
+              />
+              <button type="button" class="btn-link" onClick={() => set({ hasEnd: false })}>
+                Quitar la hora de fin
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              class="btn-link"
+              onClick={() => set({ hasEnd: true, end: s.start })}
+            >
+              + Añadir hora de fin
+            </button>
+          )}
+        </>
       ) : (
         <div class="duration-line">
           Toma de <strong>{timeOf(times.start)}</strong> a <strong>{timeOf(times.end)}</strong>
@@ -389,12 +424,28 @@ function DiaperFields({ s, set, now }: FieldProps) {
           />
         </div>
       </div>
+      {s.pee && (
+        <div class="field">
+          <span class="field-label">💧 Cuánto pis (opcional)</span>
+          <Seg<PeeAmount | ''>
+            options={[
+              { value: '', label: '—' },
+              { value: 'poco', label: 'Poco' },
+              { value: 'medio', label: 'Medio' },
+              { value: 'mucho', label: 'Mucho' },
+            ]}
+            value={s.peeAmount}
+            onChange={(peeAmount) => set({ peeAmount })}
+          />
+        </div>
+      )}
       {s.poop && (
         <div class="field">
-          <span class="field-label">Consistencia (opcional)</span>
+          <span class="field-label">💩 Cómo era (opcional)</span>
           <Seg<Consistency | ''>
             options={[
               { value: '', label: '—' },
+              { value: 'pedete', label: 'Pedete' },
               { value: 'liquida', label: 'Líquida' },
               { value: 'pastosa', label: 'Pastosa' },
               { value: 'solida', label: 'Sólida' },

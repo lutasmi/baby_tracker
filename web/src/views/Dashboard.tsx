@@ -1,12 +1,23 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { getApi } from '../api'
 import { ApiError } from '../api/types'
 import { DayStrip } from '../components/DayStrip'
 import { ErrorCard, Seg, StatTile } from '../components/ui'
-import { handleAuthError, navigate, useDay, useDayMode, useNow } from '../hooks'
-import { addDays, diffMinutes, formatAgo, formatDuration, nowMadrid, timeOf } from '../lib/dates'
+import { handleAuthError, navigate, useDay, useDayMode, useDays, useNow } from '../hooks'
+import {
+  addDays,
+  addMinutes,
+  dateOf,
+  diffMinutes,
+  formatAgo,
+  formatDateHuman,
+  formatDuration,
+  nowMadrid,
+  timeOf,
+} from '../lib/dates'
 import { babyStatus, isStaleSleep } from '../lib/derive'
-import { lifeDayTotals } from '../lib/lifeday'
+import { lifeDayRange, lifeDayTotals } from '../lib/lifeday'
+import { windowRecords } from '../lib/timeline'
 import { formatGrams, formatKg, formatPercent, weightChange } from '../lib/records'
 import type { DayMode } from '../prefs'
 import { showToast } from '../toast'
@@ -15,14 +26,12 @@ import type { BabyRecord, DayData, LifeDayTotals, SleepRecord, User } from '../t
 const editRoute = (id: string) => `#/editar/${encodeURIComponent(id)}`
 const goEdit = (id: string) => navigate(editRoute(id))
 
-/** El periodo que se está mirando, con lo que pasó dentro. */
+/** El tramo que se está mirando: hoy, o uno anterior. */
 interface Period {
   title: string
   subtitle: string
   start: string
   end: string
-  records: BabyRecord[]
-  totals: LifeDayTotals
 }
 
 export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
@@ -31,6 +40,11 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
   const { data, loading, error, reload } = useDay(today)
   const [mode, setMode] = useDayMode()
   const [saving, setSaving] = useState(false)
+  // 0 es el periodo en curso; 1, el anterior, y así hacia atrás.
+  const [back, setBack] = useState(0)
+
+  // Cambiar de calendario vuelve al periodo actual.
+  useEffect(() => setBack(0), [mode])
 
   async function quickSleepAction(action: () => Promise<unknown>, okMessage: string) {
     setSaving(true)
@@ -65,7 +79,20 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
     )
   }
 
-  const period = data ? periodOf(data, mode, today) : null
+  const period = data ? periodOf(data, mode, back, today) : null
+  const isCurrent = back === 0
+  // Un tramo pasado casi siempre cae a caballo de dos días naturales.
+  const { days: pastDays } = useDays(isCurrent || !period ? [] : datesOf(period))
+
+  let records: BabyRecord[] = []
+  if (data && period) {
+    if (isCurrent) {
+      records = mode === 'life' && data.lifeDay ? data.lifeDay.records : data.records
+    } else {
+      records = windowRecords(pastDays, period.start, period.end)
+    }
+  }
+  const totals = period ? lifeDayTotals(records, period.start, period.end) : null
 
   return (
     <>
@@ -118,11 +145,24 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
               </button>
             )}
 
-            <PeriodCard period={period} last={data.last} now={now} />
+            <PeriodNav
+              period={period}
+              back={back}
+              canGoBack={canGoBack(data, mode, back)}
+              onChange={setBack}
+            />
+
+            <PeriodCard
+              period={period}
+              totals={totals!}
+              last={data.last}
+              now={now}
+              showFreshness={isCurrent}
+            />
 
             {/* Solo aparece cuando hay un sueño sin cerrar: el resto del tiempo
                 no ocupa sitio. Registrar un sueño se hace con su botón. */}
-            {data.openSleep && (
+            {isCurrent && data.openSleep && (
               <OpenSleepBar
                 sleep={data.openSleep}
                 now={now}
@@ -151,14 +191,14 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
               <DayStrip
                 start={period.start}
                 end={period.end}
-                records={period.records}
+                records={records}
                 now={now}
                 onSelect={goEdit}
               />
-              <SleepCaption data={data} now={now} />
+              {isCurrent && <SleepCaption data={data} now={now} />}
             </div>
 
-            <WeightCard data={data} />
+            {isCurrent && <WeightCard data={data} />}
 
             <div class="nav-pair">
               <button class="btn" onClick={() => navigate('#/cronologia')}>
@@ -184,29 +224,76 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
   )
 }
 
-/** El periodo que toca según el calendario elegido. */
-function periodOf(data: DayData, mode: DayMode, today: string): Period {
-  if (mode === 'life' && data.lifeDay) {
-    const { number, start, end, totals, records } = data.lifeDay
+/** El tramo que toca según el calendario elegido y cuántos se ha retrocedido. */
+function periodOf(data: DayData, mode: DayMode, back: number, today: string): Period {
+  if (mode === 'life' && data.lifeDay && data.settings.birth) {
+    const number = data.lifeDay.number - back
+    const { start, end } = lifeDayRange(data.settings.birth, number)
     return {
       title: `Día de vida ${number}`,
-      subtitle: `desde las ${timeOf(start)}`,
+      subtitle: `${formatDateHuman(dateOf(start), today)} desde las ${timeOf(start)}`,
       start,
       end,
-      records,
-      totals,
     }
   }
-  const start = `${data.date} 00:00`
-  const end = `${addDays(data.date, 1)} 00:00`
+  const date = addDays(today, -back)
   return {
-    title: data.date === today ? 'Hoy' : data.date,
+    title: formatDateHuman(date, today),
     subtitle: 'de 00:00 a 23:59',
-    start,
-    end,
-    records: data.records,
-    totals: lifeDayTotals(data.records, start, end),
+    start: `${date} 00:00`,
+    end: `${addDays(date, 1)} 00:00`,
   }
+}
+
+/** Días naturales que hay que cargar para cubrir un tramo pasado. */
+function datesOf(period: Period): string[] {
+  const first = dateOf(period.start)
+  const last = dateOf(addMinutes(period.end, -1))
+  return first === last ? [first] : [last, first]
+}
+
+/** No se retrocede antes del día de vida 1 ni antes del nacimiento. */
+function canGoBack(data: DayData, mode: DayMode, back: number): boolean {
+  if (mode === 'life' && data.lifeDay) return data.lifeDay.number - back > 1
+  return true
+}
+
+/** Ir y volver entre el tramo actual y los anteriores. */
+function PeriodNav({
+  period,
+  back,
+  canGoBack,
+  onChange,
+}: {
+  period: Period
+  back: number
+  canGoBack: boolean
+  onChange: (back: number) => void
+}) {
+  return (
+    <div class="period-nav">
+      <button
+        class="nav-arrow"
+        aria-label="Tramo anterior"
+        disabled={!canGoBack}
+        onClick={() => onChange(back + 1)}
+      >
+        ◀
+      </button>
+      <div class="period-nav-main">
+        <span class="period-nav-title">{period.title}</span>
+        <span class="period-nav-sub">{period.subtitle}</span>
+      </div>
+      <button
+        class="nav-arrow"
+        aria-label="Tramo siguiente"
+        disabled={back === 0}
+        onClick={() => onChange(back - 1)}
+      >
+        ▶
+      </button>
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -215,39 +302,55 @@ function periodOf(data: DayData, mode: DayMode, today: string): Period {
 
 function PeriodCard({
   period,
+  totals: t,
   last,
   now,
+  showFreshness,
 }: {
   period: Period
+  totals: LifeDayTotals
   last: DayData['last']
   now: string
+  /** El "hace cuánto" solo tiene sentido mirando el tramo en curso. */
+  showFreshness: boolean
 }) {
-  const t = period.totals
   const elapsed = diffMinutes(period.start, now)
 
   return (
     <div class="card lifeday">
-      <div class="lifeday-head">
-        <div class="lifeday-title">{period.title}</div>
-        <div class="lifeday-range">
-          {period.subtitle}
-          {elapsed > 0 && ` · llevamos ${formatDuration(Math.min(elapsed, 24 * 60))}`}
+      {showFreshness && elapsed > 0 && (
+        <div class="lifeday-head">
+          <div class="lifeday-range">
+            llevamos {formatDuration(Math.min(elapsed, 24 * 60))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div class="kpi-row">
         <StatTile
           label="💧 Pises"
           value={String(t.pees)}
-          note={last.pee ? formatAgo(diffMinutes(last.pee.start, now)) : 'sin registros'}
-          editId={last.pee?.id}
+          note={
+            !showFreshness
+              ? null
+              : last.pee
+                ? formatAgo(diffMinutes(last.pee.start, now))
+                : 'sin registros'
+          }
+          editId={showFreshness ? last.pee?.id : undefined}
           onEdit={goEdit}
         />
         <StatTile
           label="💩 Cacas"
           value={String(t.poops)}
-          note={last.poop ? formatAgo(diffMinutes(last.poop.start, now)) : 'sin registros'}
-          editId={last.poop?.id}
+          note={
+            !showFreshness
+              ? null
+              : last.poop
+                ? formatAgo(diffMinutes(last.poop.start, now))
+                : 'sin registros'
+          }
+          editId={showFreshness ? last.poop?.id : undefined}
           onEdit={goEdit}
         />
       </div>

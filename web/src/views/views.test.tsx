@@ -5,7 +5,7 @@
 import render from 'preact-render-to-string'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { addDays, nowMadrid } from '../lib/dates'
-import { lifeDayRange } from '../lib/lifeday'
+import { lifeDayRange, lifeDayTotals } from '../lib/lifeday'
 import { cacheDay, clearDayCache } from '../store'
 import { aDay, aDiaper, aFeed, aHistoryDay, aSleep, aWeight, someTotals } from '../test-fixtures'
 import type { DayData } from '../types'
@@ -19,31 +19,48 @@ import { Timeline } from './Timeline'
 const NOW = nowMadrid()
 const TODAY = NOW.slice(0, 10)
 const USER = { email: 'ana@example.com', name: 'Ana' }
-const BIRTH = `${TODAY} 00:17`
 
+// Nacimiento a medianoche de hace dos días: así el día de vida 3 coincide
+// exactamente con el día natural de hoy y las pruebas valen a cualquier hora,
+// en los dos calendarios.
+const LIFE_DAY = 3
+const BIRTH = `${addDays(TODAY, -(LIFE_DAY - 1))} 00:00`
+
+/**
+ * Un día con sus registros. Los totales se calculan de ellos, no se declaran:
+ * una fixture que dijera "4 pises" sin cuatro pañales sería mentira, y la
+ * pantalla dejaría de estar probada de verdad.
+ */
 function day(partial: Partial<DayData> = {}): DayData {
-  const range = lifeDayRange(BIRTH, 1)
+  const range = lifeDayRange(BIRTH, LIFE_DAY)
+  const records = partial.records ?? []
   return aDay({
     date: TODAY,
     serverNow: NOW,
     settings: { birth: BIRTH, birthWeightG: 3420 },
     lifeDay: {
-      number: 3,
+      number: LIFE_DAY,
       start: range.start,
       end: range.end,
-      records: partial.records ?? [],
-      totals: {
-        pees: 4,
-        poops: 2,
-        diapers: 5,
-        feeds: 6,
-        breastMin: 25,
-        expressedMl: 130,
-        formulaMl: 180,
-        milkMl: 310,
-      },
+      records,
+      totals: lifeDayTotals(records, range.start, range.end),
     },
     ...partial,
+  })
+}
+
+/** Un día de vida con cuatro pises, dos cacas y 310 ml de leche. */
+function diaCompleto(): DayData {
+  return day({
+    records: [
+      aFeed({ start: `${TODAY} 08:00`, end: `${TODAY} 08:20`, formulaMl: 180 }),
+      aFeed({ start: `${TODAY} 12:00`, end: `${TODAY} 12:20`, expressedMl: 130 }),
+      aFeed({ start: `${TODAY} 16:00`, end: `${TODAY} 16:25`, breastMin: 25, breastSide: 'ambos' }),
+      aDiaper({ start: `${TODAY} 07:00`, pee: true, poop: true }),
+      aDiaper({ start: `${TODAY} 10:00`, pee: true, poop: false }),
+      aDiaper({ start: `${TODAY} 13:00`, pee: true, poop: true }),
+      aDiaper({ start: `${TODAY} 18:00`, pee: true, poop: false }),
+    ],
   })
 }
 
@@ -56,7 +73,7 @@ beforeEach(() => clearDayCache())
 
 describe('Dashboard · día de vida', () => {
   it('muestra el número de día y los contadores, sin objetivos', () => {
-    const html = renderDashboard(day())
+    const html = renderDashboard(diaCompleto())
     expect(html).toContain('Día de vida 3')
     expect(html).toContain('>4<') // pises
     expect(html).toContain('>2<') // cacas
@@ -84,13 +101,13 @@ describe('Dashboard · día de vida', () => {
   })
 
   it('sin registros los contadores lo dicen sin dejar hueco en blanco', () => {
-    const html = renderDashboard(day({ lifeDay: { ...day().lifeDay!, totals: someTotals() } }))
+    const html = renderDashboard(day())
     expect(html).toContain('sin registros')
     expect(html).toContain('Sin tomas')
   })
 
   it('desglosa fórmula y extraída sin mezclarlas con los minutos de pecho', () => {
-    const html = renderDashboard(day())
+    const html = renderDashboard(diaCompleto())
     expect(html).toContain('180 ml fórmula')
     expect(html).toContain('130 ml extraída')
     expect(html).toContain('25 min de pecho directo (no cuantificable)')
@@ -188,7 +205,7 @@ describe('Dashboard · lo registrado', () => {
   })
 
   it('sin registros no muestra huecos raros', () => {
-    const html = renderDashboard(day({ records: [], lifeDay: { ...day().lifeDay!, totals: someTotals() } }))
+    const html = renderDashboard(day({ records: [] }))
     expect(html).toContain('sin registros')
     expect(html).toContain('Sin sueños registrados todavía')
     expect(html).toContain('Sin registros en este periodo todavía')
@@ -264,7 +281,7 @@ describe('Timeline', () => {
     const toma = aFeed({ start: `${TODAY} 10:00`, end: `${TODAY} 10:20` })
     cacheDay(day({ records: [toma] }))
     const html = render(<Timeline date={TODAY} />)
-    expect(html).toContain('Día de vida 1')
+    expect(html).toContain('Día de vida 3')
     expect(html).toContain('1 toma')
     expect(html).toContain('0 pañales')
   })
@@ -280,7 +297,7 @@ describe('Timeline', () => {
     const html = render(<Timeline date={TODAY} />)
     expect(html).toContain('Día natural')
     // En modo día de vida la cabecera muestra el tramo horario real.
-    expect(html).toContain('00:17 → 00:17')
+    expect(html).toContain('00:00 → 00:00')
   })
 
   it('ancla en su hora de fin lo que viene del día anterior', () => {
@@ -300,8 +317,8 @@ describe('Ajustes', () => {
   it('carga el nacimiento y el peso al nacer guardados', () => {
     cacheDay(day())
     const html = render(<SettingsView />)
-    expect(html).toContain(`value="${TODAY}"`)
-    expect(html).toContain('value="00:17"')
+    expect(html).toContain(`value="${BIRTH.slice(0, 10)}"`)
+    expect(html).toContain('value="00:00"')
     expect(html).toContain('value="3420"')
     expect(html).toContain('3,420 kg')
     expect(html).toContain('día de vida')
@@ -443,5 +460,37 @@ describe('Formulario de toma', () => {
     cacheDay(day({ records: [toma] }))
     const html = render(<EditRecord id="solo-bibe" />)
     expect(html).toContain('60 ml de fórmula a las 13:13')
+  })
+})
+
+describe('Dashboard · navegar a tramos anteriores', () => {
+  it('muestra el tramo en curso y deja retroceder', () => {
+    const html = renderDashboard(diaCompleto())
+    expect(html).toContain('Día de vida 3')
+    expect(html).toContain('aria-label="Tramo anterior"')
+    // Ya estamos en el más reciente: no hay hacia dónde avanzar.
+    expect(html).toContain('aria-label="Tramo siguiente" disabled')
+  })
+
+  it('el día de vida 1 no deja seguir hacia atrás', () => {
+    const range = lifeDayRange(BIRTH, 1)
+    const html = renderDashboard(
+      day({ lifeDay: { number: 1, ...range, records: [], totals: someTotals() } })
+    )
+    expect(html).toContain('aria-label="Tramo anterior" disabled')
+  })
+
+  it('el pañal guarda cuánto pis y si fue pedete', () => {
+    const panal = aDiaper({
+      start: `${TODAY} 12:00`,
+      pee: true,
+      peeAmount: 'mucho',
+      poop: true,
+      consistency: 'pedete',
+    })
+    cacheDay(day({ records: [panal] }))
+    const html = render(<Timeline date={TODAY} />)
+    expect(html).toContain('pis mucho')
+    expect(html).toContain('pedete')
   })
 })

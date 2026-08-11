@@ -11,8 +11,10 @@ export type RecordType = 'sleep' | 'feed' | 'diaper' | 'bath' | 'weight'
 
 export type SleepKind = 'siesta' | 'nocturno'
 export type BathKind = 'completo' | 'aseo'
-export type BreastSide = 'izquierdo' | 'derecho' | 'ambos'
-export type Consistency = 'liquida' | 'pastosa' | 'solida'
+/** "desconocido" es una respuesta válida: de madrugada vale más no saberlo. */
+export type BreastSide = 'izquierdo' | 'derecho' | 'ambos' | 'desconocido'
+export type Consistency = 'pedete' | 'liquida' | 'pastosa' | 'solida'
+export type PeeAmount = 'poco' | 'medio' | 'mucho'
 
 /** Lo que comparten todos los registros. */
 interface RecordBase {
@@ -53,7 +55,10 @@ export interface FeedRecord extends IntervalBase {
 export interface DiaperRecord extends RecordBase {
   type: 'diaper'
   pee: boolean
+  /** Cuánto pis; solo tiene sentido si `pee`. */
+  peeAmount: PeeAmount | null
   poop: boolean
+  /** Consistencia de la caca; solo tiene sentido si `poop`. */
   consistency: Consistency | null
 }
 

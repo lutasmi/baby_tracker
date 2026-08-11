@@ -328,3 +328,90 @@ describe('sueño', () => {
     expect(s).toMatchObject({ pee: true, poop: true, consistency: 'pastosa' })
   })
 })
+
+describe('cuando no se sabe qué pecho fue', () => {
+  const sinAnotar = tetada('desconocido', '2026-08-07 03:00', '2026-08-07 03:20')
+
+  it('una tetada sin anotar se guarda como tal, sin inventar lado', () => {
+    expect(buildInput('id', 'feed', feedState({ sessions: [sinAnotar] }))).toMatchObject({
+      breastMin: 20,
+      breastSide: 'desconocido',
+    })
+  })
+
+  it('mezclada con un lado conocido sigue sin saberse', () => {
+    // Media respuesta no autoriza a decir "ambos".
+    expect(breastSideOf([IZQ, sinAnotar])).toBe('desconocido')
+  })
+
+  it('si las conocidas ya suman los dos pechos, es "ambos" igualmente', () => {
+    expect(breastSideOf([IZQ, DER, sinAnotar])).toBe('ambos')
+  })
+})
+
+describe('hora de fin del biberón', () => {
+  it('sin pedirla, la toma es puntual', () => {
+    const s = { ...feedState({ formulaMl: 60 }), start: '2026-08-07 13:13' }
+    expect(buildInput('id', 'feed', s)).toMatchObject({
+      start: '2026-08-07 13:13',
+      end: '2026-08-07 13:13',
+      durationMin: 0,
+    })
+  })
+
+  it('pidiéndola, se guarda la duración: no es igual en 3 minutos que en 20', () => {
+    const s = {
+      ...feedState({ formulaMl: 60 }),
+      start: '2026-08-07 13:13',
+      end: '2026-08-07 13:33',
+      hasEnd: true,
+    }
+    expect(validate('feed', s, NOW)).toBeNull()
+    expect(buildInput('id', 'feed', s)).toMatchObject({
+      start: '2026-08-07 13:13',
+      end: '2026-08-07 13:33',
+      durationMin: 20,
+    })
+  })
+
+  it('un biberón con duración se reabre conservándola', () => {
+    const previa = aFeed({
+      start: '2026-08-07 13:13',
+      end: '2026-08-07 13:33',
+      durationMin: 20,
+      formulaMl: 60,
+    })
+    const s = initialState('feed', previa, null, NOW)
+    expect(s.hasEnd).toBe(true)
+    expect(buildInput(previa.id, 'feed', s)).toMatchObject({ end: '2026-08-07 13:33' })
+  })
+
+  it('un biberón puntual se reabre sin pedir el fin', () => {
+    const previa = aFeed({ start: '2026-08-07 13:13', end: '2026-08-07 13:13', formulaMl: 60 })
+    expect(initialState('feed', previa, null, NOW).hasEnd).toBe(false)
+  })
+})
+
+describe('detalle del pañal', () => {
+  it('la cantidad de pis solo viaja si hubo pis', () => {
+    const base = initialState('diaper', null, null, NOW)
+    const conPis = { ...base, pee: true, poop: false, peeAmount: 'mucho' as const }
+    expect(buildInput('id', 'diaper', conPis)).toMatchObject({ peeAmount: 'mucho' })
+
+    const sinPis = { ...base, pee: false, poop: true, peeAmount: 'mucho' as const }
+    expect(buildInput('id', 'diaper', sinPis)).toMatchObject({ peeAmount: null })
+  })
+
+  it('el pedete es una consistencia más', () => {
+    const s = { ...initialState('diaper', null, null, NOW), poop: true, consistency: 'pedete' as const }
+    expect(buildInput('id', 'diaper', s)).toMatchObject({ consistency: 'pedete' })
+  })
+
+  it('reabrir un pañal conserva sus dos detalles', () => {
+    const panal = aDiaper({ pee: true, peeAmount: 'poco', poop: true, consistency: 'pedete' })
+    expect(initialState('diaper', panal, null, NOW)).toMatchObject({
+      peeAmount: 'poco',
+      consistency: 'pedete',
+    })
+  })
+})

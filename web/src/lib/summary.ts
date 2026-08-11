@@ -11,12 +11,16 @@ const SIDE_LABELS: Record<string, string> = {
   izquierdo: 'izq.',
   derecho: 'der.',
   ambos: 'ambos',
+  desconocido: 'lado sin anotar',
 }
 const CONSISTENCY_LABELS: Record<string, string> = {
+  pedete: 'pedete',
   liquida: 'líquida',
   pastosa: 'pastosa',
   solida: 'sólida',
 }
+
+const PEE_LABELS: Record<string, string> = { poco: 'poco', medio: 'medio', mucho: 'mucho' }
 
 export function recordIcon(r: BabyRecord): string {
   switch (r.type) {
@@ -78,8 +82,12 @@ export function recordDetail(r: BabyRecord): string {
 
   if (r.type === 'feed') {
     parts.push(...feedParts(r))
-  } else if (r.type === 'diaper' && r.consistency) {
-    parts.push(`consistencia ${CONSISTENCY_LABELS[r.consistency] ?? r.consistency}`)
+  } else if (r.type === 'diaper') {
+    if (r.peeAmount) parts.push(`pis ${PEE_LABELS[r.peeAmount] ?? r.peeAmount}`)
+    if (r.consistency === 'pedete') parts.push('pedete')
+    else if (r.consistency) {
+      parts.push(`consistencia ${CONSISTENCY_LABELS[r.consistency] ?? r.consistency}`)
+    }
   } else if (r.type === 'weight') {
     parts.push(formatKg(r.grams))
   }

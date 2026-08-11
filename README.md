@@ -15,10 +15,11 @@ La especificación original está en [docs/especificacion.md](docs/especificacio
 - **El periodo de un vistazo**: una franja horizontal con un carril por tipo —sueño, tomas, pises, cacas— donde se ve a qué horas pasa cada cosa y cómo se relacionan entre sí. Marca dónde estamos ahora y cada hito abre su registro.
 - **Contadores del periodo**: pises, cacas, fórmula y leche materna extraída, con cuánto hace del último de cada cosa.
 - **Una toma admite varias tetadas**: un pecho, luego el otro, y otra vez si se queda con hambre. Sigue siendo **una sola toma**, así que el contador no se dispara. Los minutos se suman y las horas de la toma salen de la primera y la última tetada.
-- **El biberón es puntual**: cantidad y hora, sin fin que ajustar. Queda como "60 ml de fórmula a las 13:13".
+- **El biberón es puntual**: cantidad y hora, sin fin que ajustar. Queda como "60 ml de fórmula a las 13:13". Si interesa, se le puede añadir hora de fin: no es lo mismo en tres minutos que en veinte.
+- **Se puede navegar a tramos anteriores** en la pantalla principal para ver sus contadores y su franja, en cualquiera de los dos calendarios.
 - Una misma toma puede combinar **pecho (min), leche materna extraída (ml) y fórmula (ml)**; los minutos y los mililitros nunca se mezclan.
 - **Sueño** con inicio y fin, registrable después de que haya ocurrido. El cronómetro de un toque sigue estando, pero es auxiliar: la aplicación no da por hecho que el bebé sigue dormido porque nadie cerró un sueño.
-- **Pañales**: pis y caca son casillas independientes, así que un pañal puede llevar las dos; la consistencia solo aparece cuando hay caca.
+- **Pañales**: pis y caca son casillas independientes, así que un pañal puede llevar las dos. Cada uno con su detalle opcional —cuánto pis, y cómo era la caca, pedete incluido—, que solo se pregunta si hubo aquello a lo que se refiere.
 - **Baños**: completo o aseo rápido, con duración opcional.
 - **Tiempo desde la toma anterior**, al registrar una toma y en cada toma de la cronología, para no tener que restar.
 - **Peso**: cada pesada con su hora, y la variación en gramos y en porcentaje respecto al peso al nacer. Se muestra el dato, sin interpretarlo.

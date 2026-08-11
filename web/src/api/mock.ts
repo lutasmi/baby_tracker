@@ -75,6 +75,7 @@ function seedRecords(): BabyRecord[] {
       start: `${today} 08:10`,
       pee: true,
       poop: true,
+      peeAmount: 'medio',
       consistency: 'pastosa',
       notes: '',
       createdAt: `${today} 08:10`,
@@ -111,6 +112,7 @@ function seedRecords(): BabyRecord[] {
       type: 'diaper',
       start: `${today} 12:20`,
       pee: true,
+      peeAmount: 'poco',
       poop: false,
       consistency: null,
       notes: '',
@@ -172,7 +174,13 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
     if (input.type === 'sleep' || input.type === 'feed') {
       return { ...input, durationMin: input.end ? diffMinutes(input.start, input.end) : null }
     }
-    if (input.type === 'diaper' && !input.poop) return { ...input, consistency: null }
+    if (input.type === 'diaper') {
+      return {
+        ...input,
+        consistency: input.poop ? input.consistency : null,
+        peeAmount: input.pee ? input.peeAmount : null,
+      }
+    }
     return input
   }
 

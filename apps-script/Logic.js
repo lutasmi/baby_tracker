@@ -83,7 +83,14 @@ var RECORD_TYPES = {
         key: 'breastSide',
         column: 'Pecho_Lado',
         kind: 'enum',
-        values: { izquierdo: 'Izquierdo', derecho: 'Derecho', ambos: 'Ambos' },
+        // "No recuerdo" existe a propósito: de madrugada es mejor no saberlo
+        // que inventarse un pecho.
+        values: {
+          izquierdo: 'Izquierdo',
+          derecho: 'Derecho',
+          ambos: 'Ambos',
+          desconocido: 'No recuerdo',
+        },
       },
       { key: 'expressedMl', column: 'Extraida_Ml', kind: 'int', max: 1000 },
       { key: 'formulaMl', column: 'Formula_Ml', kind: 'int', max: 1000 },
@@ -97,12 +104,18 @@ var RECORD_TYPES = {
     interval: false,
     fields: [
       { key: 'pee', column: 'Pis', kind: 'bool' },
+      {
+        key: 'peeAmount',
+        column: 'Pis_Cantidad',
+        kind: 'enum',
+        values: { poco: 'Poco', medio: 'Medio', mucho: 'Mucho' },
+      },
       { key: 'poop', column: 'Caca', kind: 'bool' },
       {
         key: 'consistency',
         column: 'Consistencia',
         kind: 'enum',
-        values: { liquida: 'Líquida', pastosa: 'Pastosa', solida: 'Sólida' },
+        values: { pedete: 'Pedete', liquida: 'Líquida', pastosa: 'Pastosa', solida: 'Sólida' },
       },
     ],
     requireAny: ['pee', 'poop'],
@@ -439,9 +452,10 @@ function applyTypeRules(record, spec) {
       }
     }
   }
-  if (record.type === 'diaper' && !record.poop) {
-    // La consistencia solo aplica cuando hay caca.
-    record.consistency = null;
+  if (record.type === 'diaper') {
+    // Cada detalle solo aplica si hubo aquello a lo que se refiere.
+    if (!record.poop) record.consistency = null;
+    if (!record.pee) record.peeAmount = null;
   }
   return record;
 }

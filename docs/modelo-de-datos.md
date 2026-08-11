@@ -44,16 +44,24 @@ editas una hora a mano la duración se corrige sola.
 
 **`Sueno`** — `Tipo` (Siesta · Nocturno)
 
-**`Tomas`** — `Pecho_Min`, `Pecho_Lado` (Izquierdo · Derecho · Ambos),
-`Extraida_Ml`, `Formula_Ml`
+**`Tomas`** — `Pecho_Min`, `Pecho_Lado` (Izquierdo · Derecho · Ambos · No
+recuerdo), `Extraida_Ml`, `Formula_Ml`
+
+> "No recuerdo" es una respuesta válida a propósito: de madrugada vale más no
+> saber qué pecho fue que inventárselo. Si una tetada queda sin anotar, la toma
+> entera se guarda como "No recuerdo", salvo que las demás ya sumen los dos
+> pechos.
+
+> Una toma puede tener varias tetadas y sigue siendo **un solo registro**: se
+> guarda la suma de minutos y el intervalo va de la primera a la última.
 
 > Los minutos de pecho y los mililitros son magnitudes distintas y viven en
 > columnas distintas. No se convierten entre sí en ningún punto del sistema:
 > del pecho directo no sabemos cuántos mililitros ha tomado el bebé, y fingir
 > lo contrario falsearía los totales.
 
-**`Panales`** — `Pis` (TRUE/vacío), `Caca` (TRUE/vacío), `Consistencia`
-(Líquida · Pastosa · Sólida)
+**`Panales`** — `Pis` (TRUE/vacío), `Pis_Cantidad` (Poco · Medio · Mucho),
+`Caca` (TRUE/vacío), `Consistencia` (Pedete · Líquida · Pastosa · Sólida)
 
 > Pis y caca son dos columnas independientes, no un desplegable con tres
 > opciones. "Ambos" existía antes solo porque no había sitio para dos campos.

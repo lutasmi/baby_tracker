@@ -253,6 +253,33 @@ button {
 .action-diaper { background: var(--diaper-soft); color: var(--diaper); }
 .action-bath { background: var(--bath-soft); color: var(--bath); }
 
+/* ---------- Navegación entre tramos ---------- */
+
+.period-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.period-nav-main {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.period-nav-title {
+  display: block;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.period-nav-sub {
+  display: block;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
 /* ---------- Día de vida (bloque principal) ---------- */
 
 .lifeday-head {
@@ -448,6 +475,16 @@ button {
   gap: 8px;
 }
 
+/* Acción secundaria en un formulario: no compite con el botón de guardar. */
+.btn-link {
+  align-self: flex-start;
+  min-height: 40px;
+  padding: 4px 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
 /* Una tetada dentro de la toma. Varias siguen siendo una sola toma. */
 .session {
   background: var(--surface);
@@ -554,6 +591,7 @@ select:focus {
 
 .seg {
   display: flex;
+  flex-wrap: wrap;
   background: var(--surface-2);
   border-radius: var(--radius-sm);
   padding: 3px;
@@ -561,7 +599,7 @@ select:focus {
 }
 
 .seg button {
-  flex: 1;
+  flex: 1 1 70px;
   min-height: 44px;
   border-radius: 10px;
   font-size: 15px;

@@ -10,6 +10,7 @@ import type {
   BreastSide,
   Consistency,
   FeedRecord,
+  PeeAmount,
   RecordInput,
   RecordType,
   SleepKind,
@@ -52,7 +53,10 @@ export interface FormState {
   active: ComponentKey[]
   pee: boolean
   poop: boolean
+  peeAmount: PeeAmount | ''
   consistency: Consistency | ''
+  /** El biberón es puntual salvo que se pida una hora de fin a propósito. */
+  hasEnd: boolean
   grams: number
   notes: string
 }
@@ -93,11 +97,20 @@ export function breastMinutes(sessions: BreastSession[]): number {
   return sessions.reduce((total, s) => total + sessionMinutes(s), 0)
 }
 
-/** Qué pechos se usaron: si hubo de los dos, "ambos". */
+/**
+ * Qué pechos se usaron en la toma.
+ *
+ * Con tetadas de los dos lados es "ambos". Si alguna quedó sin anotar, el
+ * resultado es "no recuerdo" salvo que las conocidas ya sumen los dos pechos:
+ * media respuesta no autoriza a inventar la otra media.
+ */
 export function breastSideOf(sessions: BreastSession[]): BreastSide | null {
   const sides = new Set(sessions.filter((s) => sessionMinutes(s) > 0).map((s) => s.side))
   if (sides.size === 0) return null
-  if (sides.size > 1 || sides.has('ambos')) return 'ambos'
+
+  const unknown = sides.delete('desconocido')
+  if (sides.has('ambos') || (sides.has('izquierdo') && sides.has('derecho'))) return 'ambos'
+  if (unknown || sides.size === 0) return 'desconocido'
   return [...sides][0]
 }
 
@@ -109,7 +122,9 @@ export function breastSideOf(sessions: BreastSession[]): BreastSide | null {
  * anota "a las 13:13", no "de 13:13 a la hora que fuera cuando lo apuntaste".
  */
 export function timesFromSessions(state: FormState): { start: string; end: string } {
-  if (state.sessions.length === 0) return { start: state.start, end: state.start }
+  if (state.sessions.length === 0) {
+    return { start: state.start, end: state.hasEnd ? state.end : state.start }
+  }
   const starts = state.sessions.map((s) => s.start)
   const ends = state.sessions.map((s) => s.end)
   return {
@@ -153,7 +168,9 @@ export function initialState(
     active: [],
     pee: false,
     poop: false,
+    peeAmount: '',
     consistency: '',
+    hasEnd: false,
     grams: 0,
     notes: '',
   }
@@ -208,9 +225,17 @@ export function initialState(
         expressedMl: r.expressedMl,
         formulaMl: r.formulaMl,
         active: activeKeysOf(r),
+        // Un biberón que duró un rato conserva su fin al reabrirlo.
+        hasEnd: r.breastMin === 0 && r.end != null && r.end !== r.start,
       }
     case 'diaper':
-      return { ...state, pee: r.pee, poop: r.poop, consistency: r.consistency ?? '' }
+      return {
+        ...state,
+        pee: r.pee,
+        poop: r.poop,
+        peeAmount: r.peeAmount ?? '',
+        consistency: r.consistency ?? '',
+      }
     case 'bath':
       return { ...state, bathKind: r.kind, bathDurationMin: r.durationMin }
     case 'weight':
@@ -271,7 +296,8 @@ export function buildInput(id: string, type: RecordType, s: FormState): RecordIn
         type: 'diaper',
         pee: s.pee,
         poop: s.poop,
-        // La consistencia solo aplica cuando hay caca.
+        // Cada detalle solo viaja si hubo aquello a lo que se refiere.
+        peeAmount: s.pee && s.peeAmount ? s.peeAmount : null,
         consistency: s.poop && s.consistency ? s.consistency : null,
       }
     case 'bath':

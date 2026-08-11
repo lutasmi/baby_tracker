@@ -31,6 +31,7 @@ const diaper = (id: string, start: string, pee: boolean, poop: boolean): RecordI
   type: 'diaper',
   start,
   pee,
+  peeAmount: null,
   poop,
   consistency: null,
   notes: '',
