@@ -419,19 +419,27 @@ describe('Gráfica de peso', () => {
 })
 
 describe('Formulario de toma', () => {
-  it('se abre en el caso simple: una hora y las cantidades, sin tetadas', () => {
+  it('se abre vacía, con las dos cosas que pueden pasar en una toma', () => {
     cacheDay(day())
     const html = render(<NewRecord type="feed" />)
     expect(html).toContain('+ Añadir tetada')
-    // Sin tetadas la toma es puntual: una sola hora, no inicio y fin.
-    expect(html).toContain('Hora')
-    expect(html).not.toContain('Empezó')
-    expect(html).not.toContain('Terminó')
+    expect(html).toContain('+ Añadir biberón')
   })
 
-  it('al reabrir una toma con pecho reconstruye su tetada', () => {
+  it('al reabrir una toma vuelve cada elemento con su hora', () => {
     const toma = aFeed({
       id: 'toma-mixta',
+      items: [
+        {
+          id: 'i1',
+          kind: 'pecho',
+          start: `${TODAY} 11:42`,
+          end: `${TODAY} 12:03`,
+          side: 'ambos',
+          ml: 0,
+        },
+        { id: 'i2', kind: 'formula', start: `${TODAY} 12:13`, end: null, side: null, ml: 60 },
+      ],
       start: `${TODAY} 11:42`,
       end: `${TODAY} 12:13`,
       durationMin: 31,
@@ -445,13 +453,18 @@ describe('Formulario de toma', () => {
     expect(html).toContain('Empezó')
     expect(html).toContain('Terminó')
     expect(html).toContain('21 min')
-    // Y el biberón de la misma toma sigue ahí.
+    // El biberón de la misma toma sigue ahí, con su cantidad y su hora.
+    expect(html).toContain('Fórmula 1')
     expect(html).toContain('value="60"')
+    expect(html).toContain('value="12:13"')
+    // Y la toma entera abarca de la primera tetada al último biberón.
+    expect(html).toContain('Toma de <strong>11:42</strong> a <strong>12:13</strong>')
   })
 
-  it('resume en una frase lo que se va a guardar', () => {
+  it('el biberón puede llevar su propia hora de fin', () => {
     const toma = aFeed({
       id: 'solo-bibe',
+      items: [{ id: 'b1', kind: 'formula', start: `${TODAY} 13:13`, end: null, side: null, ml: 60 }],
       start: `${TODAY} 13:13`,
       end: `${TODAY} 13:13`,
       durationMin: 0,
@@ -459,6 +472,20 @@ describe('Formulario de toma', () => {
     })
     cacheDay(day({ records: [toma] }))
     const html = render(<EditRecord id="solo-bibe" />)
+    expect(html).toContain('+ Añadir hora de fin')
+    expect(html).toContain('Toma a las <strong>13:13</strong>')
+  })
+
+  it('resume en una frase lo que se va a guardar', () => {
+    const toma = aFeed({
+      id: 'resumen',
+      start: `${TODAY} 13:13`,
+      end: `${TODAY} 13:13`,
+      durationMin: 0,
+      formulaMl: 60,
+    })
+    cacheDay(day({ records: [toma] }))
+    const html = render(<EditRecord id="resumen" />)
     expect(html).toContain('60 ml de fórmula a las 13:13')
   })
 })

@@ -69,33 +69,17 @@ var RECORD_TYPES = {
     ],
   },
 
+  // La toma es el único tipo agrupado: **una fila por cada cosa que pasa
+  // dentro de ella**, unidas por `Toma_ID`. Una toma con dos tetadas y un
+  // biberón son tres filas, y así cada elemento conserva su propia hora en vez
+  // de quedar reducido a un total. Su intervalo y sus totales se calculan de
+  // esas filas, nunca se guardan aparte. Todo lo suyo está más abajo, en "La
+  // toma y sus elementos".
   feed: {
     sheet: 'Tomas',
     label: 'Toma',
+    grouped: true,
     interval: true,
-    openAllowed: false,
-    minDuration: 0, // una toma puntual es válida
-    // Los minutos de pecho y los mililitros son magnitudes distintas y viven en
-    // columnas distintas: nunca se convierten entre sí.
-    fields: [
-      { key: 'breastMin', column: 'Pecho_Min', kind: 'int', max: 600 },
-      {
-        key: 'breastSide',
-        column: 'Pecho_Lado',
-        kind: 'enum',
-        // "No recuerdo" existe a propósito: de madrugada es mejor no saberlo
-        // que inventarse un pecho.
-        values: {
-          izquierdo: 'Izquierdo',
-          derecho: 'Derecho',
-          ambos: 'Ambos',
-          desconocido: 'No recuerdo',
-        },
-      },
-      { key: 'expressedMl', column: 'Extraida_Ml', kind: 'int', max: 1000 },
-      { key: 'formulaMl', column: 'Formula_Ml', kind: 'int', max: 1000 },
-    ],
-    requireAny: ['breastMin', 'expressedMl', 'formulaMl'],
   },
 
   diaper: {
@@ -163,11 +147,20 @@ function specOf(type) {
 /** Columnas de la pestaña de un tipo, en el orden en que se crean. */
 function columnsFor(type) {
   var spec = specOf(type);
+  if (spec.grouped) return FEED_COLUMNS.slice();
   var cols = COMMON_COLUMNS.slice();
   cols = cols.concat(spec.interval ? INTERVAL_COLUMNS : [MOMENT_COLUMN]);
   for (var i = 0; i < spec.fields.length; i++) cols.push(spec.fields[i].column);
   cols.push(NOTES_COLUMN);
   return cols.concat(AUDIT_COLUMNS);
+}
+
+/**
+ * Columnas de versiones anteriores que se siguen leyendo pero ya no se crean.
+ * `setup()` las respeta si están; nadie escribe en ellas.
+ */
+function legacyColumnsFor(type) {
+  return type === 'feed' ? FEED_LEGACY_COLUMNS.slice() : [];
 }
 
 /** Columna que guarda el instante principal del registro. */
@@ -351,6 +344,8 @@ function readEnum(value, field) {
 function normalizeAndValidate(input, now) {
   if (!input || typeof input !== 'object') throw apiError('VALIDATION', 'Falta el registro.');
   var spec = specOf(input.type);
+  // La toma no se valida campo a campo: se valida elemento a elemento.
+  if (spec.grouped) return normalizeFeed(input, now);
 
   var id = String(input.id == null ? '' : input.id).trim();
   if (!id || id.length > 80) throw apiError('VALIDATION', 'Identificador no válido.');
@@ -410,7 +405,7 @@ function normalizeAndValidate(input, now) {
   }
 
   if (spec.requireAny && !hasAny(out, spec.requireAny)) {
-    throw apiError('VALIDATION', requireAnyMessage(input.type));
+    throw apiError('VALIDATION', requireAnyMessage());
   }
   requirePositive(out, spec);
   applyTypeRules(out, spec);
@@ -424,10 +419,7 @@ function hasAny(record, keys) {
   return false;
 }
 
-function requireAnyMessage(type) {
-  if (type === 'feed') {
-    return 'La toma necesita al menos un componente: pecho, leche extraída o fórmula.';
-  }
+function requireAnyMessage() {
   return 'El pañal tiene que llevar pis, caca o las dos cosas.';
 }
 
@@ -443,21 +435,345 @@ function requirePositive(record, spec) {
 
 /** Reglas que no caben en un descriptor de campo. */
 function applyTypeRules(record, spec) {
-  if (record.type === 'feed') {
-    if (!record.breastMin) record.breastSide = null;
-    if (record.breastMin && record.end) {
-      var dur = diffMinutes(record.start, record.end);
-      if (record.breastMin > dur + FUTURE_MARGIN_MIN) {
-        throw apiError('VALIDATION', 'Los minutos de pecho no pueden superar la duración de la toma.');
-      }
-    }
-  }
   if (record.type === 'diaper') {
     // Cada detalle solo aplica si hubo aquello a lo que se refiere.
     if (!record.poop) record.consistency = null;
     if (!record.pee) record.peeAmount = null;
   }
   return record;
+}
+
+// ---------------------------------------------------------------------------
+// La toma y sus elementos
+// ---------------------------------------------------------------------------
+//
+// La pestaña `Tomas` guarda **una fila por cada tetada y cada biberón**. Las
+// filas que comparten `Toma_ID` son la misma toma. El intervalo de la toma y
+// sus totales se derivan de sus elementos cada vez que se leen: al no estar
+// almacenados, no pueden contradecirlos.
+
+var FEED_COLUMNS = [
+  'ID',
+  'Toma_ID',
+  'Fecha',
+  'Hora_Inicio',
+  'Hora_Fin',
+  'Duracion_Min',
+  'Tipo',
+  'Pecho_Lado',
+  'Cantidad_Ml',
+  'Notas',
+].concat(AUDIT_COLUMNS);
+
+/** Columnas de las tomas guardadas con el modelo anterior, de una sola fila. */
+var FEED_LEGACY_COLUMNS = ['Pecho_Min', 'Extraida_Ml', 'Formula_Ml'];
+var FEED_NUMERIC_COLUMNS = ['Duracion_Min', 'Cantidad_Ml'];
+
+var FEED_KINDS = { pecho: 'Pecho', extraida: 'Extraída', formula: 'Fórmula' };
+var BREAST_SIDES = {
+  izquierdo: 'Izquierdo',
+  derecho: 'Derecho',
+  ambos: 'Ambos',
+  // "No recuerdo" existe a propósito: de madrugada es mejor no saberlo que
+  // inventarse un pecho.
+  desconocido: 'No recuerdo',
+};
+
+function isBreast(item) {
+  return item.kind === 'pecho';
+}
+
+/** Minutos que dura un elemento; los biberones puntuales valen 0. */
+function itemMinutes(item) {
+  return item.end ? Math.max(0, diffMinutes(item.start, item.end)) : 0;
+}
+
+/** Valida y normaliza un elemento de la toma. */
+function normalizeItem(input, now) {
+  if (!input || typeof input !== 'object') throw apiError('VALIDATION', 'Elemento no válido.');
+  var kind = reverseValues(FEED_KINDS)[normText(input.kind)];
+  if (!kind) throw apiError('VALIDATION', 'Tipo de elemento no válido en la toma.');
+
+  var id = String(input.id == null ? '' : input.id).trim();
+  if (!id || id.length > 80) throw apiError('VALIDATION', 'Identificador no válido.');
+
+  var start = String(input.start == null ? '' : input.start).trim();
+  if (!isValidDt(start)) throw apiError('VALIDATION', 'La hora del elemento no es válida.');
+  if (diffMinutes(now, start) > FUTURE_MARGIN_MIN) {
+    throw apiError('VALIDATION', 'Un elemento de la toma no puede empezar en el futuro.');
+  }
+
+  var end = input.end == null || input.end === '' ? null : String(input.end).trim();
+  if (end) {
+    if (!isValidDt(end)) throw apiError('VALIDATION', 'La hora de fin del elemento no es válida.');
+    if (diffMinutes(now, end) > FUTURE_MARGIN_MIN) {
+      throw apiError('VALIDATION', 'Un elemento de la toma no puede acabar en el futuro.');
+    }
+    var dur = diffMinutes(start, end);
+    if (dur < 0) throw apiError('VALIDATION', 'El fin debe ser posterior al inicio.');
+    if (dur > 24 * 60) throw apiError('VALIDATION', 'Un elemento no puede durar más de 24 horas.');
+  }
+
+  var item = { id: id, kind: kind, start: start, end: end, side: null, ml: 0 };
+
+  if (kind === 'pecho') {
+    if (!end) throw apiError('VALIDATION', 'Una tetada necesita hora de fin.');
+    if (itemMinutes(item) <= 0) {
+      throw apiError('VALIDATION', 'Cada tetada tiene que acabar después de empezar.');
+    }
+    if (input.side) {
+      item.side = reverseValues(BREAST_SIDES)[normText(input.side)];
+      if (!item.side) throw apiError('VALIDATION', 'Pecho no válido.');
+    }
+  } else {
+    item.ml = boundedInt(input.ml, 1000, 'la cantidad');
+    if (!item.ml) throw apiError('VALIDATION', 'La cantidad tiene que ser mayor que cero.');
+  }
+  return item;
+}
+
+/** Suma de los minutos de pecho de la toma. */
+function breastMinutesOf(items) {
+  var total = 0;
+  for (var i = 0; i < items.length; i++) {
+    if (isBreast(items[i])) total += itemMinutes(items[i]);
+  }
+  return total;
+}
+
+/**
+ * Qué pechos se usaron. Con tetadas de los dos lados es "ambos"; si alguna
+ * quedó sin anotar es "no recuerdo", salvo que las conocidas ya sumen los dos:
+ * media respuesta no autoriza a inventar la otra media.
+ */
+function breastSideOfItems(items) {
+  var izquierdo = false;
+  var derecho = false;
+  var ambos = false;
+  var desconocido = false;
+  var alguna = false;
+  for (var i = 0; i < items.length; i++) {
+    if (!isBreast(items[i]) || itemMinutes(items[i]) <= 0) continue;
+    alguna = true;
+    if (items[i].side === 'izquierdo') izquierdo = true;
+    else if (items[i].side === 'derecho') derecho = true;
+    else if (items[i].side === 'ambos') ambos = true;
+    else desconocido = true;
+  }
+  if (!alguna) return null;
+  if (ambos || (izquierdo && derecho)) return 'ambos';
+  if (desconocido) return 'desconocido';
+  return izquierdo ? 'izquierdo' : derecho ? 'derecho' : 'desconocido';
+}
+
+function mlOf(items, kind) {
+  var total = 0;
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].kind === kind) total += items[i].ml || 0;
+  }
+  return total;
+}
+
+/** La toma completa a partir de sus elementos: el intervalo y los totales. */
+function feedFromItems(id, items, meta) {
+  items = items.slice().sort(function (a, b) {
+    return a.start < b.start ? -1 : a.start > b.start ? 1 : 0;
+  });
+  // Ya están en orden, así que la toma empieza con el primero. El fin hay que
+  // buscarlo: una tetada larga puede acabar después de un biberón posterior.
+  var start = items[0].start;
+  var end = items[0].end || items[0].start;
+  for (var i = 1; i < items.length; i++) {
+    var itemEnd = items[i].end || items[i].start;
+    if (itemEnd > end) end = itemEnd;
+  }
+  return {
+    id: id,
+    type: 'feed',
+    start: start,
+    end: end,
+    durationMin: diffMinutes(start, end),
+    items: items,
+    breastMin: breastMinutesOf(items),
+    breastSide: breastSideOfItems(items),
+    expressedMl: mlOf(items, 'extraida'),
+    formulaMl: mlOf(items, 'formula'),
+    notes: meta.notes || '',
+    createdBy: meta.createdBy || '',
+    createdAt: meta.createdAt || '',
+    updatedBy: meta.updatedBy || null,
+    updatedAt: meta.updatedAt || null,
+  };
+}
+
+/** Valida una toma entera: sus elementos y que tenga al menos uno. */
+function normalizeFeed(input, now) {
+  var id = String(input.id == null ? '' : input.id).trim();
+  if (!id || id.length > 80) throw apiError('VALIDATION', 'Identificador no válido.');
+
+  var raw = input.items;
+  if (!raw || !raw.length) {
+    throw apiError('VALIDATION', 'La toma necesita al menos una tetada o un biberón.');
+  }
+  var items = [];
+  for (var i = 0; i < raw.length; i++) items.push(normalizeItem(raw[i], now));
+
+  return feedFromItems(id, items, {
+    notes: String(input.notes == null ? '' : input.notes)
+      .trim()
+      .slice(0, 500),
+  });
+}
+
+/** Una fila por elemento; todas comparten Toma_ID, notas y auditoría. */
+function feedToRows(record, deleted) {
+  var rows = [];
+  for (var i = 0; i < record.items.length; i++) {
+    var item = record.items[i];
+    var row = {
+      ID: item.id,
+      Toma_ID: record.id,
+      Fecha: dtDateOf(item.start),
+      Hora_Inicio: item.start,
+      Hora_Fin: item.end || '',
+      Duracion_Min: item.end ? itemMinutes(item) : '',
+      Tipo: FEED_KINDS[item.kind],
+      Pecho_Lado: item.side ? BREAST_SIDES[item.side] : '',
+      Cantidad_Ml: item.ml ? item.ml : '',
+      Notas: record.notes || '',
+      Creado_Por: record.createdBy || '',
+      Creado_En: record.createdAt || '',
+      Modificado_Por: record.updatedBy || '',
+      Modificado_En: record.updatedAt || '',
+      Eliminado: deleted ? 'TRUE' : '',
+    };
+    // Si la fila venía del modelo anterior, sus totales ya no significan nada:
+    // se vacían para que quien mire la hoja no lea dos versiones de lo mismo.
+    for (var j = 0; j < FEED_LEGACY_COLUMNS.length; j++) row[FEED_LEGACY_COLUMNS[j]] = '';
+    rows.push(row);
+  }
+  return rows;
+}
+
+/**
+ * Una fila de la pestaña Tomas. Devuelve el elemento y a qué toma pertenece.
+ *
+ * Las filas guardadas con el modelo anterior no tienen ni `Toma_ID` ni `Tipo`:
+ * se expanden a sus elementos para poder leerlas igual, y al editar esa toma se
+ * reescribe ya con el modelo nuevo.
+ */
+function rowToFeedItems(row) {
+  var id = String(row.ID == null ? '' : row.ID).trim();
+  if (!id) return null;
+  var fecha = parseDateCell(row.Fecha);
+  var start = parseDtCell(row.Hora_Inicio, fecha);
+  if (!start) return null;
+
+  var end = parseDtCell(row.Hora_Fin, fecha) || null;
+  if (end && diffMinutes(start, end) < 0 && dtDateOf(end) === fecha) {
+    end = addMinutesDt(end, 24 * 60);
+  }
+  var meta = {
+    notes: String(row.Notas == null ? '' : row.Notas).trim(),
+    createdBy: String(row.Creado_Por == null ? '' : row.Creado_Por).trim(),
+    createdAt: parseDtCell(row.Creado_En, '') || '',
+    updatedBy: String(row.Modificado_Por == null ? '' : row.Modificado_Por).trim() || null,
+    updatedAt: parseDtCell(row.Modificado_En, '') || null,
+  };
+  var deleted = isTruthyCell(row.Eliminado);
+  var side = reverseValues(BREAST_SIDES)[normText(row.Pecho_Lado)] || null;
+  var kind = reverseValues(FEED_KINDS)[normText(row.Tipo)];
+
+  if (kind) {
+    return {
+      feedId: String(row.Toma_ID == null ? '' : row.Toma_ID).trim() || id,
+      items: [
+        {
+          id: id,
+          kind: kind,
+          start: start,
+          end: end,
+          side: kind === 'pecho' ? side : null,
+          ml: kind === 'pecho' ? 0 : numOrNull(row.Cantidad_Ml) || 0,
+        },
+      ],
+      meta: meta,
+      deleted: deleted,
+    };
+  }
+
+  // Modelo anterior: totales en una sola fila.
+  var items = [];
+  var breastMin = numOrNull(row.Pecho_Min) || 0;
+  if (breastMin > 0) {
+    items.push({
+      id: id + '-pecho',
+      kind: 'pecho',
+      start: start,
+      end: addMinutesDt(start, breastMin),
+      side: side,
+      ml: 0,
+    });
+  }
+  var expressed = numOrNull(row.Extraida_Ml) || 0;
+  if (expressed > 0) {
+    items.push({
+      id: id + '-extraida',
+      kind: 'extraida',
+      start: start,
+      end: null,
+      side: null,
+      ml: expressed,
+    });
+  }
+  var formula = numOrNull(row.Formula_Ml) || 0;
+  if (formula > 0) {
+    items.push({
+      id: id + '-formula',
+      kind: 'formula',
+      start: start,
+      end: null,
+      side: null,
+      ml: formula,
+    });
+  }
+  if (!items.length) return null;
+
+  // `legacyEnd` conserva el intervalo guardado: la toma pudo durar más que la
+  // suma de sus elementos reconstruidos, y esa hora de fin es un dato real.
+  return { feedId: id, items: items, meta: meta, deleted: deleted, legacyEnd: end };
+}
+
+/** Junta las filas de la pestaña Tomas en tomas completas. */
+function groupFeedRows(parsedRows) {
+  var order = [];
+  var byId = {};
+  for (var i = 0; i < parsedRows.length; i++) {
+    var parsed = parsedRows[i];
+    if (!parsed || parsed.deleted) continue;
+    if (!byId[parsed.feedId]) {
+      byId[parsed.feedId] = { items: [], meta: parsed.meta, legacyEnd: null, rowNumbers: [] };
+      order.push(parsed.feedId);
+    }
+    var group = byId[parsed.feedId];
+    for (var j = 0; j < parsed.items.length; j++) group.items.push(parsed.items[j]);
+    if (parsed.legacyEnd) group.legacyEnd = parsed.legacyEnd;
+    if (parsed.rowNumber) group.rowNumbers.push(parsed.rowNumber);
+  }
+
+  var out = [];
+  for (var k = 0; k < order.length; k++) {
+    var g = byId[order[k]];
+    if (!g.items.length) continue;
+    var record = feedFromItems(order[k], g.items, g.meta);
+    // Una toma antigua pudo durar más que sus elementos reconstruidos.
+    if (g.legacyEnd && g.legacyEnd > record.end) {
+      record.end = g.legacyEnd;
+      record.durationMin = diffMinutes(record.start, record.end);
+    }
+    out.push({ record: record, rowNumbers: g.rowNumbers });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -713,6 +1029,18 @@ if (typeof module !== 'undefined' && module.exports) {
     normalizeAndValidate: normalizeAndValidate,
     recordToRow: recordToRow,
     rowToRecord: rowToRecord,
+    FEED_COLUMNS: FEED_COLUMNS,
+    FEED_LEGACY_COLUMNS: FEED_LEGACY_COLUMNS,
+    FEED_NUMERIC_COLUMNS: FEED_NUMERIC_COLUMNS,
+    legacyColumnsFor: legacyColumnsFor,
+    normalizeFeed: normalizeFeed,
+    feedFromItems: feedFromItems,
+    feedToRows: feedToRows,
+    rowToFeedItems: rowToFeedItems,
+    groupFeedRows: groupFeedRows,
+    breastMinutesOf: breastMinutesOf,
+    breastSideOfItems: breastSideOfItems,
+    itemMinutes: itemMinutes,
     isOpenSleep: isOpenSleep,
     effectiveEnd: effectiveEnd,
     recordTouchesDay: recordTouchesDay,

@@ -13,7 +13,7 @@ una columna a una pestaña.
 | Pestaña | Qué guarda |
 |---|---|
 | `Sueno` | Siestas y sueño nocturno |
-| `Tomas` | Tomas, con sus componentes |
+| `Tomas` | Tomas: **una fila por cada tetada y cada biberón** |
 | `Panales` | Cambios de pañal |
 | `Banos` | Baños y aseos |
 | `Peso` | Pesadas |
@@ -44,21 +44,44 @@ editas una hora a mano la duración se corrige sola.
 
 **`Sueno`** — `Tipo` (Siesta · Nocturno)
 
-**`Tomas`** — `Pecho_Min`, `Pecho_Lado` (Izquierdo · Derecho · Ambos · No
-recuerdo), `Extraida_Ml`, `Formula_Ml`
+**`Tomas`** — `Toma_ID`, `Tipo` (Pecho · Extraída · Fórmula), `Pecho_Lado`
+(Izquierdo · Derecho · Ambos · No recuerdo), `Cantidad_Ml`
+
+Es la única pestaña donde **un registro ocupa varias filas**: una por cada cosa
+que pasa dentro de la toma. Las filas que comparten `Toma_ID` son la misma toma.
+Una toma con dos tetadas y un biberón son tres filas:
+
+| ID | Toma_ID | Hora_Inicio | Hora_Fin | Duracion_Min | Tipo | Pecho_Lado | Cantidad_Ml |
+|---|---|---|---|---|---|---|---|
+| `i1` | `t-9f2` | 11:42 | 11:53 | 11 | Pecho | Izquierdo | |
+| `i2` | `t-9f2` | 12:03 | 12:13 | 10 | Pecho | Derecho | |
+| `i3` | `t-9f2` | 12:20 | | 0 | Fórmula | | 60 |
+
+> **Por qué así.** Con los totales en una sola fila (`Pecho_Min: 21`) se perdía
+> cuándo pasó cada cosa, y al reabrir la toma para corregirla no había forma de
+> reconstruirla: la aplicación tenía que adivinar una tetada de 21 minutos que
+> nunca existió tal cual. Guardando cada elemento con su hora, editar una toma
+> es editar lo que pasó dentro.
+
+> **Nada se guarda dos veces.** El intervalo de la toma y sus totales —minutos
+> de pecho, mililitros, qué pechos se usaron— **se calculan** a partir de las
+> filas cada vez que se leen. Al no estar almacenados, no pueden contradecir a
+> sus elementos.
 
 > "No recuerdo" es una respuesta válida a propósito: de madrugada vale más no
 > saber qué pecho fue que inventárselo. Si una tetada queda sin anotar, la toma
-> entera se guarda como "No recuerdo", salvo que las demás ya sumen los dos
+> entera cuenta como "No recuerdo", salvo que las demás ya sumen los dos
 > pechos.
 
-> Una toma puede tener varias tetadas y sigue siendo **un solo registro**: se
-> guarda la suma de minutos y el intervalo va de la primera a la última.
+> Los minutos de pecho y los mililitros son magnitudes distintas. No se
+> convierten entre sí en ningún punto del sistema: del pecho directo no sabemos
+> cuántos mililitros ha tomado el bebé, y fingir lo contrario falsearía los
+> totales.
 
-> Los minutos de pecho y los mililitros son magnitudes distintas y viven en
-> columnas distintas. No se convierten entre sí en ningún punto del sistema:
-> del pecho directo no sabemos cuántos mililitros ha tomado el bebé, y fingir
-> lo contrario falsearía los totales.
+> **Las tomas del modelo anterior se siguen leyendo.** Una fila antigua con
+> `Pecho_Min`, `Extraida_Ml` y `Formula_Ml` se convierte en elementos al
+> leerla, conservando su hora de fin. En cuanto se edita, se reescribe en el
+> formato nuevo. Esas tres columnas ya no se crean, pero si están, se leen.
 
 **`Panales`** — `Pis` (TRUE/vacío), `Pis_Cantidad` (Poco · Medio · Mucho),
 `Caca` (TRUE/vacío), `Consistencia` (Pedete · Líquida · Pastosa · Sólida)
@@ -76,6 +99,7 @@ recuerdo), `Extraida_Ml`, `Formula_Ml`
 **`Bebe`** — `Fecha_Nacimiento`, `Hora_Nacimiento`, `Peso_Nacimiento_G`
 
 ## Dónde se declara todo esto
+
 
 En `RECORD_TYPES`, al principio de [`apps-script/Logic.js`](../apps-script/Logic.js).
 El resto del backend es genérico: lee esa declaración para saber qué pestaña
@@ -99,6 +123,12 @@ diaper: {
 Tipos de campo disponibles: `int` (con `max`), `bool` y `enum` (con `values`,
 que es a la vez la lista de valores válidos y la etiqueta que se escribe en la
 hoja). Cualquier campo puede llevar `required: true`.
+
+La toma es la excepción: se declara con `grouped: true` y no tiene `fields`,
+porque sus columnas y su conversión no son genéricas. Todo lo suyo está junto
+en `Logic.js`, en el bloque "La toma y sus elementos"
+(`normalizeFeed`, `feedToRows`, `rowToFeedItems`, `groupFeedRows`), y el resto
+del backend solo pregunta si un tipo es `grouped` para llamar a ese camino.
 
 ## Cómo añadir un campo a un tipo
 

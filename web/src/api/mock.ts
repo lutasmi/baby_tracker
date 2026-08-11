@@ -6,11 +6,13 @@
 import { addDays, addMinutes, diffMinutes, nowMadrid } from '../lib/dates'
 import { STALE_SLEEP_MIN } from '../lib/derive'
 import { lifeDayNumber, lifeDayRange, lifeDayTotals } from '../lib/lifeday'
-import { feedIsEmpty } from '../lib/records'
+import { deriveFeed, feedIsEmpty, itemMinutes, newId } from '../lib/records'
 import type {
   BabyRecord,
   DayData,
   DiaperRecord,
+  FeedItem,
+  FeedItemKind,
   FeedRecord,
   History,
   HistoryDay,
@@ -38,6 +40,24 @@ function waiter(latencyMs: number) {
 
 const AUDIT = { createdBy: 'ana@example.com', updatedBy: null, updatedAt: null }
 
+const tetada = (start: string, end: string, side: FeedItem['side']): FeedItem => ({
+  id: newId(),
+  kind: 'pecho',
+  start,
+  end,
+  side,
+  ml: 0,
+})
+
+const biberon = (start: string, ml: number, kind: FeedItemKind = 'formula'): FeedItem => ({
+  id: newId(),
+  kind,
+  start,
+  end: null,
+  side: null,
+  ml,
+})
+
 function seedRecords(): BabyRecord[] {
   const today = nowMadrid().slice(0, 10)
   const yesterday = addDays(today, -1)
@@ -57,13 +77,11 @@ function seedRecords(): BabyRecord[] {
       ...AUDIT,
       id: 'seed-toma-mixta',
       type: 'feed',
-      start: `${today} 07:45`,
-      end: `${today} 08:14`,
-      durationMin: 29,
-      breastMin: 12,
-      breastSide: 'izquierdo',
-      expressedMl: 30,
-      formulaMl: 35,
+      ...deriveFeed([
+        tetada(`${today} 07:45`, `${today} 07:57`, 'izquierdo'),
+        biberon(`${today} 08:02`, 30, 'extraida'),
+        biberon(`${today} 08:14`, 35),
+      ]),
       notes: '',
       createdBy: 'luis@example.com',
       createdAt: `${today} 08:15`,
@@ -96,13 +114,7 @@ function seedRecords(): BabyRecord[] {
       ...AUDIT,
       id: 'seed-biberon',
       type: 'feed',
-      start: `${today} 11:00`,
-      end: `${today} 11:12`,
-      durationMin: 12,
-      breastMin: 0,
-      breastSide: null,
-      expressedMl: 90,
-      formulaMl: 0,
+      ...deriveFeed([{ ...biberon(`${today} 11:00`, 90, 'extraida'), end: `${today} 11:12` }]),
       notes: '',
       createdAt: `${today} 11:12`,
     },
@@ -150,12 +162,16 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
   /** Comprobaciones que hace el backend real antes de guardar. */
   const check = (input: RecordInput) => {
     if (input.type === 'feed') {
-      if (!input.end) throw new ApiError('VALIDATION', 'Falta la hora de fin de la toma.')
-      if (feedIsEmpty(input)) {
-        throw new ApiError(
-          'VALIDATION',
-          'La toma necesita al menos un componente: pecho, leche extraída o fórmula.'
-        )
+      if (feedIsEmpty(input.items)) {
+        throw new ApiError('VALIDATION', 'La toma necesita al menos una tetada o un biberón.')
+      }
+      for (const item of input.items) {
+        if (item.kind === 'pecho' && itemMinutes(item) <= 0) {
+          throw new ApiError('VALIDATION', 'Cada tetada tiene que acabar después de empezar.')
+        }
+        if (item.kind !== 'pecho' && item.ml <= 0) {
+          throw new ApiError('VALIDATION', 'La cantidad tiene que ser mayor que cero.')
+        }
       }
     }
     if (input.type === 'diaper' && !input.pee && !input.poop) {
@@ -170,8 +186,11 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
   }
 
   /** Lo que el backend deriva al guardar. */
-  const derived = (input: RecordInput): RecordInput => {
-    if (input.type === 'sleep' || input.type === 'feed') {
+  const derived = (input: RecordInput) => {
+    // La toma se reconstruye entera a partir de sus elementos, como hace el
+    // backend al leer las filas de la hoja.
+    if (input.type === 'feed') return { ...input, ...deriveFeed(input.items) }
+    if (input.type === 'sleep') {
       return { ...input, durationMin: input.end ? diffMinutes(input.start, input.end) : null }
     }
     if (input.type === 'diaper') {

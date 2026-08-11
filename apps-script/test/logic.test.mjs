@@ -17,18 +17,11 @@ const sleep = (p = {}) => ({
   ...p,
 })
 
-const feed = (p = {}) => ({
-  id: 'uuid-2',
-  type: 'feed',
-  start: '2026-08-07 10:13',
-  end: '2026-08-07 10:31',
-  breastMin: 0,
-  breastSide: null,
-  expressedMl: 0,
-  formulaMl: 0,
-  notes: '',
-  ...p,
-})
+/** Una toma con los elementos indicados. */
+const feed = (items, p = {}) => ({ id: 'uuid-2', type: 'feed', items, notes: '', ...p })
+
+const tetada = (start, end, side, id) => ({ id: id ?? `t-${start}`, kind: 'pecho', start, end, side })
+const bibe = (start, ml, kind, id) => ({ id: id ?? `b-${start}`, kind: kind ?? 'formula', start, ml })
 
 const diaper = (p = {}) => ({
   id: 'uuid-3',
@@ -82,11 +75,14 @@ describe('declaración de tipos', () => {
     expect(L.startColumnOf('bath')).toBe('Hora')
   })
 
-  it('la toma tiene una columna por magnitud', () => {
+  it('la toma guarda una fila por elemento, unidas por Toma_ID', () => {
+    expect(L.RECORD_TYPES.feed.grouped).toBe(true)
     const cols = L.columnsFor('feed')
     expect(cols).toEqual(
-      expect.arrayContaining(['Pecho_Min', 'Pecho_Lado', 'Extraida_Ml', 'Formula_Ml'])
+      expect.arrayContaining(['Toma_ID', 'Tipo', 'Pecho_Lado', 'Cantidad_Ml', 'Duracion_Min'])
     )
+    // Las columnas del modelo anterior se siguen leyendo, pero ya no se crean.
+    for (const vieja of L.legacyColumnsFor('feed')) expect(cols).not.toContain(vieja)
   })
 })
 
@@ -126,65 +122,87 @@ describe('normalizeAndValidate · sueño', () => {
 })
 
 describe('normalizeAndValidate · toma', () => {
-  it('guarda inicio y fin reales con precisión de un minuto', () => {
-    const r = L.normalizeAndValidate(feed({ formulaMl: 63 }), NOW)
-    expect(r.start).toBe('2026-08-07 10:13')
-    expect(r.end).toBe('2026-08-07 10:31')
-    expect(r.durationMin).toBe(18)
-    expect(r.formulaMl).toBe(63)
-  })
-
-  it('admite varios componentes a la vez sin mezclarlos', () => {
+  it('una toma son sus elementos, cada uno con su hora', () => {
     const r = L.normalizeAndValidate(
-      feed({ start: '2026-08-07 15:00', end: '2026-08-07 15:30', breastMin: 17, expressedMl: 28, formulaMl: 37 }),
+      feed([
+        tetada('2026-08-07 11:42', '2026-08-07 11:53', 'izquierdo'),
+        tetada('2026-08-07 12:03', '2026-08-07 12:13', 'derecho'),
+        bibe('2026-08-07 12:20', 60),
+      ]),
       NOW
     )
-    expect(r.breastMin).toBe(17)
-    expect(r.expressedMl).toBe(28)
-    expect(r.formulaMl).toBe(37)
-    // Sin conversión de minutos a mililitros en ningún sitio.
-    expect(r.formulaMl + r.expressedMl).toBe(65)
+    // El intervalo de la toma sale de sus elementos, del primero al último.
+    expect(r.start).toBe('2026-08-07 11:42')
+    expect(r.end).toBe('2026-08-07 12:20')
+    expect(r.durationMin).toBe(38)
+    // Los minutos de pecho son los de las tetadas, no los del intervalo.
+    expect(r.breastMin).toBe(21)
+    expect(r.breastSide).toBe('ambos')
+    expect(r.formulaMl).toBe(60)
+    expect(r.items).toHaveLength(3)
   })
 
-  it('admite una toma puntual (inicio igual que fin)', () => {
-    const r = L.normalizeAndValidate(
-      feed({ end: feed().start, formulaMl: 60 }),
-      NOW
-    )
+  it('un biberón solo es puntual', () => {
+    const r = L.normalizeAndValidate(feed([bibe('2026-08-07 13:13', 60)]), NOW)
+    expect(r.start).toBe('2026-08-07 13:13')
+    expect(r.end).toBe('2026-08-07 13:13')
     expect(r.durationMin).toBe(0)
   })
 
-  it('exige hora de fin', () => {
-    expect(() => L.normalizeAndValidate(feed({ end: null, formulaMl: 60 }), NOW)).toThrow(/fin/)
-  })
-
-  it('exige al menos un componente', () => {
-    expect(() => L.normalizeAndValidate(feed(), NOW)).toThrow(/al menos un componente/)
-  })
-
-  it('rechaza cantidades fuera de rango', () => {
-    expect(() => L.normalizeAndValidate(feed({ formulaMl: 2000 }), NOW)).toThrow(/Formula_Ml/)
-    expect(() => L.normalizeAndValidate(feed({ expressedMl: -5 }), NOW)).toThrow(/Extraida_Ml/)
-  })
-
-  it('no admite más minutos de pecho que duración de la toma', () => {
-    expect(() =>
-      L.normalizeAndValidate(feed({ start: '2026-08-07 15:00', end: '2026-08-07 15:10', breastMin: 90 }), NOW)
-    ).toThrow(/superar la duración/)
-  })
-
-  it('descarta el lado si no hay pecho', () => {
-    const r = L.normalizeAndValidate(feed({ formulaMl: 60, breastSide: 'izquierdo' }), NOW)
-    expect(r.breastSide).toBeNull()
-  })
-
-  it('admite no recordar qué pecho fue', () => {
+  it('los elementos se ordenan por hora aunque lleguen desordenados', () => {
     const r = L.normalizeAndValidate(
-      feed({ start: '2026-08-07 03:00', end: '2026-08-07 03:20', breastMin: 20, breastSide: 'desconocido' }),
+      feed([
+        bibe('2026-08-07 12:20', 60),
+        tetada('2026-08-07 11:42', '2026-08-07 11:53', 'izquierdo'),
+      ]),
+      NOW
+    )
+    expect(r.items.map((i) => i.start)).toEqual(['2026-08-07 11:42', '2026-08-07 12:20'])
+  })
+
+  it('repetir el mismo pecho suma sin volverlo "ambos"', () => {
+    const r = L.normalizeAndValidate(
+      feed([
+        tetada('2026-08-07 11:42', '2026-08-07 11:53', 'izquierdo'),
+        tetada('2026-08-07 12:30', '2026-08-07 12:38', 'izquierdo'),
+      ]),
+      NOW
+    )
+    expect(r.breastMin).toBe(19)
+    expect(r.breastSide).toBe('izquierdo')
+  })
+
+  it('una tetada sin anotar deja la toma como "no recuerdo"', () => {
+    const r = L.normalizeAndValidate(
+      feed([
+        tetada('2026-08-07 03:00', '2026-08-07 03:20', 'izquierdo'),
+        tetada('2026-08-07 04:00', '2026-08-07 04:10'),
+      ]),
       NOW
     )
     expect(r.breastSide).toBe('desconocido')
-    expect(L.recordToRow(r, false).Pecho_Lado).toBe('No recuerdo')
+  })
+
+  it('exige al menos un elemento', () => {
+    expect(() => L.normalizeAndValidate(feed([]), NOW)).toThrow(/al menos una tetada/)
+  })
+
+  it('la tetada necesita hora de fin y el biberón cantidad', () => {
+    expect(() =>
+      L.normalizeAndValidate(feed([{ id: 'x', kind: 'pecho', start: '2026-08-07 11:42' }]), NOW)
+    ).toThrow(/hora de fin/)
+    expect(() => L.normalizeAndValidate(feed([bibe('2026-08-07 12:00', 0)]), NOW)).toThrow(
+      /mayor que cero/
+    )
+  })
+
+  it('rechaza elementos en el futuro o al revés', () => {
+    expect(() =>
+      L.normalizeAndValidate(feed([bibe('2026-08-07 18:00', 60)]), NOW)
+    ).toThrow(/futuro/)
+    expect(() =>
+      L.normalizeAndValidate(feed([tetada('2026-08-07 12:00', '2026-08-07 11:50', 'izquierdo')]), NOW)
+    ).toThrow(/posterior al inicio/)
   })
 })
 
@@ -273,50 +291,72 @@ describe('recordToRow / rowToRecord', () => {
     updatedAt: null,
   })
 
-  it('la toma va y vuelve con cada magnitud en su columna', () => {
+  it('la toma se guarda en una fila por elemento y vuelve entera', () => {
     const record = withAudit(
       L.normalizeAndValidate(
-        feed({
-          start: '2026-08-07 09:00',
-          end: '2026-08-07 09:29',
-          breastMin: 10,
-          breastSide: 'derecho',
-          expressedMl: 25,
-          formulaMl: 15,
-          notes: 'con ayuda',
-        }),
+        feed(
+          [
+            tetada('2026-08-07 11:42', '2026-08-07 11:53', 'izquierdo', 'i1'),
+            tetada('2026-08-07 12:03', '2026-08-07 12:13', 'derecho', 'i2'),
+            bibe('2026-08-07 12:20', 60, 'formula', 'i3'),
+          ],
+          { notes: 'con ayuda' }
+        ),
         NOW
       )
     )
-    const row = L.recordToRow(record, false)
-    expect(row).toMatchObject({
-      ID: 'uuid-2',
-      Fecha: '2026-08-07',
-      Hora_Inicio: '2026-08-07 09:00',
-      Hora_Fin: '2026-08-07 09:29',
-      Duracion_Min: 29,
-      Pecho_Min: 10,
-      Pecho_Lado: 'Derecho',
-      Extraida_Ml: 25,
-      Formula_Ml: 15,
+    const rows = L.feedToRows(record, false)
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toMatchObject({
+      ID: 'i1',
+      Toma_ID: 'uuid-2',
+      Hora_Inicio: '2026-08-07 11:42',
+      Hora_Fin: '2026-08-07 11:53',
+      Duracion_Min: 11,
+      Tipo: 'Pecho',
+      Pecho_Lado: 'Izquierdo',
       Notas: 'con ayuda',
-      Eliminado: '',
     })
+    expect(rows[2]).toMatchObject({ ID: 'i3', Tipo: 'Fórmula', Cantidad_Ml: 60, Hora_Fin: '' })
 
-    const back = L.rowToRecord('feed', row)
-    expect(back.deleted).toBe(false)
-    expect(back.record).toMatchObject({
+    // Y al leerlas vuelven a ser una sola toma.
+    const parsed = rows.map((r) => L.rowToFeedItems(r))
+    const [{ record: vuelta }] = L.groupFeedRows(parsed)
+    expect(vuelta).toMatchObject({
       id: 'uuid-2',
-      type: 'feed',
-      start: '2026-08-07 09:00',
-      end: '2026-08-07 09:29',
-      durationMin: 29,
-      breastMin: 10,
-      breastSide: 'derecho',
-      expressedMl: 25,
-      formulaMl: 15,
-      createdBy: 'ana@example.com',
+      start: '2026-08-07 11:42',
+      end: '2026-08-07 12:20',
+      breastMin: 21,
+      breastSide: 'ambos',
+      formulaMl: 60,
+      notes: 'con ayuda',
     })
+    expect(vuelta.items).toHaveLength(3)
+  })
+
+  it('lee una toma guardada con el modelo anterior, de una sola fila', () => {
+    const antigua = {
+      ID: 'vieja-1',
+      Fecha: '2026-08-07',
+      Hora_Inicio: '2026-08-07 11:42',
+      Hora_Fin: '2026-08-07 12:13',
+      Pecho_Min: '21',
+      Pecho_Lado: 'Ambos',
+      Formula_Ml: '60',
+      Notas: 'de antes',
+      Eliminado: '',
+    }
+    const [{ record }] = L.groupFeedRows([L.rowToFeedItems(antigua)])
+    expect(record).toMatchObject({
+      id: 'vieja-1',
+      start: '2026-08-07 11:42',
+      // El intervalo guardado manda: la toma duró más que sus elementos.
+      end: '2026-08-07 12:13',
+      breastMin: 21,
+      breastSide: 'ambos',
+      formulaMl: 60,
+    })
+    expect(record.items).toHaveLength(2)
   })
 
   it('el pañal escribe booleanos legibles', () => {
@@ -386,18 +426,22 @@ describe('lectura tolerante de ediciones manuales', () => {
     expect(back.record.durationMin).toBe(570)
   })
 
-  it('recalcula la duración aunque la celda diga otra cosa', () => {
-    const back = L.rowToRecord('feed', {
-      ID: 'manual-3',
-      Fecha: '2026-08-07',
-      Hora_Inicio: '10:00',
-      Hora_Fin: '10:20',
-      Duracion_Min: '999',
-      Formula_Ml: '60',
-      Eliminado: '',
-    })
-    expect(back.record.durationMin).toBe(20)
-    expect(back.record.formulaMl).toBe(60)
+  it('recalcula la duración de la toma aunque la celda diga otra cosa', () => {
+    const [{ record }] = L.groupFeedRows([
+      L.rowToFeedItems({
+        ID: 'manual-3',
+        Toma_ID: 'manual-3',
+        Fecha: '2026-08-07',
+        Hora_Inicio: '10:00',
+        Hora_Fin: '10:20',
+        Duracion_Min: '999',
+        Tipo: 'Pecho',
+        Pecho_Lado: 'Izquierdo',
+        Eliminado: '',
+      }),
+    ])
+    expect(record.durationMin).toBe(20)
+    expect(record.breastMin).toBe(20)
   })
 
   it('una casilla de pañal marcada a mano con una equis cuenta', () => {

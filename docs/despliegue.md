@@ -135,6 +135,7 @@ Vuelve al **Editor** (menú izquierdo). Tienes que dejar el proyecto con 5 archi
 ## Mantenimiento
 
 - **Actualizar el frontend**: push a `main`; el workflow lo publica solo.
-- **Actualizar el backend**: pega el código nuevo en el editor y en **Implementar → Administrar implementaciones → ✏️ → Versión: Nueva versión → Implementar**. Así la URL `/exec` no cambia.
+- **Actualizar el backend**: pega el código nuevo en el editor y en **Implementar → Administrar implementaciones → ✏️ → Versión: Nueva versión → Implementar**. Así la URL `/exec` no cambia. Mientras no crees la versión nueva, la app sigue usando la anterior: pegar código no afecta a producción.
+- **Si la actualización añade columnas**: ejecuta **`setup`** antes de crear la versión nueva. Solo añade al final de cada pestaña las columnas que falten; no reordena, no borra y no toca los datos que ya están.
 - **Revocar el acceso de alguien**: pon `Activo = FALSE` en su fila de **Usuarios** (efecto inmediato).
 - **Copia de seguridad**: los datos son la hoja de cálculo; con **Archivo → Hacer una copia** en Sheets es suficiente.

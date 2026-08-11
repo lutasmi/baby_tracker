@@ -39,13 +39,37 @@ export interface SleepRecord extends IntervalBase {
   kind: SleepKind
 }
 
+/** Lo que puede haber dentro de una toma. */
+export type FeedItemKind = 'pecho' | 'extraida' | 'formula'
+
 /**
- * Una toma puede combinar pecho directo (minutos), leche materna extraída (ml)
- * y fórmula (ml). Son magnitudes distintas y nunca se convierten entre sí: del
- * pecho directo no sabemos cuántos mililitros ha tomado el bebé.
+ * Un elemento de la toma: una tetada o un biberón, con su propia hora. Cada uno
+ * es una fila en la hoja de cálculo, de modo que nada se pierde por el camino.
+ */
+export interface FeedItem {
+  id: string
+  kind: FeedItemKind
+  start: string
+  /** Fin de la tetada. En un biberón es opcional. */
+  end: string | null
+  /** Pecho de la tetada; null en los biberones. */
+  side: BreastSide | null
+  /** Mililitros del biberón; 0 en las tetadas. */
+  ml: number
+}
+
+/**
+ * Una toma es el conjunto de sus elementos: puede llevar varias tetadas y
+ * varios biberones. Los totales (`breastMin`, `expressedMl`, `formulaMl`) y el
+ * intervalo se derivan de ellos, nunca se guardan aparte, así que no pueden
+ * contradecirlos.
+ *
+ * Son magnitudes distintas y nunca se convierten entre sí: del pecho directo no
+ * sabemos cuántos mililitros ha tomado el bebé.
  */
 export interface FeedRecord extends IntervalBase {
   type: 'feed'
+  items: FeedItem[]
   breastMin: number
   breastSide: BreastSide | null
   expressedMl: number
@@ -102,9 +126,15 @@ type Audit = 'createdBy' | 'createdAt' | 'updatedBy' | 'updatedAt'
  * El identificador lo genera el cliente antes de enviar: reintentar una
  * petición nunca crea duplicados.
  */
+/**
+ * De una toma solo viajan sus elementos. El intervalo y los totales los deriva
+ * el servidor a partir de ellos, así que no pueden contradecirlos.
+ */
+export type FeedInput = Pick<FeedRecord, 'id' | 'type' | 'items' | 'notes'>
+
 export type RecordInput =
   | Omit<SleepRecord, Audit>
-  | Omit<FeedRecord, Audit>
+  | FeedInput
   | Omit<DiaperRecord, Audit>
   | Omit<BathRecord, Audit>
   | Omit<WeightRecord, Audit>

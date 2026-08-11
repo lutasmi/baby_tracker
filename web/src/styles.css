@@ -506,7 +506,8 @@ button {
   color: var(--primary);
 }
 
-/* Una tetada dentro de la toma. Varias siguen siendo una sola toma. */
+/* Un elemento de la toma: una tetada o un biberón, con su hora. Varios siguen
+   siendo una sola toma. */
 .session {
   background: var(--surface);
   border-radius: var(--radius-sm);
@@ -552,15 +553,6 @@ button {
   text-align: center;
   font-weight: 600;
   color: var(--text);
-}
-
-/* Bloque de un componente de la toma (pecho, extraída, fórmula). */
-.component-block {
-  background: var(--surface);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow);
-  padding: 12px;
-  gap: 10px;
 }
 
 .duration-line {

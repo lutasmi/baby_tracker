@@ -3,7 +3,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import { addMinutes, nowMadrid } from '../lib/dates'
-import type { RecordInput } from '../types'
+import type { FeedItem, FeedItemKind, RecordInput } from '../types'
 import { createMockApi } from './mock'
 import type { Api } from './types'
 
@@ -11,20 +11,24 @@ const TODAY = nowMadrid().slice(0, 10)
 
 let api: Api
 
-const feed = (id: string, start: string, end: string, p: Partial<RecordInput> = {}): RecordInput =>
-  ({
-    id,
-    type: 'feed',
-    start,
-    end,
-    durationMin: null,
-    breastMin: 0,
-    breastSide: null,
-    expressedMl: 0,
-    formulaMl: 0,
-    notes: '',
-    ...p,
-  }) as RecordInput
+/** Una toma con los elementos que hayan pasado dentro. */
+const feed = (id: string, items: FeedItem[]): RecordInput => ({ id, type: 'feed', items, notes: '' })
+
+const tetada = (start: string, end: string, side: FeedItem['side'] = 'izquierdo'): FeedItem => ({
+  id: `pecho-${start}`,
+  kind: 'pecho',
+  start,
+  end,
+  side,
+  ml: 0,
+})
+
+const bibe = (
+  start: string,
+  ml: number,
+  kind: FeedItemKind = 'formula',
+  end: string | null = null
+): FeedItem => ({ id: `bib-${start}-${kind}`, kind, start, end, side: null, ml })
 
 const diaper = (id: string, start: string, pee: boolean, poop: boolean): RecordInput => ({
   id,
@@ -55,7 +59,7 @@ beforeEach(async () => {
 describe('registro y totales del día de vida', () => {
   it('una toma de fórmula suma a la leche cuantificable', async () => {
     const antes = (await api.getDay(TODAY)).lifeDay!.totals
-    await api.createRecord(feed('t1', `${TODAY} 10:13`, `${TODAY} 10:31`, { formulaMl: 63 }))
+    await api.createRecord(feed('t1', [bibe(`${TODAY} 10:13`, 63, 'formula', `${TODAY} 10:31`)]))
 
     const t = (await api.getDay(TODAY)).lifeDay!.totals
     expect(t.formulaMl - antes.formulaMl).toBe(63)
@@ -66,16 +70,19 @@ describe('registro y totales del día de vida', () => {
   it('una toma mixta reparte cada componente en su sitio', async () => {
     const antes = (await api.getDay(TODAY)).lifeDay!.totals
     const guardada = await api.createRecord(
-      feed('t2', `${TODAY} 13:12`, `${TODAY} 13:43`, {
-        breastMin: 17,
-        expressedMl: 28,
-        formulaMl: 37,
-      })
+      feed('t2', [
+        tetada(`${TODAY} 13:12`, `${TODAY} 13:29`),
+        bibe(`${TODAY} 13:35`, 28, 'extraida'),
+        bibe(`${TODAY} 13:43`, 37),
+      ])
     )
     expect(guardada.type).toBe('feed')
     if (guardada.type !== 'feed') throw new Error('tipo inesperado')
+    // El intervalo y los totales salen de los elementos, no llegan aparte.
+    expect(guardada.start).toBe(`${TODAY} 13:12`)
     expect(guardada.durationMin).toBe(31)
     expect(guardada.breastMin).toBe(17)
+    expect(guardada.items).toHaveLength(3)
 
     const t = (await api.getDay(TODAY)).lifeDay!.totals
     expect(t.breastMin - antes.breastMin).toBe(17)
@@ -96,17 +103,15 @@ describe('registro y totales del día de vida', () => {
     expect(t.diapers - antes.diapers).toBe(2)
   })
 
-  it('rechaza una toma sin componentes y un pañal vacío', async () => {
-    await expect(api.createRecord(feed('t3', `${TODAY} 10:00`, `${TODAY} 10:10`))).rejects.toThrow(
-      /al menos un componente/
-    )
+  it('rechaza una toma sin elementos y un pañal vacío', async () => {
+    await expect(api.createRecord(feed('t3', []))).rejects.toThrow(/al menos una tetada/)
     await expect(api.createRecord(diaper('p3', `${TODAY} 10:00`, false, false))).rejects.toThrow(
       /pis, caca/
     )
   })
 
   it('reintentar la misma petición no duplica ni altera los totales', async () => {
-    const input = feed('t4', `${TODAY} 10:13`, `${TODAY} 10:31`, { formulaMl: 63 })
+    const input = feed('t4', [bibe(`${TODAY} 10:13`, 63)])
     await api.createRecord(input)
     const primera = (await api.getDay(TODAY)).lifeDay!.totals
     await api.createRecord(input)
@@ -140,10 +145,10 @@ describe('sueño', () => {
 
 describe('edición y borrado', () => {
   it('editar una toma actualiza los totales', async () => {
-    await api.createRecord(feed('t5', `${TODAY} 10:00`, `${TODAY} 10:20`, { formulaMl: 60 }))
+    await api.createRecord(feed('t5', [bibe(`${TODAY} 10:00`, 60)]))
     const antes = (await api.getDay(TODAY)).lifeDay!.totals
 
-    await api.updateRecord(feed('t5', `${TODAY} 10:00`, `${TODAY} 10:20`, { formulaMl: 90 }))
+    await api.updateRecord(feed('t5', [bibe(`${TODAY} 10:00`, 90)]))
     const t = (await api.getDay(TODAY)).lifeDay!.totals
     expect(t.formulaMl - antes.formulaMl).toBe(30)
     expect(t.feeds).toBe(antes.feeds) // sigue siendo la misma toma
@@ -168,7 +173,7 @@ describe('evolución', () => {
 
   it('agrupa los totales por día de vida', async () => {
     await api.createRecord(diaper('h1', `${TODAY} 09:00`, true, true))
-    await api.createRecord(feed('h2', `${TODAY} 10:00`, `${TODAY} 10:20`, { formulaMl: 90 }))
+    await api.createRecord(feed('h2', [bibe(`${TODAY} 10:00`, 90)]))
 
     const { birth, days } = await api.getHistory(7)
     expect(birth).toBe(`${TODAY} 00:01`)

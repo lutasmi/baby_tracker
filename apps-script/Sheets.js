@@ -31,7 +31,7 @@ function getSpreadsheet() {
 }
 
 /** Devuelve {sheet, map} de una pestaña, con las columnas ya localizadas. */
-function sheetWithColumns(name, requiredColumns) {
+function sheetWithColumns(name, requiredColumns, optionalColumns) {
   if (_sheetCache[name]) return _sheetCache[name];
   var sheet = getSpreadsheet().getSheetByName(name);
   if (!sheet) {
@@ -42,13 +42,29 @@ function sheetWithColumns(name, requiredColumns) {
   }
   var lastColumn = Math.max(1, sheet.getLastColumn());
   var header = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
-  var entry = { sheet: sheet, map: headerMap(header, requiredColumns, name), width: lastColumn };
+  var map = headerMap(header, requiredColumns, name);
+  // Las opcionales se leen si están; no se exigen. Sirven para seguir
+  // entendiendo columnas de versiones anteriores sin obligar a migrarlas.
+  var optional = optionalColumns || [];
+  for (var i = 0; i < optional.length; i++) {
+    var found = findColumn(header, optional[i]);
+    if (found !== -1) map[optional[i]] = found;
+  }
+  var entry = { sheet: sheet, map: map, width: lastColumn, columns: requiredColumns.concat(optional) };
   _sheetCache[name] = entry;
   return entry;
 }
 
+function findColumn(header, name) {
+  var target = normText(name).replace(/ /g, '_');
+  for (var i = 0; i < header.length; i++) {
+    if (normText(header[i]).replace(/ /g, '_') === target) return i;
+  }
+  return -1;
+}
+
 function sheetForType(type) {
-  return sheetWithColumns(RECORD_TYPES[type].sheet, columnsFor(type));
+  return sheetWithColumns(RECORD_TYPES[type].sheet, columnsFor(type), legacyColumnsFor(type));
 }
 
 /** Mapa nombre de columna canónico -> índice, a partir de la fila de cabecera. */
@@ -89,6 +105,7 @@ function cellToText(v) {
 function rowObject(values, columns, map) {
   var row = {};
   for (var c = 0; c < columns.length; c++) {
+    if (!(columns[c] in map)) continue;
     row[columns[c]] = cellToText(values[map[columns[c]]]);
   }
   return row;
@@ -100,6 +117,7 @@ function rowObject(values, columns, map) {
 
 /** Lee todos los registros de un tipo: [{record, deleted, rowNumber}]. */
 function readRecordsOfType(type) {
+  if (RECORD_TYPES[type].grouped) return readFeeds();
   var entry = sheetForType(type);
   var columns = columnsFor(type);
   var values = entry.sheet.getDataRange().getValues();
@@ -111,6 +129,76 @@ function readRecordsOfType(type) {
     out.push(parsed);
   }
   return out;
+}
+
+/**
+ * Las tomas, juntando las filas que comparten Toma_ID. Devuelve la misma forma
+ * que el resto de tipos: [{record, deleted, rowNumbers}].
+ */
+function readFeeds() {
+  var entry = sheetForType('feed');
+  var columns = entry.columns;
+  var values = entry.sheet.getDataRange().getValues();
+  var parsedRows = [];
+  for (var r = 1; r < values.length; r++) {
+    var parsed = rowToFeedItems(rowObject(values[r], columns, entry.map));
+    if (!parsed) continue;
+    parsed.rowNumber = r + 1;
+    parsedRows.push(parsed);
+  }
+  var grouped = groupFeedRows(parsedRows);
+  var out = [];
+  for (var i = 0; i < grouped.length; i++) {
+    out.push({ record: grouped[i].record, deleted: false, rowNumbers: grouped[i].rowNumbers });
+  }
+  return out;
+}
+
+/** Números de fila que pertenecen a una toma, incluidas las ya borradas. */
+function feedRowNumbers(feedId) {
+  var entry = sheetForType('feed');
+  var values = entry.sheet.getDataRange().getValues();
+  var out = [];
+  for (var r = 1; r < values.length; r++) {
+    var id = String(values[r][entry.map.ID] || '').trim();
+    var group = String(values[r][entry.map.Toma_ID] || '').trim() || id;
+    if (id && group === feedId) out.push(r + 1);
+  }
+  return out;
+}
+
+/**
+ * Escribe una toma: reescribe las filas que ya tenía y añade o marca las que
+ * falten. Así corregir una toma no deja elementos sueltos de la versión
+ * anterior ni mueve filas de sitio.
+ */
+function writeFeed(record, deleted) {
+  var entry = sheetForType('feed');
+  var rows = feedToRows(record, deleted);
+  var existing = feedRowNumbers(record.id);
+
+  for (var i = 0; i < rows.length; i++) {
+    writeRowAt(entry, rows[i], i < existing.length ? existing[i] : -1);
+  }
+  // Elementos que ya no están: se marcan como eliminados en su sitio.
+  for (var j = rows.length; j < existing.length; j++) {
+    writeRowAt(entry, { Eliminado: 'TRUE' }, existing[j]);
+  }
+}
+
+function writeRowAt(entry, row, rowNumber) {
+  var values;
+  if (rowNumber === -1) {
+    values = [];
+    for (var i = 0; i < entry.width; i++) values.push('');
+  } else {
+    values = entry.sheet.getRange(rowNumber, 1, 1, entry.width).getValues()[0];
+  }
+  for (var name in row) {
+    if (name in entry.map) values[entry.map[name]] = row[name];
+  }
+  if (rowNumber === -1) entry.sheet.appendRow(values);
+  else entry.sheet.getRange(rowNumber, 1, 1, entry.width).setValues([values]);
 }
 
 /**
@@ -160,22 +248,7 @@ function readRecordAtRow(type, rowNumber) {
  * no borra las que alguien haya añadido a mano.
  */
 function writeRecordRow(type, row, rowNumber) {
-  var entry = sheetForType(type);
-  var values;
-  if (rowNumber === -1) {
-    values = [];
-    for (var i = 0; i < entry.width; i++) values.push('');
-  } else {
-    values = entry.sheet.getRange(rowNumber, 1, 1, entry.width).getValues()[0];
-  }
-  for (var name in row) {
-    if (name in entry.map) values[entry.map[name]] = row[name];
-  }
-  if (rowNumber === -1) {
-    entry.sheet.appendRow(values);
-  } else {
-    entry.sheet.getRange(rowNumber, 1, 1, entry.width).setValues([values]);
-  }
+  writeRowAt(sheetForType(type), row, rowNumber);
 }
 
 // ---------------------------------------------------------------------------

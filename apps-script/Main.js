@@ -339,15 +339,33 @@ function assertNoOtherOpenSleep(exceptId) {
   }
 }
 
+/** La toma guardada con ese identificador, o null. */
+function findFeed(id) {
+  var feeds = readRecordsOfType('feed');
+  for (var i = 0; i < feeds.length; i++) {
+    if (feeds[i].record.id === id) return feeds[i].record;
+  }
+  return null;
+}
+
 function createRecord(req, session) {
   var now = nowMadrid();
   var record = normalizeAndValidate(req.record, now);
   return withLock(function () {
-    var existing = findRecordRow(record.type, record.id);
-    if (existing !== -1) {
+    if (RECORD_TYPES[record.type].grouped) {
       // Reintento de una petición ya aplicada: no duplicar.
-      return readRecordAtRow(record.type, existing).record;
+      var already = findFeed(record.id);
+      if (already) return already;
+      record.createdBy = session.email;
+      record.createdAt = now;
+      record.updatedBy = null;
+      record.updatedAt = null;
+      writeFeed(record, false);
+      return record;
     }
+
+    var existing = findRecordRow(record.type, record.id);
+    if (existing !== -1) return readRecordAtRow(record.type, existing).record;
     if (isOpenSleep(record)) assertNoOtherOpenSleep(record.id);
     record.createdBy = session.email;
     record.createdAt = now;
@@ -362,13 +380,24 @@ function updateRecord(req, session) {
   var now = nowMadrid();
   var record = normalizeAndValidate(req.record, now);
   return withLock(function () {
+    if (RECORD_TYPES[record.type].grouped) {
+      var current = findFeed(record.id);
+      if (!current) throw apiError('NOT_FOUND', 'El registro ya no existe.');
+      record.createdBy = current.createdBy;
+      record.createdAt = current.createdAt;
+      record.updatedBy = session.email;
+      record.updatedAt = now;
+      writeFeed(record, false);
+      return record;
+    }
+
     var rowNumber = findRecordRow(record.type, record.id);
     if (rowNumber === -1) throw apiError('NOT_FOUND', 'El registro ya no existe.');
-    var current = readRecordAtRow(record.type, rowNumber);
-    if (!current || current.deleted) throw apiError('NOT_FOUND', 'El registro fue eliminado.');
+    var currentRow = readRecordAtRow(record.type, rowNumber);
+    if (!currentRow || currentRow.deleted) throw apiError('NOT_FOUND', 'El registro fue eliminado.');
     if (isOpenSleep(record)) assertNoOtherOpenSleep(record.id);
-    record.createdBy = current.record.createdBy;
-    record.createdAt = current.record.createdAt;
+    record.createdBy = currentRow.record.createdBy;
+    record.createdAt = currentRow.record.createdAt;
     record.updatedBy = session.email;
     record.updatedAt = now;
     writeRecordRow(record.type, recordToRow(record, false), rowNumber);
@@ -382,8 +411,17 @@ function deleteRecord(req, session) {
   var type = req.type;
   if (!RECORD_TYPES[type]) throw apiError('VALIDATION', 'Tipo de registro no válido.');
   return withLock(function () {
+    if (RECORD_TYPES[type].grouped) {
+      var feed = findFeed(id);
+      if (!feed) return { deleted: true }; // ya no existe: idempotente
+      feed.updatedBy = session.email;
+      feed.updatedAt = nowMadrid();
+      writeFeed(feed, true);
+      return { deleted: true };
+    }
+
     var rowNumber = findRecordRow(type, id);
-    if (rowNumber === -1) return { deleted: true }; // ya no existe: idempotente
+    if (rowNumber === -1) return { deleted: true };
     var current = readRecordAtRow(type, rowNumber);
     if (current && !current.deleted) {
       var record = current.record;

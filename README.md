@@ -14,7 +14,7 @@ La especificación original está en [docs/especificacion.md](docs/especificacio
 - **Dos calendarios que conviven**: día de vida (24 h desde la hora exacta de nacimiento) o día natural (00:00–23:59). Se elige en la pantalla principal y en la cronología, y la preferencia se recuerda.
 - **El periodo de un vistazo**: una franja horizontal con un carril por tipo —sueño, tomas, pises, cacas— donde se ve a qué horas pasa cada cosa y cómo se relacionan entre sí. Marca dónde estamos ahora y cada hito abre su registro.
 - **Contadores del periodo**: pises, cacas, fórmula y leche materna extraída, con cuánto hace del último de cada cosa.
-- **Una toma admite varias tetadas**: un pecho, luego el otro, y otra vez si se queda con hambre. Sigue siendo **una sola toma**, así que el contador no se dispara. Los minutos se suman y las horas de la toma salen de la primera y la última tetada.
+- **Una toma admite varias tetadas y varios biberones**: un pecho, luego el otro, y un biberón después si se queda con hambre. Sigue siendo **una sola toma**, así que el contador no se dispara. Cada elemento guarda su hora, y de ahí salen el intervalo de la toma y sus totales.
 - **El biberón es puntual**: cantidad y hora, sin fin que ajustar. Queda como "60 ml de fórmula a las 13:13". Si interesa, se le puede añadir hora de fin: no es lo mismo en tres minutos que en veinte.
 - **Se puede navegar a tramos anteriores** en la pantalla principal para ver sus contadores y su franja, en cualquiera de los dos calendarios.
 - Una misma toma puede combinar **pecho (min), leche materna extraída (ml) y fórmula (ml)**; los minutos y los mililitros nunca se mezclan.
@@ -26,7 +26,7 @@ La especificación original está en [docs/especificacion.md](docs/especificacio
 - **Cronología** como línea de tiempo, con la hora a la izquierda y cabecera pegajosa por tramo. "Ver anteriores" encadena el tramo previo debajo sin perder de vista el actual, y los huecos entre tomas se calculan de un tramo al siguiente.
 - **Evolución** por días de vida: pises, cacas y leche en barras comparables, y el peso en una gráfica de eje temporal real, verde por encima del peso al nacer y roja por debajo, con la diferencia en porcentaje en barras y en el eje derecho.
 - **Lo último registrado se corrige desde la pantalla principal**: cada contador y cada casilla abren su registro.
-- **Todo es corregible después**: horas, cantidades, componentes de una toma y contenido del pañal, con la misma pantalla con la que se creó.
+- **Todo es corregible después**: horas, cantidades, cada tetada y cada biberón de una toma, y el contenido del pañal, con la misma pantalla con la que se creó.
 - Cada registro guarda **quién lo creó, quién lo modificó y cuándo**.
 - Reintentos seguros: el identificador se genera en el cliente y **repetir una petición nunca duplica** el registro.
 - Errores de red visibles y con reintento manual; nada se marca como guardado si la hoja no confirmó la escritura.
@@ -47,7 +47,7 @@ Cada tipo de registro tiene **su propia pestaña** en la hoja de cálculo, con s
 
 - **Frontend**: Vite + TypeScript + Preact, en [web/](web/). Sin más dependencias de ejecución. Hora local de Madrid en todo el dominio (`Europe/Madrid`).
 - **Backend**: Google Apps Script, en [apps-script/](apps-script/). Cuatro archivos sin build. Verifica el ID token de Google, emite sesiones propias (180 días), valida cada registro y escribe en la hoja bajo bloqueo. Los tipos de registro se declaran en un único sitio (`RECORD_TYPES`) y el resto del backend es genérico.
-- **Datos**: una hoja de cálculo con una pestaña por tipo (`Sueno`, `Tomas`, `Panales`, `Banos`, `Peso`), más `Usuarios` y `Bebe`. Borrado lógico en la columna `Eliminado`. Se puede editar a mano sin romper la aplicación.
+- **Datos**: una hoja de cálculo con una pestaña por tipo (`Sueno`, `Tomas`, `Panales`, `Banos`, `Peso`), más `Usuarios` y `Bebe`. En `Tomas` hay **una fila por cada tetada y cada biberón**, unidas por `Toma_ID`. Borrado lógico en la columna `Eliminado`. Se puede editar a mano sin romper la aplicación.
 - Todo el hosting utilizado (GitHub Pages, Apps Script, Sheets) es gratuito.
 
 ### Estructura del repositorio
@@ -148,7 +148,7 @@ No hay credenciales en el repositorio: la URL de la API y el Client ID (público
 - **Zona horaria**: todo se guarda y se muestra en hora de Madrid (`Europe/Madrid`), independientemente del dispositivo. Formato `yyyy-MM-dd HH:mm` en la hoja.
 - **Duplicados**: el cliente genera el `ID` (UUID) antes de enviar; si un reintento llega dos veces, el backend devuelve el registro ya guardado.
 - **Un solo sueño abierto**: lo garantiza el backend bajo bloqueo global. Un sueño sin cerrar **no** significa que el bebé siga dormido: pasadas 14 horas se considera un cronómetro olvidado, deja de contar en las horas dormidas y la pantalla principal ofrece corregirlo.
-- **Componentes de la toma**: cada magnitud tiene su columna en la pestaña `Tomas` (`Pecho_Min`, `Extraida_Ml`, `Formula_Ml`). Los minutos y los mililitros no se convierten entre sí en ningún punto: del pecho directo no sabemos cuántos ml ha tomado el bebé.
+- **Contenido de la toma**: cada tetada y cada biberón son una fila propia en `Tomas`, con su hora y su tipo (Pecho · Extraída · Fórmula). Los totales de la toma se calculan de esas filas, no se guardan aparte, así que no pueden contradecirlas. Los minutos y los mililitros no se convierten entre sí en ningún punto: del pecho directo no sabemos cuántos ml ha tomado el bebé.
 - **Día de vida**: periodos de 24 h desde el instante del nacimiento. Un registro cuenta en el periodo en el que empieza, así que una toma que cruza el aniversario horario no se parte en dos.
 - **Datos del bebé** (nacimiento y peso al nacer): viven en la pestaña `Bebe`, una sola fila. Son comunes a todos los usuarios y se editan desde la pantalla de Ajustes o a mano en la hoja.
 - **Nada de recomendaciones**: la aplicación no propone objetivos de alimentación, no dice si un peso es normal ni avisa de que lleváis mucho sin registrar. Muestra lo registrado y deja el juicio a los padres y al pediatra.

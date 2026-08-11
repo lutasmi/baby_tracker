@@ -5,19 +5,19 @@ import { AmountField, MomentField, ScreenTitle, Seg, Toggle } from '../component
 import { handleAuthError, navigateReplace, useDay, useNow } from '../hooks'
 import { dateOf, diffMinutes, formatDuration, nowMadrid, timeOf } from '../lib/dates'
 import {
+  bottleItems,
+  breastItems,
   buildInput,
   feedSummary,
-  initialState,
-  newSession,
-  nextSide,
-  sessionMinutes,
   feedTimes,
+  initialState,
+  newBottleItem,
+  newBreastItem,
+  nextSide,
   validate,
-  type BreastSession,
-  type ComponentKey,
   type FormState,
 } from '../lib/recordform'
-import { formatKg, newId } from '../lib/records'
+import { formatKg, itemMinutes, newId } from '../lib/records'
 import { recordTitle } from '../lib/summary'
 import { findCachedRecord } from '../store'
 import { showToast } from '../toast'
@@ -26,6 +26,8 @@ import type {
   BathKind,
   BreastSide,
   Consistency,
+  FeedItem,
+  FeedItemKind,
   PeeAmount,
   RecordType,
   SleepKind,
@@ -39,10 +41,11 @@ const NEW_TITLES: Record<RecordType, string> = {
   weight: 'Registrar peso',
 }
 
-const COMPONENT_CHIPS: { key: ComponentKey; label: string }[] = [
-  { key: 'expressed', label: '🥛 Extraída' },
-  { key: 'formula', label: '🍼 Fórmula' },
-]
+const BOTTLE_LABELS: Record<FeedItemKind, string> = {
+  pecho: 'Tetada',
+  extraida: 'Extraída',
+  formula: 'Fórmula',
+}
 
 export function NewRecord({ type }: { type: RecordType }) {
   return <RecordForm type={type} existing={null} />
@@ -84,12 +87,6 @@ function RecordForm({ type, existing }: { type: RecordType; existing: BabyRecord
 
   const problem = useMemo(() => validate(type, s, now), [type, s, now])
 
-  function toggleComponent(key: ComponentKey) {
-    set({
-      active: s.active.includes(key) ? s.active.filter((k) => k !== key) : [...s.active, key],
-    })
-  }
-
   async function save() {
     if (problem) return
     setSaving(true)
@@ -101,7 +98,10 @@ function RecordForm({ type, existing }: { type: RecordType; existing: BabyRecord
         await getApi().createRecord(input)
       }
       showToast('Guardado ✓')
-      navigateReplace(existing ? `#/cronologia/${dateOf(input.start)}` : '#/')
+      // Al editar se vuelve al día del registro; una toma lo saca de sus
+      // elementos, que es donde vive su hora.
+      const day = type === 'feed' ? feedTimes(s).start : s.start
+      navigateReplace(existing ? `#/cronologia/${dateOf(day)}` : '#/')
     } catch (err) {
       if (!handleAuthError(err)) {
         showToast(
@@ -147,7 +147,6 @@ function RecordForm({ type, existing }: { type: RecordType; existing: BabyRecord
             <FeedFields
               s={s}
               set={set}
-              toggle={toggleComponent}
               now={now}
               previousFeedStart={existing ? null : (data?.last.feed?.start ?? null)}
               lastSide={data?.last.feed?.breastSide ?? null}
@@ -241,12 +240,10 @@ function SleepFields({ s, set, now, isNew }: FieldProps & { isNew: boolean }) {
 function FeedFields({
   s,
   set,
-  toggle,
   now,
   previousFeedStart,
   lastSide,
 }: FieldProps & {
-  toggle: (key: ComponentKey) => void
   previousFeedStart: string | null
   lastSide: BreastSide | null
 }) {
@@ -254,9 +251,13 @@ function FeedFields({
   // De inicio a inicio, que es como se cuenta lo de "cada tres horas".
   const sincePrevious = previousFeedStart ? diffMinutes(previousFeedStart, times.start) : null
   const summary = feedSummary(s)
+  const tetadas = breastItems(s.items)
+  const biberones = bottleItems(s.items)
 
-  const setSession = (key: string, patch: Partial<BreastSession>) =>
-    set({ sessions: s.sessions.map((x) => (x.key === key ? { ...x, ...patch } : x)) })
+  const setItem = (id: string, patch: Partial<FeedItem>) =>
+    set({ items: s.items.map((x) => (x.id === id ? { ...x, ...patch } : x)) })
+  const removeItem = (id: string) => set({ items: s.items.filter((x) => x.id !== id) })
+  const addItem = (item: FeedItem) => set({ items: [...s.items, item] })
 
   return (
     <>
@@ -268,18 +269,18 @@ function FeedFields({
 
       <div class="field">
         <span class="field-label">🤱 Pecho</span>
-        {/* Varias tetadas siguen siendo una sola toma: se suman los minutos y
-            las horas de la toma salen de la primera y la última. */}
-        {s.sessions.map((session, index) => (
-          <div class="session" key={session.key}>
+        {/* Varias tetadas siguen siendo una sola toma. Cada una guarda su hora,
+            así que la toma sabe exactamente qué pasó dentro. */}
+        {tetadas.map((item, index) => (
+          <div class="session" key={item.id}>
             <div class="session-head">
               <span class="session-number">Tetada {index + 1}</span>
-              <span class="session-min">{formatDuration(sessionMinutes(session))}</span>
+              <span class="session-min">{formatDuration(itemMinutes(item))}</span>
               <button
                 type="button"
                 class="session-remove"
                 aria-label={`Quitar tetada ${index + 1}`}
-                onClick={() => set({ sessions: s.sessions.filter((x) => x.key !== session.key) })}
+                onClick={() => removeItem(item.id)}
               >
                 ×
               </button>
@@ -292,31 +293,27 @@ function FeedFields({
                 // De madrugada vale más no saberlo que inventárselo.
                 { value: 'desconocido', label: 'No recuerdo' },
               ]}
-              value={session.side}
-              onChange={(side) => setSession(session.key, { side })}
+              value={item.side ?? 'desconocido'}
+              onChange={(side) => setItem(item.id, { side })}
             />
             <MomentField
               label="Empezó"
-              value={session.start}
+              value={item.start}
               now={now}
-              onChange={(start) => setSession(session.key, { start })}
+              onChange={(start) => setItem(item.id, { start })}
             />
             <MomentField
               label="Terminó"
-              value={session.end}
+              value={item.end ?? item.start}
               now={now}
-              onChange={(end) => setSession(session.key, { end })}
+              onChange={(end) => setItem(item.id, { end })}
             />
           </div>
         ))}
         <button
           type="button"
           class="btn"
-          onClick={() =>
-            set({
-              sessions: [...s.sessions, newSession(nextSide(s.sessions, lastSide), now)],
-            })
-          }
+          onClick={() => addItem(newBreastItem(nextSide(s.items, lastSide), now))}
         >
           + Añadir tetada
         </button>
@@ -324,80 +321,107 @@ function FeedFields({
 
       <div class="field">
         <span class="field-label">🍼 Biberón</span>
-        <div class="chips">
-          {COMPONENT_CHIPS.map((c) => (
-            <button
-              key={c.key}
-              type="button"
-              class={s.active.includes(c.key) ? 'on' : ''}
-              onClick={() => toggle(c.key)}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
+        {/* Cada biberón lleva su hora, y la de fin si se quiere anotar cuánto
+            tardó en tomárselo. */}
+        {biberones.map((item, index) => (
+          <div class="session" key={item.id}>
+            <div class="session-head">
+              <span class="session-number">
+                {BOTTLE_LABELS[item.kind]} {index + 1}
+              </span>
+              <span class="session-min">{item.ml} ml</span>
+              <button
+                type="button"
+                class="session-remove"
+                aria-label={`Quitar biberón ${index + 1}`}
+                onClick={() => removeItem(item.id)}
+              >
+                ×
+              </button>
+            </div>
+            <Seg<FeedItemKind>
+              options={[
+                { value: 'extraida', label: '🥛 Extraída' },
+                { value: 'formula', label: '🍼 Fórmula' },
+              ]}
+              value={item.kind}
+              onChange={(kind) => setItem(item.id, { kind })}
+            />
+            <AmountField
+              value={item.ml}
+              onChange={(ml) => setItem(item.id, { ml })}
+              unit="ml"
+              presets={[20, 40, 60, 90, 120]}
+              max={1000}
+            />
+            <MomentField
+              label={item.end ? 'Empezó' : 'Hora'}
+              value={item.start}
+              now={now}
+              onChange={(start) => setItem(item.id, { start })}
+            />
+            {item.end ? (
+              <>
+                <MomentField
+                  label="Terminó"
+                  value={item.end}
+                  now={now}
+                  onChange={(end) => setItem(item.id, { end })}
+                />
+                <button
+                  type="button"
+                  class="btn-link"
+                  onClick={() => setItem(item.id, { end: null })}
+                >
+                  Quitar la hora de fin
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                class="btn-link"
+                onClick={() => setItem(item.id, { end: item.start })}
+              >
+                + Añadir hora de fin
+              </button>
+            )}
+          </div>
+        ))}
+        <button
+          type="button"
+          class="btn"
+          onClick={() => addItem(newBottleItem(nextBottleKind(biberones), lastBottleMl(biberones), now))}
+        >
+          + Añadir biberón
+        </button>
       </div>
 
-      {s.active.includes('expressed') && (
-        <div class="field component-block">
-          <span class="field-label">🥛 Leche materna extraída</span>
-          <AmountField
-            value={s.expressedMl}
-            onChange={(expressedMl) => set({ expressedMl })}
-            unit="ml"
-            presets={[20, 40, 60, 90, 120]}
-            max={1000}
-          />
-        </div>
-      )}
-
-      {s.active.includes('formula') && (
-        <div class="field component-block">
-          <span class="field-label">🍼 Fórmula</span>
-          <AmountField
-            value={s.formulaMl}
-            onChange={(formulaMl) => set({ formulaMl })}
-            unit="ml"
-            presets={[20, 40, 60, 90, 120]}
-            max={1000}
-          />
-        </div>
-      )}
-
-      {/* Las horas de la toma. Salen de las tetadas cuando las hay; si no, es
-          puntual: "biberón de 60 ml a las 13:13". Y siempre se pueden poner a
-          mano, que es lo que hace falta cuando el biberón viene después del
-          pecho y alarga la toma. */}
-      {s.manualTimes ? (
-        <>
-          <MomentField label="Empezó" value={s.start} now={now} onChange={(start) => set({ start })} />
-          <MomentField label="Terminó" value={s.end} now={now} onChange={(end) => set({ end })} />
-          <button type="button" class="btn-link" onClick={() => set({ manualTimes: false })}>
-            {s.sessions.length > 0 ? 'Volver a calcularlas de las tetadas' : 'Quitar la hora de fin'}
-          </button>
-        </>
-      ) : (
-        <>
-          {s.sessions.length === 0 ? (
-            <MomentField label="Hora" value={s.start} now={now} onChange={(start) => set({ start })} />
+      {s.items.length > 0 && (
+        <div class="duration-line">
+          {times.start === times.end ? (
+            <>
+              Toma a las <strong>{timeOf(times.start)}</strong>
+            </>
           ) : (
-            <div class="duration-line">
+            <>
               Toma de <strong>{timeOf(times.start)}</strong> a <strong>{timeOf(times.end)}</strong>
-            </div>
+            </>
           )}
-          <button
-            type="button"
-            class="btn-link"
-            onClick={() => set({ manualTimes: true, start: times.start, end: times.end })}
-          >
-            {s.sessions.length > 0 ? 'Ajustar las horas de la toma' : '+ Añadir hora de fin'}
-          </button>
-        </>
+        </div>
       )}
 
       {summary && <p class="field-hint feed-summary">{summary}</p>}
     </>
   )
+}
+
+/** El siguiente biberón repite el tipo y la cantidad del anterior. */
+function nextBottleKind(bottles: FeedItem[]): FeedItemKind {
+  return bottles[bottles.length - 1]?.kind ?? 'formula'
+}
+
+function lastBottleMl(bottles: FeedItem[]): number {
+  return bottles[bottles.length - 1]?.ml ?? 0
 }
 
 function DiaperFields({ s, set, now }: FieldProps) {

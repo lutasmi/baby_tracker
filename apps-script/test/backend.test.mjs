@@ -11,6 +11,11 @@ let backend
 
 const record = (payload) => ({ record: payload })
 
+// Una toma se manda con sus elementos: cada tetada y cada biberón por separado.
+const feed = (id, items, p = {}) => ({ record: { id, type: 'feed', items, notes: '', ...p } })
+const tetada = (id, start, end, side) => ({ id, kind: 'pecho', start, end, side })
+const bibe = (id, start, ml, kind = 'formula', end = null) => ({ id, kind, start, ml, end })
+
 beforeEach(() => {
   backend = createBackend({ now: `${DAY} 08:00` }).install()
 })
@@ -28,16 +33,17 @@ describe('instalación', () => {
     const header = (name) =>
       backend.sheet(name).getRange(1, 1, 1, 20).getValues()[0].filter(Boolean)
 
+    // La toma guarda una fila por elemento; `Toma_ID` es lo que las une.
     expect(header('Tomas')).toEqual([
       'ID',
+      'Toma_ID',
       'Fecha',
       'Hora_Inicio',
       'Hora_Fin',
       'Duracion_Min',
-      'Pecho_Min',
+      'Tipo',
       'Pecho_Lado',
-      'Extraida_Ml',
-      'Formula_Ml',
+      'Cantidad_Ml',
       'Notas',
       'Creado_Por',
       'Creado_En',
@@ -54,9 +60,7 @@ describe('instalación', () => {
   it('da formato de número a las columnas numéricas y de texto al resto', () => {
     // Si una columna numérica se queda como texto, Sheets la alinea a la
     // izquierda y deja de servir para fórmulas o gráficos.
-    expect(backend.columnFormat('Tomas', 'Formula_Ml')).toBe('0')
-    expect(backend.columnFormat('Tomas', 'Extraida_Ml')).toBe('0')
-    expect(backend.columnFormat('Tomas', 'Pecho_Min')).toBe('0')
+    expect(backend.columnFormat('Tomas', 'Cantidad_Ml')).toBe('0')
     expect(backend.columnFormat('Tomas', 'Duracion_Min')).toBe('0')
     expect(backend.columnFormat('Peso', 'Gramos')).toBe('0')
     expect(backend.columnFormat('Bebe', 'Peso_Nacimiento_G')).toBe('0')
@@ -77,17 +81,7 @@ describe('instalación', () => {
 
   it('volver a ejecutarlo no duplica nada ni pierde datos', () => {
     backend.setNow(`${DAY} 10:00`)
-    backend.call(
-      'createRecord',
-      record({
-        id: 'previo',
-        type: 'feed',
-        start: `${DAY} 09:00`,
-        end: `${DAY} 09:20`,
-        formulaMl: 60,
-        notes: '',
-      })
-    )
+    backend.call('createRecord', feed('previo', [bibe('b1', `${DAY} 09:00`, 60)]))
     const hojas = backend.spreadsheet().getSheets().length
     const cabecera = backend.sheet('Tomas').getRange(1, 1, 1, 15).getValues()[0]
 
@@ -112,7 +106,7 @@ describe('instalación', () => {
     backend.runSetup()
 
     const cabecera = backend.sheet('Tomas').getRange(1, 1, 1, 20).getValues()[0].filter(Boolean)
-    expect(cabecera).toEqual(expect.arrayContaining(['Pecho_Lado', 'Extraida_Ml', 'Formula_Ml']))
+    expect(cabecera).toEqual(expect.arrayContaining(['Toma_ID', 'Tipo', 'Cantidad_Ml']))
     // Las columnas que ya estaban no se reordenan y su fila se conserva.
     expect(cabecera.slice(0, 6)).toEqual([
       'ID',
@@ -122,11 +116,11 @@ describe('instalación', () => {
       'Duracion_Min',
       'Pecho_Min',
     ])
+    // Y la toma de antes se sigue leyendo, ahora repartida en elementos.
     backend.setNow(`${DAY} 12:00`)
-    expect(backend.call('getDay', { date: DAY }).records[0]).toMatchObject({
-      id: 'viejo-1',
-      breastMin: 15,
-    })
+    const vieja = backend.call('getDay', { date: DAY }).records[0]
+    expect(vieja).toMatchObject({ id: 'viejo-1', breastMin: 15, end: `${DAY} 09:20` })
+    expect(vieja.items).toHaveLength(1)
   })
 })
 
@@ -137,18 +131,11 @@ describe('un día de uso', () => {
       settings: { birth: '2026-08-05 09:17', birthWeightG: 3420 },
     })
 
-    // 08:05 — toma de fórmula anotada justo al terminar.
+    // 08:05 — biberón de fórmula anotado justo al terminar.
     backend.setNow(`${DAY} 08:05`)
     backend.call(
       'createRecord',
-      record({
-        id: 'toma-1',
-        type: 'feed',
-        start: `${DAY} 07:45`,
-        end: `${DAY} 08:03`,
-        formulaMl: 63,
-        notes: '',
-      })
+      feed('toma-1', [bibe('t1-bib', `${DAY} 07:45`, 63, 'formula', `${DAY} 08:03`)])
     )
 
     // 08:20 — pañal con las dos cosas.
@@ -187,21 +174,19 @@ describe('un día de uso', () => {
       })
     )
 
-    // 13:00 — toma mixta: pecho, extraída y fórmula a la vez.
+    // 13:00 — toma larga: tetada, leche extraída y remate de fórmula.
     backend.setNow(`${DAY} 13:00`)
     backend.call(
       'createRecord',
-      record({
-        id: 'toma-2',
-        type: 'feed',
-        start: `${DAY} 12:20`,
-        end: `${DAY} 12:51`,
-        breastMin: 17,
-        breastSide: 'izquierdo',
-        expressedMl: 28,
-        formulaMl: 37,
-        notes: 'con ayuda',
-      })
+      feed(
+        'toma-2',
+        [
+          tetada('t2-pecho', `${DAY} 12:20`, `${DAY} 12:37`, 'izquierdo'),
+          bibe('t2-extr', `${DAY} 12:40`, 28, 'extraida'),
+          bibe('t2-form', `${DAY} 12:51`, 37, 'formula'),
+        ],
+        { notes: 'con ayuda' }
+      )
     )
 
     // 16:00 — se anota un pis de la tarde y un baño.
@@ -219,25 +204,36 @@ describe('un día de uso', () => {
   it('cada registro acaba en su pestaña, con sus columnas', () => {
     liveTheDay()
 
-    expect(backend.sheet('Tomas').asObjects()).toHaveLength(2)
+    // Una fila por elemento: el biberón de la mañana y los tres de la tarde.
+    expect(backend.sheet('Tomas').asObjects()).toHaveLength(4)
     expect(backend.sheet('Panales').asObjects()).toHaveLength(2)
     expect(backend.sheet('Sueno').asObjects()).toHaveLength(1)
     expect(backend.sheet('Banos').asObjects()).toHaveLength(1)
 
-    expect(backend.sheet('Tomas').asObjects()[1]).toMatchObject({
-      ID: 'toma-2',
+    const tomas = backend.sheet('Tomas').asObjects()
+    expect(tomas[1]).toMatchObject({
+      ID: 't2-pecho',
+      Toma_ID: 'toma-2',
       Fecha: DAY,
       Hora_Inicio: `${DAY} 12:20`,
-      Hora_Fin: `${DAY} 12:51`,
-      Duracion_Min: 31,
-      Pecho_Min: 17,
+      Hora_Fin: `${DAY} 12:37`,
+      Duracion_Min: 17,
+      Tipo: 'Pecho',
       Pecho_Lado: 'Izquierdo',
-      Extraida_Ml: 28,
-      Formula_Ml: 37,
+      Cantidad_Ml: '',
       Notas: 'con ayuda',
       Creado_Por: 'ana@example.com',
       Eliminado: '',
     })
+    expect(tomas[2]).toMatchObject({
+      ID: 't2-extr',
+      Toma_ID: 'toma-2',
+      Hora_Inicio: `${DAY} 12:40`,
+      Hora_Fin: '',
+      Tipo: 'Extraída',
+      Cantidad_Ml: 28,
+    })
+    expect(tomas[3]).toMatchObject({ ID: 't2-form', Tipo: 'Fórmula', Cantidad_Ml: 37 })
 
     expect(backend.sheet('Panales').asObjects()[0]).toMatchObject({
       Hora: `${DAY} 08:18`,
@@ -348,14 +344,7 @@ describe('un día de uso', () => {
     backend.setNow(`${DAY} 16:10`)
     backend.call(
       'createRecord',
-      record({
-        id: 'toma-noche',
-        type: 'feed',
-        start: '2026-08-06 23:30',
-        end: '2026-08-06 23:50',
-        formulaMl: 50,
-        notes: '',
-      })
+      feed('toma-noche', [bibe('n1', '2026-08-06 23:30', 50, 'formula', '2026-08-06 23:50')])
     )
     const day = backend.call('getDay', { date: DAY })
     expect(day.records.find((r) => r.id === 'toma-noche')).toBeUndefined()
@@ -396,17 +385,7 @@ describe('evolución por días de vida', () => {
       'createRecord',
       record({ id: 'p-d3', type: 'diaper', start: `${DAY} 12:00`, pee: true, poop: false, notes: '' })
     )
-    backend.call(
-      'createRecord',
-      record({
-        id: 't-d3',
-        type: 'feed',
-        start: `${DAY} 13:00`,
-        end: `${DAY} 13:20`,
-        formulaMl: 90,
-        notes: '',
-      })
-    )
+    backend.call('createRecord', feed('t-d3', [bibe('b-d3', `${DAY} 13:00`, 90)]))
     backend.call(
       'createRecord',
       record({ id: 'w-d3', type: 'weight', start: `${DAY} 14:00`, grams: 3300, notes: '' })
@@ -439,26 +418,14 @@ describe('correcciones posteriores', () => {
     backend.setNow(`${DAY} 11:00`)
     backend.call(
       'createRecord',
-      record({
-        id: 'toma-1',
-        type: 'feed',
-        start: `${DAY} 10:00`,
-        end: `${DAY} 10:20`,
-        formulaMl: 60,
-        notes: '',
-      })
+      feed('toma-1', [bibe('b1', `${DAY} 10:00`, 60, 'formula', `${DAY} 10:20`)])
     )
   })
 
   it('editar una toma reescribe su fila sin crear otra', () => {
     backend.call(
       'updateRecord',
-      record({
-        id: 'toma-1',
-        type: 'feed',
-        start: `${DAY} 10:00`,
-        end: `${DAY} 10:25`,
-        expressedMl: 90,
+      feed('toma-1', [bibe('b1', `${DAY} 10:00`, 90, 'extraida', `${DAY} 10:25`)], {
         notes: 'corregido',
       })
     )
@@ -466,14 +433,68 @@ describe('correcciones posteriores', () => {
     expect(filas).toHaveLength(1)
     expect(filas[0]).toMatchObject({
       Duracion_Min: 25,
-      Formula_Ml: '', // ya no hay fórmula
-      Extraida_Ml: 90,
+      Tipo: 'Extraída', // ya no es fórmula
+      Cantidad_Ml: 90,
       Notas: 'corregido',
       Modificado_Por: 'ana@example.com',
     })
   })
 
-  it('borrar es lógico: la fila se queda marcada', () => {
+  it('añadir una tetada a la toma añade su fila, y quitarla la retira', () => {
+    backend.call(
+      'updateRecord',
+      feed('toma-1', [
+        bibe('b1', `${DAY} 10:00`, 60, 'formula', `${DAY} 10:20`),
+        tetada('t1', `${DAY} 10:30`, `${DAY} 10:45`, 'derecho'),
+      ])
+    )
+    expect(backend.sheet('Tomas').asObjects()).toHaveLength(2)
+    let toma = backend.call('getDay', { date: DAY }).records[0]
+    expect(toma).toMatchObject({ breastMin: 15, breastSide: 'derecho', end: `${DAY} 10:45` })
+
+    // Al quitarla, su fila queda marcada como eliminada y la toma se encoge.
+    backend.call(
+      'updateRecord',
+      feed('toma-1', [bibe('b1', `${DAY} 10:00`, 60, 'formula', `${DAY} 10:20`)])
+    )
+    const filas = backend.sheet('Tomas').asObjects()
+    expect(filas).toHaveLength(2)
+    expect(filas.find((f) => f.ID === 't1').Eliminado).toBe('TRUE')
+    toma = backend.call('getDay', { date: DAY }).records[0]
+    expect(toma).toMatchObject({ breastMin: 0, end: `${DAY} 10:20` })
+    expect(toma.items).toHaveLength(1)
+  })
+
+  it('al corregir una toma del modelo anterior, su fila se reescribe entera', () => {
+    // Una toma guardada por la versión anterior: los totales en una sola fila,
+    // sin Toma_ID ni Tipo, y con la columna Pecho_Min que ya no se crea.
+    const sheet = backend.sheet('Tomas')
+    const pechoMin = sheet.getRange(1, 1, 1, 20).getValues()[0].filter(Boolean).length + 1
+    sheet.setCell(1, pechoMin, 'Pecho_Min')
+    sheet.appendRow(['vieja-1', '', DAY, `${DAY} 09:00`, `${DAY} 09:20`, 20, '', 'Ambos', '', ''])
+    sheet.setCell(sheet.getLastRow(), pechoMin, 20)
+
+    backend.setNow(`${DAY} 12:00`)
+    const vieja = backend.call('getDay', { date: DAY }).records.find((r) => r.id === 'vieja-1')
+    expect(vieja).toMatchObject({ breastMin: 20, breastSide: 'ambos' })
+    expect(vieja.items).toHaveLength(1)
+
+    // Se corrige: eran 15 minutos del pecho izquierdo.
+    backend.call(
+      'updateRecord',
+      feed('vieja-1', [tetada(vieja.items[0].id, `${DAY} 09:00`, `${DAY} 09:15`, 'izquierdo')])
+    )
+    const fila = backend.sheet('Tomas').asObjects().find((f) => f.ID === vieja.items[0].id)
+    expect(fila).toMatchObject({
+      Toma_ID: 'vieja-1',
+      Tipo: 'Pecho',
+      Pecho_Lado: 'Izquierdo',
+      Duracion_Min: 15,
+      Pecho_Min: '', // el total del modelo anterior ya no dice nada
+    })
+  })
+
+  it('borrar es lógico: las filas se quedan marcadas', () => {
     backend.call('deleteRecord', { type: 'feed', id: 'toma-1' })
     const filas = backend.sheet('Tomas').asObjects()
     expect(filas).toHaveLength(1)
@@ -484,14 +505,7 @@ describe('correcciones posteriores', () => {
   it('reintentar una creación no duplica la fila', () => {
     backend.call(
       'createRecord',
-      record({
-        id: 'toma-1',
-        type: 'feed',
-        start: `${DAY} 10:00`,
-        end: `${DAY} 10:20`,
-        formulaMl: 60,
-        notes: '',
-      })
+      feed('toma-1', [bibe('b1', `${DAY} 10:00`, 60, 'formula', `${DAY} 10:20`)])
     )
     expect(backend.sheet('Tomas').asObjects()).toHaveLength(1)
   })
@@ -500,7 +514,7 @@ describe('correcciones posteriores', () => {
     // Alguien cambia la cantidad y la hora directamente en Sheets.
     const sheet = backend.sheet('Tomas')
     const header = sheet.getRange(1, 1, 1, 15).getValues()[0]
-    sheet.setCell(2, header.indexOf('Formula_Ml') + 1, '75')
+    sheet.setCell(2, header.indexOf('Cantidad_Ml') + 1, '75')
     sheet.setCell(2, header.indexOf('Hora_Fin') + 1, '10:40')
 
     const day = backend.call('getDay', { date: DAY })
@@ -529,12 +543,7 @@ describe('reglas que protegen los datos', () => {
 
   it('rechaza una toma sin componentes y un pañal vacío', () => {
     backend.setNow(`${DAY} 10:00`)
-    expect(() =>
-      backend.call(
-        'createRecord',
-        record({ id: 'x', type: 'feed', start: `${DAY} 09:00`, end: `${DAY} 09:20`, notes: '' })
-      )
-    ).toThrow(/al menos un componente/)
+    expect(() => backend.call('createRecord', feed('x', []))).toThrow(/al menos una tetada/)
     expect(() =>
       backend.call(
         'createRecord',

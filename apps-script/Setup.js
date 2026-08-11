@@ -53,10 +53,11 @@ function setup() {
 
 /** Columnas de un tipo que guardan números, no texto. */
 function numericColumnsFor(type) {
-  var out = RECORD_TYPES[type].interval ? ['Duracion_Min'] : [];
-  var fields = RECORD_TYPES[type].fields;
-  for (var i = 0; i < fields.length; i++) {
-    if (fields[i].kind === 'int') out.push(fields[i].column);
+  var spec = RECORD_TYPES[type];
+  if (spec.grouped) return FEED_NUMERIC_COLUMNS.slice();
+  var out = spec.interval ? ['Duracion_Min'] : [];
+  for (var i = 0; i < spec.fields.length; i++) {
+    if (spec.fields[i].kind === 'int') out.push(spec.fields[i].column);
   }
   return out;
 }
