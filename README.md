@@ -63,6 +63,7 @@ apps-script/          Backend Google Apps Script (Main, Sheets, Logic, Setup)
   test/               Tests del backend y simulación de la hoja en memoria
 scripts/              Generador de iconos PNG
 docs/modelo-de-datos.md Pestañas, columnas y cómo añadir campos o tipos
+docs/fotos.md           Evolutivo anotado: fotos en los registros
 docs/especificacion.md  Especificación original del producto (contrato de la V1)
 .github/workflows/    Despliegue automático en GitHub Pages
 ```
@@ -175,6 +176,6 @@ Entre los pasos 3a y 3b hay unos minutos en los que la aplicación puede dar err
 
 ## Funcionalidad futura
 
-Cola local sin conexión con sincronización, recordatorios, estadísticas semanales/mensuales, ventanas de sueño ([diseño](docs/prediccion-sueno-tomas.md)), medicación, hitos y exportaciones.
+Cola local sin conexión con sincronización, recordatorios, estadísticas semanales/mensuales, ventanas de sueño ([diseño](docs/prediccion-sueno-tomas.md)), medicación, hitos, exportaciones y fotos en los registros ([análisis](docs/fotos.md)).
 
 Añadir un tipo de evento nuevo requiere: una entrada en los mapas de etiquetas del backend (`Logic.js`), un formulario y los textos de resumen en el frontend.
