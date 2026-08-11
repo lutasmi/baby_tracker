@@ -201,7 +201,9 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
               {isCurrent && <SleepCaption data={data} now={now} />}
             </div>
 
-            {isCurrent && <WeightCard data={data} />}
+            {/* El peso no es del tramo que se esté mirando: es el último que
+                haya, y por eso se ve siempre, con su fecha. */}
+            <WeightCard data={data} today={today} />
 
             <div class="nav-pair">
               <button class="btn" onClick={() => navigate('#/cronologia')}>
@@ -475,7 +477,7 @@ function SleepCaption({ data, now }: { data: DayData; now: string }) {
 // Peso
 // ---------------------------------------------------------------------------
 
-function WeightCard({ data }: { data: DayData }) {
+function WeightCard({ data, today }: { data: DayData; today: string }) {
   const last = data.last.weight
   const birth = data.settings.birthWeightG
   const change = last ? weightChange(last.grams, birth) : null
@@ -484,25 +486,25 @@ function WeightCard({ data }: { data: DayData }) {
     <div class="card weight-card">
       <div class="card-title">Peso</div>
       {last ? (
-        <>
-          <div class="weight-row">
-            <button class="weight-main" onClick={() => goEdit(last.id)}>
-              <div class="weight-value">{formatKg(last.grams)}</div>
-              <div class="weight-when">
-                {last.start.slice(0, 10) === data.date ? 'hoy' : last.start.slice(0, 10)} ·{' '}
-                {timeOf(last.start)}
-              </div>
-            </button>
-            {change && (
-              <div class="weight-change">
-                <div class="weight-diff">{formatGrams(change.diffG)}</div>
-                <div class="weight-pct">{formatPercent(change.percent)}</div>
-                <div class="weight-since">desde el nacimiento</div>
-              </div>
-            )}
-          </div>
-          {birth > 0 && <div class="weight-birth">Al nacer {formatKg(birth)}</div>}
-        </>
+        <button class="weight-row" onClick={() => goEdit(last.id)}>
+          <span class="weight-main">
+            <span class="weight-value">{formatKg(last.grams)}</span>
+            {/* La fecha siempre, aunque se esté mirando otro tramo: la pesada
+                es de cuando es. */}
+            <span class="weight-when">
+              {formatDateHuman(dateOf(last.start), today)} · {timeOf(last.start)}
+            </span>
+          </span>
+          {change && (
+            // Verde por encima del peso al nacer, rojo por debajo: el mismo
+            // criterio que la gráfica de la evolución.
+            <span class={`weight-pill ${change.diffG < 0 ? 'below' : 'above'}`}>
+              <span class="weight-pct">{formatPercent(change.percent)}</span>
+              <span class="weight-diff">{formatGrams(change.diffG)}</span>
+            </span>
+          )}
+          <span class="stat-edit">›</span>
+        </button>
       ) : (
         <div class="weight-empty">
           {birth > 0
@@ -510,16 +512,13 @@ function WeightCard({ data }: { data: DayData }) {
             : 'Todavía no hay ninguna pesada. El peso al nacer se indica en Ajustes.'}
         </div>
       )}
+      {birth > 0 && last && <div class="weight-birth">Al nacer {formatKg(birth)}</div>}
       {/* Pesar es cosa de cada dos o tres días: merece su acceso directo en
-          lugar de tener que buscar la pesada en la cronología. */}
-      <div class="nav-pair" style="margin-top:12px">
-        <button class="btn" onClick={() => navigate('#/nuevo/peso')}>
-          ⚖️ Añadir pesada
-        </button>
-        <button class="btn" onClick={() => navigate('#/evolucion/peso')}>
-          📋 Ver pesadas
-        </button>
-      </div>
+          lugar de tener que buscar la pesada en la cronología. Ver la gráfica
+          ya lo resuelve el botón de Evolución de abajo. */}
+      <button class="btn" style="margin-top:12px" onClick={() => navigate('#/nuevo/peso')}>
+        ⚖️ Añadir pesada
+      </button>
     </div>
   )
 }

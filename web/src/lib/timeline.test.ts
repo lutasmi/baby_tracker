@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { aDay, aFeed, aSleep } from '../test-fixtures'
-import { windowRecords } from './timeline'
+import { aBath, aDay, aDiaper, aFeed, aSleep } from '../test-fixtures'
+import { filterByType, windowRecords } from './timeline'
 
 describe('windowRecords', () => {
   const noche = aSleep({ start: '2026-08-06 21:30', end: '2026-08-07 07:00' })
@@ -37,5 +37,25 @@ describe('windowRecords', () => {
   it('sirve igual para un día de vida que no empieza a medianoche', () => {
     const out = windowRecords([hoy, ayer], '2026-08-06 09:17', '2026-08-07 09:17')
     expect(out.map((r) => r.id)).toEqual([noche.id])
+  })
+})
+
+describe('filterByType', () => {
+  const toma = aFeed({ start: '2026-08-07 10:00' })
+  const panal = aDiaper({ start: '2026-08-07 11:00' })
+  const bano = aBath({ start: '2026-08-07 19:00' })
+  const todos = [toma, panal, bano]
+
+  it('sin ningún tipo elegido devuelve todo, que es lo normal', () => {
+    expect(filterByType(todos, [])).toBe(todos)
+  })
+
+  it('deja solo los tipos elegidos, en su orden original', () => {
+    expect(filterByType(todos, ['feed']).map((r) => r.id)).toEqual([toma.id])
+    expect(filterByType(todos, ['bath', 'feed']).map((r) => r.id)).toEqual([toma.id, bano.id])
+  })
+
+  it('un tipo del que no hay nada deja el tramo vacío', () => {
+    expect(filterByType(todos, ['sleep'])).toEqual([])
   })
 })

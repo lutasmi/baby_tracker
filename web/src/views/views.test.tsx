@@ -155,6 +155,25 @@ describe('Dashboard · peso', () => {
     expect(html).toContain('Añadir pesada')
   })
 
+  it('la pesada lleva su fecha, no la del tramo que se esté mirando', () => {
+    const ayer = aWeight({ start: `${addDays(TODAY, -1)} 09:00`, grams: 3300 })
+    const html = renderDashboard(day({ last: { ...day().last, weight: ayer } }))
+    expect(html).toContain('3,300 kg')
+    expect(html).toContain('Ayer · 09:00')
+  })
+
+  it('marca en verde por encima del peso al nacer y en rojo por debajo', () => {
+    const bajo = aWeight({ grams: 3210 })
+    expect(renderDashboard(day({ last: { ...day().last, weight: bajo } }))).toContain(
+      'weight-pill below'
+    )
+    clearDayCache()
+    const alto = aWeight({ grams: 3500 })
+    expect(renderDashboard(day({ last: { ...day().last, weight: alto } }))).toContain(
+      'weight-pill above'
+    )
+  })
+
   it('sin peso al nacer no inventa una variación', () => {
     const peso = aWeight({ grams: 3210 })
     const html = renderDashboard(
@@ -164,7 +183,7 @@ describe('Dashboard · peso', () => {
       })
     )
     expect(html).toContain('3,210 kg')
-    expect(html).not.toContain('desde el nacimiento')
+    expect(html).not.toContain('weight-pill')
   })
 })
 
@@ -299,6 +318,24 @@ describe('Timeline', () => {
     expect(html).toContain('Día de vida 3')
     expect(html).toContain('1 toma')
     expect(html).toContain('0 pañales')
+  })
+
+  it('deja filtrar por tipo de registro, y volver a verlo todo', () => {
+    cacheDay(
+      day({
+        records: [
+          aFeed({ start: `${TODAY} 10:00`, end: `${TODAY} 10:20`, formulaMl: 60 }),
+          aDiaper({ start: `${TODAY} 11:00`, pee: true, poop: false }),
+        ],
+      })
+    )
+    const html = render(<Timeline date={TODAY} />)
+    for (const label of ['🍼 Tomas', '💩 Pañales', '😴 Sueño', '🛁 Baños', '⚖️ Peso']) {
+      expect(html).toContain(label)
+    }
+    // Sin filtro puesto se ve todo, que es lo habitual.
+    expect(html).toContain('aria-pressed="false"')
+    expect(html).not.toContain('Ver todo')
   })
 
   it('ofrece encadenar tramos anteriores sin salir de la pantalla', () => {
@@ -602,10 +639,11 @@ describe('Dashboard · accesos que faltaban', () => {
     expect(kpiNote(html, '🍼 Tomas')).toBe('sin registros')
   })
 
-  it('el peso tiene acceso directo a sus registros', () => {
+  it('el peso tiene su acceso para pesar, sin duplicar el de la evolución', () => {
     const html = renderDashboard(day())
-    expect(html).toContain('Ver pesadas')
     expect(html).toContain('Añadir pesada')
+    // Ver la gráfica ya lo resuelve el botón de Evolución de abajo.
+    expect(html).not.toContain('Ver pesadas')
   })
 
   it('la evolución puede abrirse directamente por el peso', () => {

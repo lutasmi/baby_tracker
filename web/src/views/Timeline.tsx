@@ -13,10 +13,19 @@ import {
 import { daySummary, feedGaps } from '../lib/derive'
 import { lifeDayNumber, lifeDayRange } from '../lib/lifeday'
 import { recordDetail, recordIcon, recordTimeParts, recordTitle } from '../lib/summary'
-import { windowRecords } from '../lib/timeline'
+import { filterByType, windowRecords } from '../lib/timeline'
 import type { DayMode } from '../prefs'
 import { userName } from '../store'
-import type { BabyRecord, DayData } from '../types'
+import type { BabyRecord, DayData, RecordType } from '../types'
+
+/** Los filtros, en el orden en que se usan a lo largo del día. */
+const FILTERS: { type: RecordType; label: string }[] = [
+  { type: 'feed', label: '🍼 Tomas' },
+  { type: 'diaper', label: '💩 Pañales' },
+  { type: 'sleep', label: '😴 Sueño' },
+  { type: 'bath', label: '🛁 Baños' },
+  { type: 'weight', label: '⚖️ Peso' },
+]
 
 /** Un tramo de la cronología: un día natural o un día de vida. */
 interface Section {
@@ -35,9 +44,14 @@ export function Timeline({ date }: { date?: string }) {
   const [mode, setMode] = useDayMode()
   // Cuántos tramos anteriores se han pedido con "Ver anteriores".
   const [extra, setExtra] = useState(0)
+  // Tipos que se quieren ver. Vacío es verlo todo, que es lo habitual.
+  const [types, setTypes] = useState<RecordType[]>([])
 
   // Cambiar de fecha o de calendario empieza de cero.
   useEffect(() => setExtra(0), [day, mode])
+
+  const toggleType = (t: RecordType) =>
+    setTypes(types.includes(t) ? types.filter((x) => x !== t) : [...types, t])
 
   const goTo = (d: string) => navigateReplace(`#/cronologia/${d}`)
   const birth = data?.settings.birth ?? null
@@ -92,6 +106,28 @@ export function Timeline({ date }: { date?: string }) {
           </button>
         </div>
 
+        {/* Filtrar por tipo: la cronología completa es lo normal, pero para
+            seguir una sola cosa —cuántas veces ha comido, cómo ha dormido—
+            estorba todo lo demás. */}
+        <div class="chips tl-filter">
+          {FILTERS.map((f) => (
+            <button
+              key={f.type}
+              type="button"
+              class={types.includes(f.type) ? 'on' : ''}
+              aria-pressed={types.includes(f.type)}
+              onClick={() => toggleType(f.type)}
+            >
+              {f.label}
+            </button>
+          ))}
+          {types.length > 0 && (
+            <button type="button" class="btn-link" onClick={() => setTypes([])}>
+              Ver todo
+            </button>
+          )}
+        </div>
+
         {mode === 'life' && !birth && (
           <p class="field-hint" style="text-align:center">
             Sin fecha de nacimiento no hay días de vida: se muestran días naturales.
@@ -107,7 +143,7 @@ export function Timeline({ date }: { date?: string }) {
 
         {!data && error && <ErrorCard message={error.message} onRetry={() => void reload()} />}
 
-        {data && <Stream sections={sections} days={days} now={now} />}
+        {data && <Stream sections={sections} days={days} now={now} types={types} />}
 
         {data && (
           <button class="btn" disabled={loadingDays} onClick={() => setExtra(extra + 1)}>
@@ -183,10 +219,13 @@ function Stream({
   sections,
   days,
   now,
+  types,
 }: {
   sections: Section[]
   days: DayData[]
   now: string
+  /** Tipos que se están mirando; vacío es todos. */
+  types: RecordType[]
 }) {
   const withRecords = sections.map((section, index) => ({
     section,
@@ -197,25 +236,32 @@ function Stream({
     }),
   }))
 
-  // Los huecos entre tomas se calculan sobre toda la corriente, así que la
-  // primera toma de un tramo se compara con la última del anterior.
+  // Los huecos entre tomas se calculan sobre toda la corriente —y sobre todos
+  // los registros, filtre lo que filtre la pantalla—, así que la primera toma
+  // de un tramo se compara con la última del anterior.
   const chronological = [...withRecords].reverse().flatMap((s) => s.records)
   const oldest = days.find((d) => d.date === dateOf(sections[sections.length - 1]?.start ?? ''))
   const gaps = feedGaps(chronological, oldest?.previousFeed ?? null)
 
   return (
     <>
-      {withRecords.map(({ section, records }) => (
+      {withRecords.map(({ section, records }) => {
+        // El resumen de la cabecera es del tramo entero, no de lo filtrado:
+        // dice cómo fue el día, y eso no cambia por mirar una sola cosa.
+        const visible = filterByType(records, types)
+        return (
         <section class="day-section" key={section.key}>
           <SectionHeader section={section} records={records} now={now} />
-          {records.length === 0 ? (
+          {visible.length === 0 ? (
             <div class="empty-state">
               <span class="icon">🗓️</span>
-              No hay registros en este tramo.
+              {records.length === 0
+                ? 'No hay registros en este tramo.'
+                : 'Nada de lo filtrado en este tramo.'}
             </div>
           ) : (
             <div class="tl-list">
-              {records.map((r) => (
+              {visible.map((r) => (
                 <TimelineItem
                   key={r.id}
                   record={r}
@@ -226,7 +272,8 @@ function Stream({
             </div>
           )}
         </section>
-      ))}
+        )
+      })}
     </>
   )
 }

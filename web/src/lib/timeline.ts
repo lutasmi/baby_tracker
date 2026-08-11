@@ -4,7 +4,7 @@
 // casos un registro pertenece al periodo en el que **empieza**: así no aparece
 // dos veces cuando se encadenan periodos consecutivos.
 
-import type { BabyRecord, DayData } from '../types'
+import type { BabyRecord, DayData, RecordType } from '../types'
 
 /**
  * Registros de los días cargados que empiezan dentro de [start, end).
@@ -33,6 +33,15 @@ export function windowRecords(
     }
   }
   return out.sort((a, b) => (a.start === b.start ? (a.id < b.id ? -1 : 1) : a.start < b.start ? -1 : 1))
+}
+
+/**
+ * Los registros de los tipos elegidos. Sin ninguno elegido se devuelven todos:
+ * la cronología completa es lo normal, y filtrar es la excepción.
+ */
+export function filterByType(records: BabyRecord[], types: RecordType[]): BabyRecord[] {
+  if (types.length === 0) return records
+  return records.filter((r) => types.includes(r.type))
 }
 
 /** ¿El registro llega hasta `moment` o más allá? */
