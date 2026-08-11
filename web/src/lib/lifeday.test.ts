@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { aDiaper, aFeed, aSleep } from '../test-fixtures'
-import { isHydration, lifeDayNumber, lifeDayRange, lifeDayTotals, periodCounts } from './lifeday'
+import { isHydration, lifeDayNumber, lifeDayRange, lifeDayTotals } from './lifeday'
 
 const BIRTH = '2026-08-05 09:17'
 
@@ -61,11 +61,11 @@ describe('lifeDayTotals', () => {
   })
 })
 
-describe('contadores de la pantalla de inicio', () => {
+describe('lo que los totales separan', () => {
   const range = lifeDayRange('2026-08-05 09:17', 3) // del 7 a las 09:17 al 8
 
   it('separa las tomas de las hidrataciones por los minutos de pecho', () => {
-    const counts = periodCounts(
+    const t = lifeDayTotals(
       [
         aFeed({ start: '2026-08-07 10:00', breastMin: 20, breastSide: 'izquierdo' }),
         aFeed({ start: '2026-08-07 12:00', breastMin: 5, breastSide: 'derecho' }), // justo en el umbral
@@ -75,7 +75,15 @@ describe('contadores de la pantalla de inicio', () => {
       range.start,
       range.end
     )
-    expect(counts).toMatchObject({ feeds: 2, hydrations: 2 })
+    expect(t).toMatchObject({ feeds: 2, hydrations: 2 })
+    // Los minutos de pecho se suman todos: se ha tomado, aunque fuera un rato.
+    expect(t.breastMin).toBe(30)
+  })
+
+  it('una toma sin nada anotado cuenta como toma, no como hidratación', () => {
+    // Solo puede pasar editando la hoja a mano. Ante la duda, el contador
+    // principal: esconderla en hidratación sería peor.
+    expect(isHydration(aFeed({ start: '2026-08-07 10:00' }))).toBe(false)
   })
 
   it('un biberón es una toma aunque no tenga duración', () => {
@@ -89,7 +97,7 @@ describe('contadores de la pantalla de inicio', () => {
   })
 
   it('separa las cacas de los pedetes, y no cuenta los pañales de solo pis', () => {
-    const counts = periodCounts(
+    const t = lifeDayTotals(
       [
         aDiaper({ start: '2026-08-07 10:00', pee: true, poop: false }),
         aDiaper({ start: '2026-08-07 11:00', poop: true, consistency: 'pedete' }),
@@ -99,7 +107,24 @@ describe('contadores de la pantalla de inicio', () => {
       range.start,
       range.end
     )
-    expect(counts).toMatchObject({ poops: 2, pedetes: 1 })
+    // Y los cuatro son pañales, gases incluidos: cambiarlo hay que cambiarlo.
+    expect(t).toMatchObject({ poops: 2, pedetes: 1, diapers: 4 })
+  })
+
+  it('las cacas más los pedetes son los pañales con caca, ni uno más', () => {
+    const records = [
+      aDiaper({ start: '2026-08-07 10:00', pee: true, poop: false }),
+      aDiaper({ start: '2026-08-07 11:00', pee: true, poop: true, consistency: 'pedete' }),
+      aDiaper({ start: '2026-08-07 12:00', poop: true, consistency: 'liquida' }),
+      aDiaper({ start: '2026-08-07 13:00', poop: true }),
+      aDiaper({ start: '2026-08-07 15:00', poop: true, consistency: 'pedete' }),
+    ]
+    const t = lifeDayTotals(records, range.start, range.end)
+    const conCaca = records.filter((r) => r.poop).length
+    expect(t.poops + t.pedetes).toBe(conCaca)
+    // Y "pañales" son todos, también el que solo llevaba pis.
+    expect(t.diapers).toBe(5)
+    expect(t.diapers).toBeGreaterThan(conCaca)
   })
 
   it('solo cuenta lo que empieza dentro del periodo', () => {
@@ -107,11 +132,12 @@ describe('contadores de la pantalla de inicio', () => {
       aFeed({ start: '2026-08-07 09:10', formulaMl: 60 }),
       aDiaper({ start: '2026-08-08 09:17', poop: true, consistency: 'pedete' }),
     ]
-    expect(periodCounts(fuera, range.start, range.end)).toEqual({
+    expect(lifeDayTotals(fuera, range.start, range.end)).toMatchObject({
       feeds: 0,
       hydrations: 0,
       poops: 0,
       pedetes: 0,
+      diapers: 0,
     })
   })
 })

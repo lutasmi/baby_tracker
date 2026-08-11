@@ -8,6 +8,7 @@
 
 import type { BabyRecord, FeedRecord, SleepRecord } from '../types'
 import { diffMinutes, minutesInDay, timeOf } from './dates'
+import { isHydration } from './lifeday'
 import { milkMlOf } from './records'
 
 /**
@@ -87,7 +88,8 @@ export function daySummary(records: BabyRecord[], date: string, now: string): Da
   for (const r of records) {
     if (!startsOn(r)) continue
     if (r.type === 'feed') {
-      feeds++
+      // Los ratitos al pecho no engordan el recuento de tomas, aquí tampoco.
+      if (!isHydration(r)) feeds++
       milkMl += milkMlOf(r)
       breastMin += r.breastMin
     } else if (r.type === 'diaper') {

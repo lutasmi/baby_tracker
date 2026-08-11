@@ -156,9 +156,13 @@ export interface Settings {
 
 export interface LifeDayTotals {
   pees: number
+  /** Cacas de verdad: los pedetes van aparte, en `pedetes`. */
   poops: number
+  pedetes: number
   diapers: number
+  /** Tomas de verdad: los ratitos al pecho van aparte, en `hydrations`. */
   feeds: number
+  hydrations: number
   breastMin: number
   expressedMl: number
   formulaMl: number

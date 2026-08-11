@@ -17,7 +17,7 @@ import {
   timeOf,
 } from '../lib/dates'
 import { babyStatus, isStaleSleep } from '../lib/derive'
-import { lifeDayRange, lifeDayTotals, periodCounts, type PeriodCounts } from '../lib/lifeday'
+import { lifeDayRange, lifeDayTotals } from '../lib/lifeday'
 import { windowRecords } from '../lib/timeline'
 import { formatGrams, formatKg, formatPercent, weightChange } from '../lib/records'
 import type { DayMode } from '../prefs'
@@ -94,7 +94,6 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
     }
   }
   const totals = period ? lifeDayTotals(records, period.start, period.end) : null
-  const counts = period ? periodCounts(records, period.start, period.end) : null
 
   return (
     <>
@@ -155,7 +154,6 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
             />
 
             <PeriodCard
-              counts={counts!}
               period={period}
               totals={totals!}
               last={data.last}
@@ -315,14 +313,12 @@ function PeriodNav({
 function PeriodCard({
   period,
   totals: t,
-  counts: c,
   last,
   now,
   showFreshness,
 }: {
   period: Period
   totals: LifeDayTotals
-  counts: PeriodCounts
   last: DayData['last']
   now: string
   /** El "hace cuánto" solo tiene sentido mirando el tramo en curso. */
@@ -358,7 +354,7 @@ function PeriodCard({
         />
         <StatTile
           label="💩 Cacas"
-          value={String(c.poops)}
+          value={String(t.poops)}
           note={
             !showFreshness
               ? null
@@ -369,10 +365,12 @@ function PeriodCard({
           editId={showFreshness ? last.poop?.id : undefined}
           onEdit={goEdit}
         />
-        <StatTile label="💨 Pedetes" value={String(c.pedetes)} />
+        <StatTile label="💨 Pedetes" value={String(t.pedetes)} />
       </div>
       <div class="kpi-feeds">
-        {t.diapers === 0 ? 'Sin pañales' : `${t.diapers} pañales`}
+        {t.diapers === 0 ? 'Sin pañales' : `${t.diapers} ${t.diapers === 1 ? 'pañal' : 'pañales'}`}
+        {/* Cuánto hace del último, que es lo que se pregunta al ir a cambiarlo. */}
+        {showFreshness && last.diaper && ` · el último ${formatAgo(diffMinutes(last.diaper.start, now))}`}
       </div>
 
       {/* Todo lo que come, en un solo cuadro: las veces y los mililitros son la
@@ -383,7 +381,7 @@ function PeriodCard({
         <div class="kpi-row">
           <StatTile
             label="🍼 Tomas"
-            value={String(c.feeds)}
+            value={String(t.feeds)}
             note={
               !showFreshness
                 ? null
@@ -394,7 +392,7 @@ function PeriodCard({
             editId={showFreshness ? last.feed?.id : undefined}
             onEdit={goEdit}
           />
-          <StatTile label="💦 Hidratación" value={String(c.hydrations)} />
+          <StatTile label="💦 Hidratación" value={String(t.hydrations)} />
         </div>
 
         <div class="kpi-milk-head">

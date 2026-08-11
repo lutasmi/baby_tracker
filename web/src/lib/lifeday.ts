@@ -25,12 +25,39 @@ export function lifeDayRange(birth: string, n: number): { start: string; end: st
   return { start: addMinutes(birth, offset), end: addMinutes(birth, offset + DAY_MIN) }
 }
 
+/**
+ * Por debajo de estos minutos, un rato al pecho es consuelo o hidratación más
+ * que una comida. Contarlo como una toma más desvirtúa justo el número que se
+ * mira para saber si toca.
+ */
+export const HYDRATION_MAX_MIN = 5
+
+/**
+ * Una toma que fue solo un ratito al pecho.
+ *
+ * Un biberón cuenta siempre como toma, aunque se anotara sin hora de fin y
+ * dure cero minutos: lo que come es la cantidad, no el tiempo. Y una toma sin
+ * nada anotado —posible editando la hoja a mano— es una toma, no hidratación:
+ * ante la duda, el contador principal.
+ */
+export function isHydration(r: FeedRecord): boolean {
+  if (r.expressedMl + r.formulaMl > 0) return false
+  return r.breastMin > 0 && r.breastMin < HYDRATION_MAX_MIN
+}
+
+/** Un pañal con caca de verdad; el pedete son gases, no una caca. */
+export function isRealPoop(r: DiaperRecord): boolean {
+  return r.poop && r.consistency !== 'pedete'
+}
+
 export function emptyTotals(): LifeDayTotals {
   return {
     pees: 0,
     poops: 0,
+    pedetes: 0,
     diapers: 0,
     feeds: 0,
+    hydrations: 0,
     breastMin: 0,
     expressedMl: 0,
     formulaMl: 0,
@@ -49,9 +76,15 @@ export function lifeDayTotals(records: BabyRecord[], start: string, end: string)
     if (r.type === 'diaper') {
       t.diapers++
       if (r.pee) t.pees++
-      if (r.poop) t.poops++
+      // Un pedete son gases, no una caca: cuenta aparte para que el número
+      // que se vigila estas semanas siga significando lo que significaba.
+      if (isRealPoop(r)) t.poops++
+      else if (r.poop) t.pedetes++
     } else if (r.type === 'feed') {
-      t.feeds++
+      if (isHydration(r)) t.hydrations++
+      else t.feeds++
+      // Los minutos y los mililitros se suman siempre: se ha tomado, aunque
+      // fuera un ratito.
       t.breastMin += r.breastMin
       t.expressedMl += r.expressedMl
       t.formulaMl += r.formulaMl
@@ -60,57 +93,4 @@ export function lifeDayTotals(records: BabyRecord[], start: string, end: string)
   // Leche cuantificable: el pecho directo no entra porque no sabemos los ml.
   t.milkMl = t.expressedMl + t.formulaMl
   return t
-}
-
-// --- Contadores de la pantalla de inicio -------------------------------------
-//
-// Van aparte de `LifeDayTotals` a propósito: ese tipo es lo que devuelve la API
-// y lo que usa la evolución. Esto es solo cómo se presentan los KPIs, y separa
-// dos cosas que sumadas dicen menos de lo que dicen por separado.
-
-/**
- * Por debajo de estos minutos, un rato al pecho es consuelo o hidratación más
- * que una comida. Contarlo como una toma más desvirtúa justo el número que se
- * mira para saber si toca.
- */
-export const HYDRATION_MAX_MIN = 5
-
-/**
- * Una toma que fue solo un ratito al pecho.
- *
- * Un biberón cuenta siempre como toma, aunque se anotara sin hora de fin y
- * dure cero minutos: lo que come es la cantidad, no el tiempo.
- */
-export function isHydration(r: FeedRecord): boolean {
-  return r.expressedMl + r.formulaMl === 0 && r.breastMin < HYDRATION_MAX_MIN
-}
-
-/** Un pañal con caca de verdad; el pedete son gases, no una caca. */
-export function isRealPoop(r: DiaperRecord): boolean {
-  return r.poop && r.consistency !== 'pedete'
-}
-
-export interface PeriodCounts {
-  /** Tomas de verdad: con biberón, o con pecho suficiente. */
-  feeds: number
-  hydrations: number
-  /** Cacas de verdad: las que no son un pedete. */
-  poops: number
-  pedetes: number
-}
-
-/** Cuenta los registros del periodo separando tomas e hidratación, cacas y pedetes. */
-export function periodCounts(records: BabyRecord[], start: string, end: string): PeriodCounts {
-  const c: PeriodCounts = { feeds: 0, hydrations: 0, poops: 0, pedetes: 0 }
-  for (const r of records) {
-    if (r.start < start || r.start >= end) continue
-    if (r.type === 'feed') {
-      if (isHydration(r)) c.hydrations++
-      else c.feeds++
-    } else if (r.type === 'diaper' && r.poop) {
-      if (isRealPoop(r)) c.poops++
-      else c.pedetes++
-    }
-  }
-  return c
 }

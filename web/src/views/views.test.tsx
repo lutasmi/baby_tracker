@@ -616,6 +616,14 @@ describe('Dashboard · lo que cada contador separa', () => {
     expect(html).toMatch(/kpi-milk[\s\S]*🍼 Tomas[\s\S]*💦 Hidratación[\s\S]*Leche cuantificable/)
   })
 
+  it('la línea de pañales dice cuánto hace del último', () => {
+    const panal = aDiaper({ start: `${TODAY} 08:00`, pee: true, poop: false })
+    const html = renderDashboard(
+      day({ records: [panal], last: { ...day().last, diaper: panal } })
+    )
+    expect(html).toMatch(/1 pañal · el último (hace|ahora mismo)/)
+  })
+
   it('los pedetes van aparte de las cacas', () => {
     const html = renderDashboard(
       day({

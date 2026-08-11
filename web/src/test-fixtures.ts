@@ -151,8 +151,10 @@ export function someTotals(p: Partial<LifeDayTotals> = {}): LifeDayTotals {
   return {
     pees: 0,
     poops: 0,
+    pedetes: 0,
     diapers: 0,
     feeds: 0,
+    hydrations: 0,
     breastMin: 0,
     expressedMl: 0,
     formulaMl: 0,

@@ -760,8 +760,11 @@ var HYDRATION_MAX_MIN = 5;
  */
 function isHydration(record) {
   if (record.type !== 'feed') return false;
-  var ml = (record.expressedMl || 0) + (record.formulaMl || 0);
-  return ml === 0 && (record.breastMin || 0) < HYDRATION_MAX_MIN;
+  if ((record.expressedMl || 0) + (record.formulaMl || 0) > 0) return false;
+  // Una toma sin nada anotado —posible editando la hoja a mano— es una toma,
+  // no hidratación: ante la duda, el contador principal.
+  var min = record.breastMin || 0;
+  return min > 0 && min < HYDRATION_MAX_MIN;
 }
 
 /** Un pañal con caca de verdad; el pedete son gases, no una caca. */
@@ -958,8 +961,10 @@ function lifeDayTotals(records, rangeStart, rangeEnd) {
   var t = {
     pees: 0,
     poops: 0,
+    pedetes: 0,
     diapers: 0,
     feeds: 0,
+    hydrations: 0,
     breastMin: 0,
     expressedMl: 0,
     formulaMl: 0,
@@ -971,9 +976,15 @@ function lifeDayTotals(records, rangeStart, rangeEnd) {
     if (r.type === 'diaper') {
       t.diapers++;
       if (r.pee) t.pees++;
-      if (r.poop) t.poops++;
+      // Un pedete son gases, no una caca: cuenta aparte para que el número que
+      // se vigila estas semanas siga significando lo que significaba.
+      if (isRealPoop(r)) t.poops++;
+      else if (r.poop) t.pedetes++;
     } else if (r.type === 'feed') {
-      t.feeds++;
+      if (isHydration(r)) t.hydrations++;
+      else t.feeds++;
+      // Los minutos y los mililitros se suman siempre: se ha tomado, aunque
+      // fuera un ratito.
       t.breastMin += r.breastMin || 0;
       t.expressedMl += r.expressedMl || 0;
       t.formulaMl += r.formulaMl || 0;

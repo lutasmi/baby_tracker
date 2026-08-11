@@ -206,6 +206,48 @@ describe('normalizeAndValidate · toma', () => {
   })
 })
 
+describe('lo que cuenta como toma y como caca', () => {
+  const toma = (p) => ({ type: 'feed', breastMin: 0, expressedMl: 0, formulaMl: 0, ...p })
+  const panal = (p) => ({ type: 'diaper', poop: true, consistency: null, ...p })
+
+  it('un ratito al pecho es hidratación; a partir de cinco minutos, toma', () => {
+    expect(L.isHydration(toma({ breastMin: 2 }))).toBe(true)
+    expect(L.isHydration(toma({ breastMin: 4 }))).toBe(true)
+    expect(L.isHydration(toma({ breastMin: 5 }))).toBe(false)
+    expect(L.isHydration(toma({ breastMin: 20 }))).toBe(false)
+  })
+
+  it('un biberón es toma aunque dure cero: lo que come es la cantidad', () => {
+    expect(L.isHydration(toma({ formulaMl: 60 }))).toBe(false)
+    expect(L.isHydration(toma({ breastMin: 2, expressedMl: 30 }))).toBe(false)
+    // Y una toma sin nada anotado no se esconde en hidratación.
+    expect(L.isHydration(toma({}))).toBe(false)
+  })
+
+  it('el pedete no es una caca, pero sin anotar la consistencia sí lo es', () => {
+    expect(L.isRealPoop(panal({ consistency: 'pedete' }))).toBe(false)
+    expect(L.isRealPoop(panal({ consistency: 'liquida' }))).toBe(true)
+    expect(L.isRealPoop(panal({}))).toBe(true)
+    expect(L.isRealPoop(panal({ poop: false }))).toBe(false)
+  })
+
+  it('los totales del día separan las dos cosas', () => {
+    const t = L.lifeDayTotals(
+      [
+        { type: 'feed', start: '2026-08-07 10:00', breastMin: 20, expressedMl: 0, formulaMl: 0 },
+        { type: 'feed', start: '2026-08-07 12:00', breastMin: 3, expressedMl: 0, formulaMl: 0 },
+        { type: 'diaper', start: '2026-08-07 11:00', pee: true, poop: true, consistency: 'pastosa' },
+        { type: 'diaper', start: '2026-08-07 13:00', pee: false, poop: true, consistency: 'pedete' },
+      ],
+      '2026-08-07 00:00',
+      '2026-08-08 00:00'
+    )
+    expect(t).toMatchObject({ feeds: 1, hydrations: 1, poops: 1, pedetes: 1, diapers: 2 })
+    // Y los minutos de pecho se suman todos: se ha tomado, aunque fuera un rato.
+    expect(t.breastMin).toBe(23)
+  })
+})
+
 describe('normalizeAndValidate · pañal y baño', () => {
   it('el pañal registra pis y caca por separado', () => {
     const r = L.normalizeAndValidate(diaper({ pee: true, poop: true }), NOW)
