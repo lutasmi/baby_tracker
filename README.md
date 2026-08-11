@@ -20,7 +20,7 @@ La especificación original está en [docs/especificacion.md](docs/especificacio
 - **Se puede navegar a tramos anteriores** en la pantalla principal para ver sus contadores y su franja, en cualquiera de los dos calendarios.
 - Una misma toma puede combinar **pecho (min), leche materna extraída (ml) y fórmula (ml)**; los minutos y los mililitros nunca se mezclan.
 - **Sueño** con inicio y fin, registrable después de que haya ocurrido. El cronómetro de un toque sigue estando, pero es auxiliar: la aplicación no da por hecho que el bebé sigue dormido porque nadie cerró un sueño.
-- **Pañales**: pis y caca son casillas independientes, así que un pañal puede llevar las dos. Cada uno con su detalle opcional —cuánto pis, y cómo era la caca, pedete incluido—, que solo se pregunta si hubo aquello a lo que se refiere.
+- **Pañales**: pis y caca son casillas independientes, así que un pañal puede llevar las dos. Cada uno con sus detalles opcionales —cuánto pis, cuánta caca y cómo era, pedete incluido—, que solo se preguntan si hubo aquello a lo que se refieren.
 - **Baños**: completo o aseo rápido, con duración opcional.
 - **Tiempo desde la toma anterior**, al registrar una toma y en cada toma de la cronología, para no tener que restar.
 - **Peso**: cada pesada con su hora, y la variación en gramos y en porcentaje respecto al peso al nacer. Se muestra el dato, sin interpretarlo. Tiene acceso directo desde la pantalla principal, tanto para añadir como para revisar el histórico.

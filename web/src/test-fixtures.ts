@@ -101,6 +101,7 @@ export function aDiaper(p: Partial<DiaperRecord> = {}): DiaperRecord {
     pee: true,
     peeAmount: null,
     poop: false,
+    poopAmount: null,
     consistency: null,
     notes: '',
     ...p,

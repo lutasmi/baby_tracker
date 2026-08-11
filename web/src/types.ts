@@ -14,7 +14,8 @@ export type BathKind = 'completo' | 'aseo'
 /** "desconocido" es una respuesta válida: de madrugada vale más no saberlo. */
 export type BreastSide = 'izquierdo' | 'derecho' | 'ambos' | 'desconocido'
 export type Consistency = 'pedete' | 'liquida' | 'pastosa' | 'solida'
-export type PeeAmount = 'poco' | 'medio' | 'mucho'
+/** Cuánto había: vale igual para el pis y para la caca. */
+export type Amount = 'poco' | 'medio' | 'mucho'
 
 /** Lo que comparten todos los registros. */
 interface RecordBase {
@@ -80,8 +81,10 @@ export interface DiaperRecord extends RecordBase {
   type: 'diaper'
   pee: boolean
   /** Cuánto pis; solo tiene sentido si `pee`. */
-  peeAmount: PeeAmount | null
+  peeAmount: Amount | null
   poop: boolean
+  /** Cuánta caca; solo tiene sentido si `poop`. */
+  poopAmount: Amount | null
   /** Consistencia de la caca; solo tiene sentido si `poop`. */
   consistency: Consistency | null
 }

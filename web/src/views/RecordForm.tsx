@@ -28,7 +28,7 @@ import type {
   Consistency,
   FeedItem,
   FeedItemKind,
-  PeeAmount,
+  Amount,
   RecordType,
   SleepKind,
 } from '../types'
@@ -447,7 +447,7 @@ function DiaperFields({ s, set, now }: FieldProps) {
       {s.pee && (
         <div class="field">
           <span class="field-label">💧 Cuánto pis (opcional)</span>
-          <Seg<PeeAmount | ''>
+          <Seg<Amount | ''>
             options={[
               { value: '', label: '—' },
               { value: 'poco', label: 'Poco' },
@@ -456,6 +456,23 @@ function DiaperFields({ s, set, now }: FieldProps) {
             ]}
             value={s.peeAmount}
             onChange={(peeAmount) => set({ peeAmount })}
+          />
+        </div>
+      )}
+      {s.poop && (
+        <div class="field">
+          <span class="field-label">💩 Cuánta caca (opcional)</span>
+          {/* En femenino: se guarda el mismo valor que en el pis, pero aquí se
+              habla de la caca. */}
+          <Seg<Amount | ''>
+            options={[
+              { value: '', label: '—' },
+              { value: 'poco', label: 'Poca' },
+              { value: 'medio', label: 'Media' },
+              { value: 'mucho', label: 'Mucha' },
+            ]}
+            value={s.poopAmount}
+            onChange={(poopAmount) => set({ poopAmount })}
           />
         </div>
       )}

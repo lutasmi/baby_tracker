@@ -259,9 +259,25 @@ describe('normalizeAndValidate · pañal y baño', () => {
     expect(() => L.normalizeAndValidate(diaper(), NOW)).toThrow(/pis, caca/)
   })
 
-  it('descarta la consistencia si no hay caca', () => {
-    const r = L.normalizeAndValidate(diaper({ pee: true, consistency: 'liquida' }), NOW)
+  it('descarta la consistencia y la cantidad si no hay caca', () => {
+    const r = L.normalizeAndValidate(
+      diaper({ pee: true, consistency: 'liquida', poopAmount: 'mucho' }),
+      NOW
+    )
     expect(r.consistency).toBeNull()
+    expect(r.poopAmount).toBeNull()
+  })
+
+  it('la caca lleva cantidad además de consistencia', () => {
+    const r = L.normalizeAndValidate(
+      diaper({ poop: true, poopAmount: 'poco', consistency: 'pastosa' }),
+      NOW
+    )
+    expect(r.poopAmount).toBe('poco')
+    expect(r.consistency).toBe('pastosa')
+    expect(() => L.normalizeAndValidate(diaper({ poop: true, poopAmount: 'enorme' }), NOW)).toThrow(
+      /Caca_Cantidad/
+    )
   })
 
   it('conserva la consistencia cuando hay caca, incluido el pedete', () => {

@@ -71,6 +71,11 @@ describe('recordDetail', () => {
     expect(recordDetail(r)).toBe('30 min · 17 min pecho izq. · 28 ml extraída · 37 ml fórmula')
   })
 
+  it('dice cuánto de cada cosa, cada una en su género', () => {
+    const r = aDiaper({ pee: true, peeAmount: 'poco', poop: true, poopAmount: 'mucho' })
+    expect(recordDetail(r)).toBe('pis poco · caca mucha')
+  })
+
   it('no repite el pedete: ya está en el título', () => {
     const r = aDiaper({ pee: true, peeAmount: 'mucho', poop: true, consistency: 'pedete' })
     expect(recordDetail(r)).toBe('pis mucho')

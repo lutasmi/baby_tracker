@@ -22,6 +22,7 @@ const CONSISTENCY_LABELS: Record<string, string> = {
 }
 
 const PEE_LABELS: Record<string, string> = { poco: 'poco', medio: 'medio', mucho: 'mucho' }
+const POOP_LABELS: Record<string, string> = { poco: 'poca', medio: 'media', mucho: 'mucha' }
 
 export function recordIcon(r: BabyRecord): string {
   switch (r.type) {
@@ -89,6 +90,7 @@ export function recordDetail(r: BabyRecord): string {
     parts.push(...feedParts(r))
   } else if (r.type === 'diaper') {
     if (r.peeAmount) parts.push(`pis ${PEE_LABELS[r.peeAmount] ?? r.peeAmount}`)
+    if (r.poopAmount) parts.push(`caca ${POOP_LABELS[r.poopAmount] ?? r.poopAmount}`)
     // El pedete ya está en el título; repetirlo aquí sobraría.
     if (r.consistency && r.consistency !== 'pedete') {
       parts.push(`consistencia ${CONSISTENCY_LABELS[r.consistency] ?? r.consistency}`)

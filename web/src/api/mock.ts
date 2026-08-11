@@ -94,6 +94,7 @@ function seedRecords(): BabyRecord[] {
       pee: true,
       poop: true,
       peeAmount: 'medio',
+      poopAmount: 'mucho',
       consistency: 'pastosa',
       notes: '',
       createdAt: `${today} 08:10`,
@@ -126,6 +127,7 @@ function seedRecords(): BabyRecord[] {
       pee: true,
       peeAmount: 'poco',
       poop: false,
+      poopAmount: null,
       consistency: null,
       notes: '',
       createdAt: `${today} 12:20`,
@@ -197,6 +199,7 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
       return {
         ...input,
         consistency: input.poop ? input.consistency : null,
+        poopAmount: input.poop ? input.poopAmount : null,
         peeAmount: input.pee ? input.peeAmount : null,
       }
     }

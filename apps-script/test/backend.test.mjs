@@ -52,7 +52,14 @@ describe('instalación', () => {
       'Eliminado',
     ])
     expect(header('Panales')).toEqual(
-      expect.arrayContaining(['Hora', 'Pis', 'Pis_Cantidad', 'Caca', 'Consistencia'])
+      expect.arrayContaining([
+        'Hora',
+        'Pis',
+        'Pis_Cantidad',
+        'Caca',
+        'Caca_Cantidad',
+        'Consistencia',
+      ])
     )
     expect(header('Panales')).not.toContain('Hora_Inicio')
   })
@@ -241,6 +248,33 @@ describe('un día de uso', () => {
       Caca: 'TRUE',
       Consistencia: 'Pastosa',
     })
+  })
+
+  it('el pis y la caca guardan cada uno su cantidad, en su columna', () => {
+    liveTheDay()
+    backend.setNow(`${DAY} 17:00`)
+    backend.call(
+      'createRecord',
+      record({
+        id: 'panal-4',
+        type: 'diaper',
+        start: `${DAY} 16:45`,
+        pee: true,
+        peeAmount: 'poco',
+        poop: true,
+        poopAmount: 'mucho',
+        consistency: 'liquida',
+        notes: '',
+      })
+    )
+    const fila = backend.sheet('Panales').asObjects().find((r) => r.ID === 'panal-4')
+    expect(fila).toMatchObject({
+      Pis_Cantidad: 'Poco',
+      Caca_Cantidad: 'Mucho',
+      Consistencia: 'Líquida',
+    })
+    const panal = backend.call('getDay', { date: DAY }).records.find((r) => r.id === 'panal-4')
+    expect(panal).toMatchObject({ peeAmount: 'poco', poopAmount: 'mucho' })
   })
 
   it('el pañal guarda la cantidad de pis en su columna', () => {

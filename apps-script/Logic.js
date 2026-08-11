@@ -96,6 +96,12 @@ var RECORD_TYPES = {
       },
       { key: 'poop', column: 'Caca', kind: 'bool' },
       {
+        key: 'poopAmount',
+        column: 'Caca_Cantidad',
+        kind: 'enum',
+        values: { poco: 'Poco', medio: 'Medio', mucho: 'Mucho' },
+      },
+      {
         key: 'consistency',
         column: 'Consistencia',
         kind: 'enum',
@@ -437,7 +443,10 @@ function requirePositive(record, spec) {
 function applyTypeRules(record, spec) {
   if (record.type === 'diaper') {
     // Cada detalle solo aplica si hubo aquello a lo que se refiere.
-    if (!record.poop) record.consistency = null;
+    if (!record.poop) {
+      record.consistency = null;
+      record.poopAmount = null;
+    }
     if (!record.pee) record.peeAmount = null;
   }
   return record;

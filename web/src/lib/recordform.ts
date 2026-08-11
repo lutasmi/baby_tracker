@@ -12,7 +12,7 @@ import type {
   FeedItem,
   FeedItemKind,
   FeedRecord,
-  PeeAmount,
+  Amount,
   RecordInput,
   RecordType,
   SleepKind,
@@ -37,7 +37,8 @@ export interface FormState {
   items: FeedItem[]
   pee: boolean
   poop: boolean
-  peeAmount: PeeAmount | ''
+  peeAmount: Amount | ''
+  poopAmount: Amount | ''
   consistency: Consistency | ''
   grams: number
   notes: string
@@ -131,6 +132,7 @@ export function initialState(
     pee: false,
     poop: false,
     peeAmount: '',
+    poopAmount: '',
     consistency: '',
     grams: 0,
     notes: '',
@@ -176,6 +178,7 @@ export function initialState(
         pee: r.pee,
         poop: r.poop,
         peeAmount: r.peeAmount ?? '',
+        poopAmount: r.poopAmount ?? '',
         consistency: r.consistency ?? '',
       }
     case 'bath':
@@ -209,6 +212,7 @@ export function buildInput(id: string, type: RecordType, s: FormState): RecordIn
         poop: s.poop,
         // Cada detalle solo viaja si hubo aquello a lo que se refiere.
         peeAmount: s.pee && s.peeAmount ? s.peeAmount : null,
+        poopAmount: s.poop && s.poopAmount ? s.poopAmount : null,
         consistency: s.poop && s.consistency ? s.consistency : null,
       }
     case 'bath':

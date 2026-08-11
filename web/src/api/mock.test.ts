@@ -37,6 +37,7 @@ const diaper = (id: string, start: string, pee: boolean, poop: boolean): RecordI
   pee,
   peeAmount: null,
   poop,
+  poopAmount: null,
   consistency: null,
   notes: '',
 })
@@ -137,6 +138,7 @@ describe('lo último de cada cosa', () => {
       pee: false,
       peeAmount: null,
       poop: true,
+      poopAmount: null,
       consistency: 'pedete',
       notes: '',
     }

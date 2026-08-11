@@ -567,18 +567,32 @@ describe('Dashboard · navegar a tramos anteriores', () => {
     expect(html).toContain('aria-label="Tramo anterior" disabled')
   })
 
-  it('el pañal guarda cuánto pis y si fue pedete', () => {
+  it('el pañal guarda cuánto pis, cuánta caca y cómo era', () => {
     const panal = aDiaper({
       start: `${TODAY} 12:00`,
       pee: true,
       peeAmount: 'mucho',
       poop: true,
-      consistency: 'pedete',
+      poopAmount: 'poco',
+      consistency: 'liquida',
     })
     cacheDay(day({ records: [panal] }))
     const html = render(<Timeline date={TODAY} />)
     expect(html).toContain('pis mucho')
-    expect(html).toContain('pedete')
+    expect(html).toContain('caca poca')
+    expect(html).toContain('consistencia líquida')
+  })
+
+  it('el formulario del pañal pregunta las dos cantidades por separado', () => {
+    const panal = aDiaper({ id: 'p-1', start: `${TODAY} 12:00`, pee: true, poop: true })
+    cacheDay(day({ records: [panal] }))
+    const html = render(<EditRecord id="p-1" />)
+    expect(html).toContain('Cuánto pis')
+    expect(html).toContain('Cuánta caca')
+    expect(html).toContain('Cómo era')
+    // La caca se pregunta en femenino, aunque se guarde el mismo valor.
+    expect(html).toContain('Mucha')
+    expect(html).toContain('Mucho')
   })
 })
 

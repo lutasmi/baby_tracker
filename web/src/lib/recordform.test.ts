@@ -422,6 +422,30 @@ describe('hora de fin del biberón', () => {
 })
 
 describe('detalle del pañal', () => {
+  it('la caca lleva su cantidad, y solo viaja si hubo caca', () => {
+    const base = initialState('diaper', null, null, NOW)
+    const conCaca = { ...base, pee: false, poop: true, poopAmount: 'mucho' as const }
+    expect(buildInput('id', 'diaper', conCaca)).toMatchObject({ poopAmount: 'mucho' })
+
+    const sinCaca = { ...base, pee: true, poop: false, poopAmount: 'mucho' as const }
+    expect(buildInput('id', 'diaper', sinCaca)).toMatchObject({ poopAmount: null })
+  })
+
+  it('reabrir un pañal conserva las dos cantidades y la consistencia', () => {
+    const panal = aDiaper({
+      pee: true,
+      peeAmount: 'poco',
+      poop: true,
+      poopAmount: 'mucho',
+      consistency: 'liquida',
+    })
+    expect(initialState('diaper', panal, null, NOW)).toMatchObject({
+      peeAmount: 'poco',
+      poopAmount: 'mucho',
+      consistency: 'liquida',
+    })
+  })
+
   it('la cantidad de pis solo viaja si hubo pis', () => {
     const base = initialState('diaper', null, null, NOW)
     const conPis = { ...base, pee: true, poop: false, peeAmount: 'mucho' as const }

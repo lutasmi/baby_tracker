@@ -84,10 +84,15 @@ Una toma con dos tetadas y un biberón son tres filas:
 > formato nuevo. Esas tres columnas ya no se crean, pero si están, se leen.
 
 **`Panales`** — `Pis` (TRUE/vacío), `Pis_Cantidad` (Poco · Medio · Mucho),
-`Caca` (TRUE/vacío), `Consistencia` (Pedete · Líquida · Pastosa · Sólida)
+`Caca` (TRUE/vacío), `Caca_Cantidad` (Poco · Medio · Mucho), `Consistencia`
+(Pedete · Líquida · Pastosa · Sólida)
 
 > Pis y caca son dos columnas independientes, no un desplegable con tres
 > opciones. "Ambos" existía antes solo porque no había sitio para dos campos.
+
+> Cada uno lleva **su propia cantidad**, y la caca además su consistencia:
+> cuánta había y cómo era son dos preguntas distintas. Los detalles solo se
+> guardan si hubo aquello a lo que se refieren.
 
 **`Banos`** — `Tipo` (Baño completo · Aseo rápido), `Duracion_Min`
 
