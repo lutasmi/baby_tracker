@@ -1,5 +1,6 @@
-> Evolutivo anotado, **no implementado**. Se analizó al preguntar si se podían
-> guardar fotos —por ejemplo de un pañal— desde la aplicación.
+> **Evolutivo no implementado.** Nada de lo que hay aquí está en la aplicación:
+> es el análisis de si se podrían guardar fotos —por ejemplo de un pañal— desde
+> la aplicación, y qué haría falta.
 
 # Fotos en los registros
 

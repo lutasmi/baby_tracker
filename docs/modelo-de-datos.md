@@ -1,5 +1,8 @@
 # Modelo de datos
 
+Qué se guarda y dónde. Para lo que hace la aplicación con estos datos está
+[funcionamiento.md](funcionamiento.md); para la API, [api.md](api.md).
+
 Una **pestaña por tipo de registro**. Cada tipo tiene sus columnas propias, con
 su nombre y su significado, y ninguna columna sirve para dos cosas distintas.
 
@@ -103,6 +106,19 @@ Una toma con dos tetadas y un biberón son tres filas:
 
 **`Bebe`** — `Fecha_Nacimiento`, `Hora_Nacimiento`, `Peso_Nacimiento_G`
 
+## Lo que se calcula y no se guarda
+
+Nada de esto ocupa una columna: se deriva al leer, de modo que no puede
+contradecir a los registros.
+
+| Dato | De dónde sale |
+|---|---|
+| Intervalo y totales de una toma | De sus filas: del primer elemento al último |
+| Duración de cualquier intervalo | Del inicio y el fin, aunque la celda diga otra cosa |
+| Totales del día de vida | De los registros que empiezan dentro del periodo |
+| Tomas frente a hidrataciones, cacas frente a pedetes | De los minutos de pecho y de la consistencia ([reglas](funcionamiento.md#qué-cuenta-como-toma-y-qué-como-caca)) |
+| Variación del peso | Del peso al nacer de la pestaña `Bebe` |
+
 ## Dónde se declara todo esto
 
 
@@ -117,9 +133,13 @@ diaper: {
   interval: false,
   fields: [
     { key: 'pee',  column: 'Pis',  kind: 'bool' },
+    { key: 'peeAmount', column: 'Pis_Cantidad', kind: 'enum',
+      values: { poco: 'Poco', medio: 'Medio', mucho: 'Mucho' } },
     { key: 'poop', column: 'Caca', kind: 'bool' },
+    { key: 'poopAmount', column: 'Caca_Cantidad', kind: 'enum',
+      values: { poco: 'Poco', medio: 'Medio', mucho: 'Mucho' } },
     { key: 'consistency', column: 'Consistencia', kind: 'enum',
-      values: { liquida: 'Líquida', pastosa: 'Pastosa', solida: 'Sólida' } },
+      values: { pedete: 'Pedete', liquida: 'Líquida', pastosa: 'Pastosa', solida: 'Sólida' } },
   ],
   requireAny: ['pee', 'poop'],
 }

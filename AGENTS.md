@@ -6,6 +6,11 @@ Este repositorio está pensado para que agentes de IA (Claude Code, Codex o simi
 
 El objetivo no es generar ejemplos, prototipos o demostraciones. El objetivo es terminar una aplicación completamente funcional y mantenible.
 
+Este documento dice **cómo trabajar**. Lo que la aplicación hace hoy está en
+[docs/funcionamiento.md](docs/funcionamiento.md), el modelo de datos en
+[docs/modelo-de-datos.md](docs/modelo-de-datos.md) y la API en
+[docs/api.md](docs/api.md). Ante una contradicción, mandan esos tres.
+
 ---
 
 # Objetivo
@@ -70,24 +75,19 @@ Todo lo demás queda fuera salvo que sea imprescindible.
 
 # Modelo de datos
 
-Toda la aplicación debe construirse alrededor del concepto de **Evento**.
+**Una pestaña por tipo de registro**, cada una con sus columnas propias y su
+significado. Ninguna columna sirve para dos cosas distintas y nada se serializa
+dentro de una celda.
 
-Cada acción realizada sobre el bebé es un evento.
+Los tipos se declaran en un único sitio (`RECORD_TYPES`, en `Logic.js`) y el
+resto del backend es genérico: de esa declaración salen las columnas que se
+crean, la validación y la traducción entre fila y registro. Añadir un campo debe
+seguir siendo añadir un descriptor y una columna.
 
-Ejemplos:
+Todo lo derivable se calcula al leer y no se guarda: duraciones, totales y
+clasificaciones. Así ningún dato puede contradecir a otro.
 
-- Inicio de sueño
-- Fin de sueño
-- Biberón
-- Lactancia
-- Pañal
-- Baño
-- Medicación
-- Peso
-
-Cada tipo podrá tener atributos propios.
-
-Diseñar el sistema para que añadir un nuevo tipo de evento requiera el mínimo trabajo posible.
+El detalle está en [docs/modelo-de-datos.md](docs/modelo-de-datos.md).
 
 ---
 

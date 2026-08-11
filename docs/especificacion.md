@@ -1,5 +1,10 @@
-> Especificación original del producto (contrato de la V1). Las instrucciones
-> de instalación y despliegue reales están en el README de la raíz.
+> **Documento histórico.** Es la especificación con la que se construyó la
+> primera versión, y **ya no describe la aplicación**: el modelo de datos, las
+> pantallas y varias reglas han cambiado desde entonces. Se conserva porque
+> explica de dónde viene el producto.
+>
+> Para saber qué hace hoy: [funcionamiento.md](funcionamiento.md),
+> [modelo-de-datos.md](modelo-de-datos.md) y [api.md](api.md).
 
 # Baby Tracker
 

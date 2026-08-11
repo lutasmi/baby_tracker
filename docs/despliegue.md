@@ -1,6 +1,6 @@
 # Guía de despliegue paso a paso
 
-Lista ordenada de **todos los pasos manuales** para poner Baby Tracker en producción. Solo hay que hacerla una vez; al final tendrás la app instalada en los móviles y guardando en tu Google Sheets.
+Lista ordenada de **todos los pasos manuales** para poner Baby Tracker en producción desde cero. Para actualizar uno que ya funciona, el resumen está en el [README](../README.md#actualizar-un-despliegue-existente). Solo hay que hacerla una vez; al final tendrás la app instalada en los móviles y guardando en tu Google Sheets.
 
 Tiempo estimado: 20–30 minutos.
 
@@ -95,7 +95,7 @@ Vuelve al **Editor** (menú izquierdo). Tienes que dejar el proyecto con 5 archi
   - `VITE_GOOGLE_CLIENT_ID` = el ID de cliente de la fase 2.2
 - [ ] Lanza el despliegue: pestaña **Actions → deploy → Run workflow** (o simplemente haz push a `main`).
 - [ ] Espera a que el workflow acabe en verde y abre `https://TU_USUARIO.github.io/NOMBRE_DEL_REPO/`.
-- [ ] Comprobación final: pulsa **Continuar con Google**, entra con tu cuenta y registra una toma de prueba. Abre la hoja de cálculo y comprueba que aparece la fila en **Tomas**, con la cantidad en su columna. Después bórrala desde la cronología de la app.
+- [ ] Comprobación final: pulsa **Continuar con Google**, entra con tu cuenta y registra una toma de prueba con una tetada y un biberón. Abre la hoja de cálculo y comprueba que en **Tomas** aparecen **dos filas con el mismo `Toma_ID`**, cada una con su hora. Después borra la toma desde la cronología de la app y comprueba que las dos filas quedan marcadas en `Eliminado`.
 - [ ] En **Ajustes** (rueda dentada de la pantalla principal) pon la fecha y la hora de nacimiento —es lo que activa el bloque de día de vida— y el peso al nacer, que es la referencia de las pesadas. Se guardan en la pestaña **Bebe**.
 
 ---
