@@ -84,17 +84,23 @@ describe('tramos encadenados', () => {
 describe('timelineRows', () => {
   const dia = { start: '2026-08-07 00:00', end: '2026-08-08 00:00' }
 
+  it('pone lo más reciente arriba, igual que los tramos entre sí', () => {
+    const madrugada = aFeed({ id: 'm', start: '2026-08-07 00:30', end: '2026-08-07 00:50' })
+    const manana = aFeed({ id: 'x', start: '2026-08-07 09:00', end: '2026-08-07 09:20' })
+    const rows = timelineRows([madrugada, manana], dia)
+    expect(rows.map((r) => r.when.time)).toEqual(['09:00', '00:30'])
+  })
+
   it('ordena por la hora que se enseña, no por la que tiene guardada', () => {
-    // El sueño de anoche se enseña a las 07:00, que es cuando acabó y lo
-    // único que cae dentro del día. Colocarlo por su inicio lo mandaba al
-    // principio de la lista, delante de las 00:30.
+    // El sueño de anoche se enseña a las 07:00, que es cuando acabó y lo único
+    // que cae dentro del día. Colocarlo por su inicio lo sacaba de sitio.
     const noche = aSleep({ id: 'n', start: '2026-08-06 21:30', end: '2026-08-07 07:00' })
     const madrugada = aFeed({ id: 'm', start: '2026-08-07 00:30', end: '2026-08-07 00:50' })
     const manana = aFeed({ id: 'x', start: '2026-08-07 09:00', end: '2026-08-07 09:20' })
 
     const rows = timelineRows([noche, madrugada, manana], dia)
-    expect(rows.map((r) => r.record.id)).toEqual(['m', 'n', 'x'])
-    expect(rows.map((r) => r.when.time)).toEqual(['00:30', '07:00', '09:00'])
+    expect(rows.map((r) => r.record.id)).toEqual(['x', 'n', 'm'])
+    expect(rows.map((r) => r.when.time)).toEqual(['09:00', '07:00', '00:30'])
   })
 
   it('marca dónde cambia la fecha dentro del tramo, y solo ahí', () => {
@@ -107,7 +113,10 @@ describe('timelineRows', () => {
       ],
       tramo
     )
-    expect(rows.map((r) => r.dayBreak)).toEqual([null, '2026-08-11', null])
+    // Bajando por la lista se retrocede en el tiempo: la marca cae al pasar a
+    // la fecha anterior.
+    expect(rows.map((r) => r.record.id)).toEqual(['c', 'b', 'a'])
+    expect(rows.map((r) => r.dayBreak)).toEqual([null, null, '2026-08-10'])
   })
 })
 

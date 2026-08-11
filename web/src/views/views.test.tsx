@@ -3,7 +3,7 @@
 // vista deje de renderizar o pierda una cifra por el camino.
 
 import render from 'preact-render-to-string'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { addDays, nowMadrid } from '../lib/dates'
 import { lifeDayRange, lifeDayTotals } from '../lib/lifeday'
 import { cacheDay, clearDayCache } from '../store'
@@ -16,8 +16,11 @@ import { EditRecord, NewRecord } from './RecordForm'
 import { SettingsView } from './Settings'
 import { Timeline } from './Timeline'
 
-const NOW = nowMadrid()
-const TODAY = NOW.slice(0, 10)
+// Las pantallas leen el reloj real. La fecha se toma de verdad —para que la
+// navegación por días siga siendo la de hoy— pero la hora se fija: si no, una
+// prueba pasa a las 10:00 y falla a las 23:00, que es peor que no tenerla.
+const TODAY = nowMadrid().slice(0, 10)
+const NOW = `${TODAY} 12:00`
 const USER = { email: 'ana@example.com', name: 'Ana' }
 
 // Nacimiento a medianoche de hace dos días: así el día de vida 3 coincide
@@ -84,7 +87,13 @@ function renderDashboard(d: DayData): string {
   return render(<Dashboard user={USER} onLogout={() => {}} />)
 }
 
-beforeEach(() => clearDayCache())
+beforeEach(() => {
+  clearDayCache()
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(`${TODAY}T12:00:00`))
+})
+
+afterEach(() => vi.useRealTimers())
 
 describe('Dashboard · día de vida', () => {
   it('muestra el número de día y los contadores, sin objetivos', () => {
@@ -423,8 +432,9 @@ describe('Timeline', () => {
     // tramo, anclado en su hora de fin, que es lo que cae dentro.
     expect((html.match(/de antes/g) ?? []).length).toBe(1)
     expect(html).toContain('<span class="tl-time">23:10</span><span class="tl-note">de antes</span>')
-    // En orden: primero lo de anoche, luego la madrugada.
-    expect(html.indexOf('23:20')).toBeLessThan(html.indexOf('02:20'))
+    // De lo más reciente a lo más antiguo: la madrugada antes que anoche.
+    expect(html.indexOf('06:00')).toBeLessThan(html.indexOf('02:20'))
+    expect(html.indexOf('02:20')).toBeLessThan(html.indexOf('23:20'))
     // Con la fecha marcada donde cambia.
     expect(html).toContain('tl-daybreak')
     // El resumen cuenta las dos fechas: tres tomas, un pañal, 180 ml.

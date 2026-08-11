@@ -5,7 +5,7 @@
 // dos veces cuando se encadenan periodos consecutivos.
 
 import type { BabyRecord, DayData, RecordType } from '../types'
-import { dateOf } from './dates'
+import { addMinutes, dateOf } from './dates'
 import { recordTimeParts, type TimeWindow } from './summary'
 
 type TimeParts = ReturnType<typeof recordTimeParts>
@@ -52,9 +52,13 @@ export function filterByType(records: BabyRecord[], types: RecordType[]): BabyRe
  * Las filas de un tramo: en el orden en que se leen y con la fecha marcada
  * donde cambia.
  *
+ * **De lo más reciente a lo más antiguo**, igual que los tramos entre sí: lo
+ * último que ha pasado es lo que se consulta, y así está siempre arriba sin
+ * tener que bajar.
+ *
  * Se ordenan por **la hora que se enseña**, que no siempre es la de inicio: lo
  * que venía de antes del tramo se ancla en su hora de fin, y colocarlo por su
- * inicio lo mandaba al principio de la lista con una hora de la mañana.
+ * inicio lo sacaba de sitio.
  *
  * La fecha se marca porque un día de vida cae a caballo de dos días naturales:
  * sin eso, a las 03:00 no hay forma de saber si fue anoche o esta madrugada.
@@ -70,12 +74,14 @@ export function timelineRows(
         ? a.record.id < b.record.id
           ? -1
           : 1
-        : a.when.at < b.when.at
+        : a.when.at > b.when.at
           ? -1
           : 1
     )
 
-  let previous = dateOf(window.start)
+  // Bajando por la lista se va hacia atrás en el tiempo, así que se arranca en
+  // la fecha del final del tramo (el fin es exclusivo: cuenta su último minuto).
+  let previous = dateOf(addMinutes(window.end, -1))
   return rows.map(({ record, when }) => {
     const date = dateOf(when.at)
     const dayBreak = date === previous ? null : date
