@@ -42,9 +42,11 @@ describe('stripLanes', () => {
     expect(lanes.find((l) => l.key === 'poop')!.marks).toHaveLength(1)
   })
 
-  it('baños y pesadas comparten el carril de otros', () => {
+  it('la franja es solo de lo que pasa varias veces al día', () => {
+    // Baños y pesadas no tienen carril: su fila salía vacía casi siempre.
     const lanes = stripLanes([aBath({ start: '2026-08-07 19:00' })], START, END, NOW)
-    expect(lanes.find((l) => l.key === 'other')!.marks).toHaveLength(1)
+    expect(lanes.map((l) => l.key)).toEqual(['sleep', 'feed', 'pee', 'poop'])
+    expect(lanes.every((l) => l.marks.length === 0)).toBe(true)
   })
 
   it('un sueño en curso se dibuja hasta ahora', () => {

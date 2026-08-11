@@ -323,10 +323,6 @@ button {
   grid-template-columns: repeat(3, 1fr);
 }
 
-.kpi-row + .kpi-row {
-  margin-top: 10px;
-}
-
 .kpi-tile {
   background: var(--surface-2);
   border-radius: var(--radius-sm);
@@ -440,6 +436,18 @@ button {
   background: var(--surface-2);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
+}
+
+/* Las casillas dentro del cuadro de alimentación: se despegan del fondo del
+   cuadro para seguir leyéndose como casillas. */
+.kpi-milk .kpi-tile {
+  background: var(--surface);
+}
+
+.kpi-milk .kpi-row + .kpi-milk-head {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }
 
 .kpi-milk-head {
@@ -1163,7 +1171,6 @@ select:focus {
 .strip-feed { background: var(--feed); }
 .strip-pee { background: var(--bath); }
 .strip-poop { background: var(--diaper); }
-.strip-other { background: var(--text-soft); }
 
 /* Pie de la franja: desde cuándo está despierto o dormido. */
 .strip-caption {

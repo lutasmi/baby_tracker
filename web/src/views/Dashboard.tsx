@@ -367,26 +367,28 @@ function PeriodCard({
         <StatTile label="💨 Pedetes" value={String(c.pedetes)} />
       </div>
 
-      {/* Las tomas: un ratito al pecho no es una comida, y sumarlo a las demás
-          estropearía el número que se mira para saber si toca. */}
-      <div class="kpi-row">
-        <StatTile
-          label="🍼 Tomas"
-          value={String(c.feeds)}
-          note={
-            !showFreshness
-              ? null
-              : last.feed
-                ? formatAgo(diffMinutes(last.feed.start, now))
-                : 'sin registros'
-          }
-          editId={showFreshness ? last.feed?.id : undefined}
-          onEdit={goEdit}
-        />
-        <StatTile label="💦 Hidratación" value={String(c.hydrations)} />
-      </div>
-
+      {/* Todo lo que come, en un solo cuadro: las veces y los mililitros son la
+          misma historia contada de dos maneras. Un ratito al pecho no es una
+          comida, y sumarlo estropearía el número que se mira para saber si
+          toca, así que va aparte pero al lado. */}
       <div class="kpi-milk">
+        <div class="kpi-row">
+          <StatTile
+            label="🍼 Tomas"
+            value={String(c.feeds)}
+            note={
+              !showFreshness
+                ? null
+                : last.feed
+                  ? formatAgo(diffMinutes(last.feed.start, now))
+                  : 'sin registros'
+            }
+            editId={showFreshness ? last.feed?.id : undefined}
+            onEdit={goEdit}
+          />
+          <StatTile label="💦 Hidratación" value={String(c.hydrations)} />
+        </div>
+
         <div class="kpi-milk-head">
           <span>🥛 Leche cuantificable</span>
           <strong>{t.milkMl} ml</strong>

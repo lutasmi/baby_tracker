@@ -1,14 +1,15 @@
 // Geometría de la franja de 24 h: dónde cae cada registro dentro del periodo.
 //
-// Un carril por tipo de cosa. Verlos alineados en el tiempo contesta a lo que
-// una tabla no contesta: si las cacas son de mañana, si los pises se espacian
-// al caer la noche, si el sueño llega siempre después de comer.
+// Un carril por cada cosa que pasa varias veces al día. Verlos alineados en el
+// tiempo contesta a lo que una tabla no contesta: si las cacas son de mañana,
+// si los pises se espacian al caer la noche, si el sueño llega siempre después
+// de comer.
 
 import type { BabyRecord } from '../types'
 import { addMinutes, diffMinutes, timeOf } from './dates'
 import { isStaleSleep } from './derive'
 
-export type LaneKey = 'sleep' | 'feed' | 'pee' | 'poop' | 'other'
+export type LaneKey = 'sleep' | 'feed' | 'pee' | 'poop'
 
 export interface StripMark {
   id: string
@@ -32,12 +33,8 @@ const LANES: { key: LaneKey; icon: string; name: string; match: (r: BabyRecord) 
   { key: 'feed', icon: '🍼', name: 'Tomas', match: (r) => r.type === 'feed' },
   { key: 'pee', icon: '💧', name: 'Pises', match: (r) => r.type === 'diaper' && r.pee },
   { key: 'poop', icon: '💩', name: 'Cacas', match: (r) => r.type === 'diaper' && r.poop },
-  {
-    key: 'other',
-    icon: '🛁',
-    name: 'Otros',
-    match: (r) => r.type === 'bath' || r.type === 'weight',
-  },
+  // Baños y pesadas no tienen carril: son de cada varios días y su fila salía
+  // vacía casi siempre. Están en la cronología, que es donde se buscan.
 ]
 
 const clamp = (v: number) => Math.min(100, Math.max(0, v))

@@ -197,6 +197,8 @@ describe('Dashboard · lo registrado', () => {
     expect(html).toContain('strip-feed')
     expect(html).toContain('strip-pee')
     expect(html).toContain('strip-poop')
+    // Y ninguno para baños y pesadas: su fila salía vacía casi siempre.
+    expect(html).not.toContain('title="Otros"')
     // El pañal con las dos cosas aparece en los dos carriles.
     expect((html.match(/Cacas · 12:17/g) ?? []).length).toBe(1)
     expect((html.match(/Pises · 12:17/g) ?? []).length).toBe(1)
@@ -603,6 +605,12 @@ describe('Dashboard · lo que cada contador separa', () => {
     )
     expect(kpi(html, '🍼 Tomas')).toBe('1')
     expect(kpi(html, '💦 Hidratación')).toBe('0')
+  })
+
+  it('las tomas, la hidratación y la leche van en el mismo cuadro', () => {
+    // Son la misma historia contada de dos maneras: las veces y los mililitros.
+    const html = renderDashboard(diaCompleto())
+    expect(html).toMatch(/kpi-milk[\s\S]*🍼 Tomas[\s\S]*💦 Hidratación[\s\S]*Leche cuantificable/)
   })
 
   it('los pedetes van aparte de las cacas', () => {

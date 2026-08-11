@@ -12,7 +12,7 @@ La especificación original está en [docs/especificacion.md](docs/especificacio
 
 - **Acceso con Google** restringido a los usuarios autorizados en la hoja `Usuarios`.
 - **Dos calendarios que conviven**: día de vida (24 h desde la hora exacta de nacimiento) o día natural (00:00–23:59). Se elige en la pantalla principal y en la cronología, y la preferencia se recuerda.
-- **El periodo de un vistazo**: una franja horizontal con un carril por tipo —sueño, tomas, pises, cacas— donde se ve a qué horas pasa cada cosa y cómo se relacionan entre sí. Marca dónde estamos ahora y cada hito abre su registro.
+- **El periodo de un vistazo**: una franja horizontal con un carril por cada cosa que pasa varias veces al día —sueño, tomas, pises, cacas— donde se ve a qué horas pasa cada una y cómo se relacionan entre sí. Marca dónde estamos ahora y cada hito abre su registro.
 - **Contadores del periodo**: pises, cacas, pedetes, tomas e hidratación, más fórmula y leche materna extraída, con cuánto hace del último de cada cosa.
 - **Dos cortes que evitan mezclar cosas distintas**: un rato al pecho de menos de 5 minutos cuenta como **hidratación**, no como toma, porque sumarlo estropea el número que se mira para saber si toca; y un **pedete** no es una caca. Un biberón siempre es una toma, aunque se anotara sin hora de fin: lo que come es la cantidad, no el tiempo.
 - **Una toma admite varias tetadas y varios biberones**: un pecho, luego el otro, y un biberón después si se queda con hambre. Sigue siendo **una sola toma**, así que el contador no se dispara. Cada elemento guarda su hora, y de ahí salen el intervalo de la toma y sus totales.
