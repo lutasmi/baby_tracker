@@ -149,10 +149,10 @@ describe('Dashboard · peso', () => {
     expect(html).toContain('Al nacer 3,420 kg')
   })
 
-  it('sin pesadas invita a añadir la primera', () => {
+  it('sin pesadas lo dice, y pesar está en los accesos rápidos', () => {
     const html = renderDashboard(day())
     expect(html).toContain('Todavía no hay ninguna pesada')
-    expect(html).toContain('Añadir pesada')
+    expect(html).toContain('action-weight')
   })
 
   it('la pesada lleva su fecha, no la del tramo que se esté mirando', () => {
@@ -647,9 +647,14 @@ describe('Dashboard · accesos que faltaban', () => {
     expect(kpiNote(html, '🍼 Tomas')).toBe('sin registros')
   })
 
-  it('el peso tiene su acceso para pesar, sin duplicar el de la evolución', () => {
+  it('pesar es un acceso rápido más, sin botones sueltos al final', () => {
     const html = renderDashboard(day())
-    expect(html).toContain('Añadir pesada')
+    // Los cinco registros se crean desde la misma cuadrícula.
+    for (const c of ['action-feed', 'action-diaper', 'action-sleep', 'action-bath', 'action-weight']) {
+      expect(html).toContain(c)
+    }
+    // Y la tarjeta del peso se queda solo con la información.
+    expect(html).not.toContain('Añadir pesada')
     // Ver la gráfica ya lo resuelve el botón de Evolución de abajo.
     expect(html).not.toContain('Ver pesadas')
   })

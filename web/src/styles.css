@@ -25,6 +25,8 @@
   --diaper-soft: #e3f6f4;
   --bath: #0284c7;
   --bath-soft: #e4f3fb;
+  --weight: #576374;
+  --weight-soft: #eceff3;
 
   --radius: 16px;
   --radius-sm: 12px;
@@ -55,6 +57,8 @@
     --diaper-soft: #16332f;
     --bath: #4cb2e8;
     --bath-soft: #16303f;
+    --weight: #9fb0c4;
+    --weight-soft: #262c35;
     --shadow: none;
   }
 }
@@ -213,10 +217,19 @@ button {
 
 /* ---------- Rejilla de acciones rápidas ---------- */
 
+/* Dos arriba y tres abajo: los de arriba son los que se pulsan a diario. */
 .action-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(6, 1fr);
   gap: 10px;
+}
+
+.action-grid > :nth-child(-n + 2) {
+  grid-column: span 3;
+}
+
+.action-grid > :nth-child(n + 3) {
+  grid-column: span 2;
 }
 
 .action-btn {
@@ -252,6 +265,7 @@ button {
 .action-feed { background: var(--feed-soft); color: var(--feed); }
 .action-diaper { background: var(--diaper-soft); color: var(--diaper); }
 .action-bath { background: var(--bath-soft); color: var(--bath); }
+.action-weight { background: var(--weight-soft); color: var(--weight); }
 
 /* ---------- Navegación entre tramos ---------- */
 

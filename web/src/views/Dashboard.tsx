@@ -187,6 +187,11 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
               <button class="action-btn action-bath" onClick={() => navigate('#/nuevo/bano')}>
                 <span class="icon">🛁</span>Baño
               </button>
+              {/* Pesar es de cada dos o tres días: va con los otros registros
+                  ocasionales, no ocupando un botón al final de la pantalla. */}
+              <button class="action-btn action-weight" onClick={() => navigate('#/nuevo/peso')}>
+                <span class="icon">⚖️</span>Peso
+              </button>
             </div>
 
             <div class="card">
@@ -515,12 +520,6 @@ function WeightCard({ data, today }: { data: DayData; today: string }) {
         </div>
       )}
       {birth > 0 && last && <div class="weight-birth">Al nacer {formatKg(birth)}</div>}
-      {/* Pesar es cosa de cada dos o tres días: merece su acceso directo en
-          lugar de tener que buscar la pesada en la cronología. Ver la gráfica
-          ya lo resuelve el botón de Evolución de abajo. */}
-      <button class="btn" style="margin-top:12px" onClick={() => navigate('#/nuevo/peso')}>
-        ⚖️ Añadir pesada
-      </button>
     </div>
   )
 }
