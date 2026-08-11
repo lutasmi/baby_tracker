@@ -371,6 +371,9 @@ function PeriodCard({
         />
         <StatTile label="💨 Pedetes" value={String(c.pedetes)} />
       </div>
+      <div class="kpi-feeds">
+        {t.diapers === 0 ? 'Sin pañales' : `${t.diapers} pañales`}
+      </div>
 
       {/* Todo lo que come, en un solo cuadro: las veces y los mililitros son la
           misma historia contada de dos maneras. Un ratito al pecho no es una
@@ -408,10 +411,6 @@ function PeriodCard({
             <span>🤱 {formatDuration(t.breastMin)} de pecho directo (no cuantificable)</span>
           </div>
         )}
-      </div>
-
-      <div class="kpi-feeds">
-        {t.diapers === 0 ? 'Sin pañales' : `${t.diapers} pañales`}
       </div>
     </div>
   )
@@ -489,29 +488,30 @@ function WeightCard({ data, today }: { data: DayData; today: string }) {
   const birth = data.settings.birthWeightG
   const change = last ? weightChange(last.grams, birth) : null
 
+  // Una pesada es un dato pequeño: cabe en dos líneas y no necesita más.
   return (
     <div class="card weight-card">
-      <div class="card-title">Peso</div>
       {last ? (
-        <button class="weight-row" onClick={() => goEdit(last.id)}>
-          <span class="weight-main">
-            <span class="weight-value">{formatKg(last.grams)}</span>
-            {/* La fecha siempre, aunque se esté mirando otro tramo: la pesada
-                es de cuando es. */}
-            <span class="weight-when">
-              {formatDateHuman(dateOf(last.start), today)} · {timeOf(last.start)}
-            </span>
-          </span>
-          {change && (
-            // Verde por encima del peso al nacer, rojo por debajo: el mismo
-            // criterio que la gráfica de la evolución.
-            <span class={`weight-pill ${change.diffG < 0 ? 'below' : 'above'}`}>
-              <span class="weight-pct">{formatPercent(change.percent)}</span>
-              <span class="weight-diff">{formatGrams(change.diffG)}</span>
-            </span>
-          )}
-          <span class="stat-edit">›</span>
-        </button>
+        <>
+          <button class="weight-row" onClick={() => goEdit(last.id)}>
+            <span class="weight-value">⚖️ {formatKg(last.grams)}</span>
+            {change && (
+              // Verde por encima del peso al nacer, rojo por debajo: el mismo
+              // criterio que la gráfica de la evolución.
+              <span class={`weight-pill ${change.diffG < 0 ? 'below' : 'above'}`}>
+                <strong>{formatPercent(change.percent)}</strong>
+                {formatGrams(change.diffG)}
+              </span>
+            )}
+            <span class="stat-edit">›</span>
+          </button>
+          {/* La fecha siempre, aunque se esté mirando otro tramo: la pesada es
+              de cuando es. */}
+          <div class="weight-meta">
+            {formatDateHuman(dateOf(last.start), today)} · {timeOf(last.start)}
+            {birth > 0 && ` · al nacer ${formatKg(birth)}`}
+          </div>
+        </>
       ) : (
         <div class="weight-empty">
           {birth > 0
@@ -519,7 +519,6 @@ function WeightCard({ data, today }: { data: DayData; today: string }) {
             : 'Todavía no hay ninguna pesada. El peso al nacer se indica en Ajustes.'}
         </div>
       )}
-      {birth > 0 && last && <div class="weight-birth">Al nacer {formatKg(birth)}</div>}
     </div>
   )
 }

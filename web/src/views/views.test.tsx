@@ -146,7 +146,10 @@ describe('Dashboard · peso', () => {
     expect(html).toContain('3,210 kg')
     expect(html).toContain('−210 g')
     expect(html).toContain('−6,1 %')
-    expect(html).toContain('Al nacer 3,420 kg')
+    // El contexto va en una sola línea pequeña, sin ocupar media tarjeta.
+    expect(html).toContain('al nacer 3,420 kg')
+    // Y la franja avisa de que la pesada no se dibuja ahí.
+    expect(html).toContain('se ven en la cronología')
   })
 
   it('sin pesadas lo dice, y pesar está en los accesos rápidos', () => {

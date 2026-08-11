@@ -70,7 +70,16 @@ export function DayStrip({
         </div>
       ))}
 
-      {records.length === 0 && <p class="field-hint">Sin registros en este periodo todavía.</p>}
+      {/* Una franja vacía sin explicación parece un fallo. Y desde que baños y
+          pesadas no tienen carril, puede haber registros y aun así nada que
+          dibujar. */}
+      {lanes.every((lane) => lane.marks.length === 0) && (
+        <p class="field-hint">
+          {records.length === 0
+            ? 'Sin registros en este periodo todavía.'
+            : 'Los baños y las pesadas de este periodo se ven en la cronología.'}
+        </p>
+      )}
     </div>
   )
 }
