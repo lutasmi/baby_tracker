@@ -9,9 +9,10 @@ import { lifeDayRange } from '../lib/lifeday'
 import { cacheDay, clearDayCache } from '../store'
 import { aDay, aDiaper, aFeed, aHistoryDay, aSleep, aWeight, someTotals } from '../test-fixtures'
 import type { DayData } from '../types'
-import { Dashboard } from './Dashboard'
 import { WeightChart } from '../components/WeightChart'
+import { Dashboard } from './Dashboard'
 import { BarList, WeightList } from './History'
+import { EditRecord, NewRecord } from './RecordForm'
 import { SettingsView } from './Settings'
 import { Timeline } from './Timeline'
 
@@ -397,5 +398,50 @@ describe('Gráfica de peso', () => {
   it('sin pesadas lo dice y no dibuja nada', () => {
     const html = render(<WeightChart weights={[]} birthWeightG={3420} today={TODAY} />)
     expect(html).toContain('Todavía no hay pesadas que dibujar')
+  })
+})
+
+describe('Formulario de toma', () => {
+  it('se abre en el caso simple: una hora y las cantidades, sin tetadas', () => {
+    cacheDay(day())
+    const html = render(<NewRecord type="feed" />)
+    expect(html).toContain('+ Añadir tetada')
+    // Sin tetadas la toma es puntual: una sola hora, no inicio y fin.
+    expect(html).toContain('Hora')
+    expect(html).not.toContain('Empezó')
+    expect(html).not.toContain('Terminó')
+  })
+
+  it('al reabrir una toma con pecho reconstruye su tetada', () => {
+    const toma = aFeed({
+      id: 'toma-mixta',
+      start: `${TODAY} 11:42`,
+      end: `${TODAY} 12:13`,
+      durationMin: 31,
+      breastMin: 21,
+      breastSide: 'ambos',
+      formulaMl: 60,
+    })
+    cacheDay(day({ records: [toma] }))
+    const html = render(<EditRecord id="toma-mixta" />)
+    expect(html).toContain('Tetada 1')
+    expect(html).toContain('Empezó')
+    expect(html).toContain('Terminó')
+    expect(html).toContain('21 min')
+    // Y el biberón de la misma toma sigue ahí.
+    expect(html).toContain('value="60"')
+  })
+
+  it('resume en una frase lo que se va a guardar', () => {
+    const toma = aFeed({
+      id: 'solo-bibe',
+      start: `${TODAY} 13:13`,
+      end: `${TODAY} 13:13`,
+      durationMin: 0,
+      formulaMl: 60,
+    })
+    cacheDay(day({ records: [toma] }))
+    const html = render(<EditRecord id="solo-bibe" />)
+    expect(html).toContain('60 ml de fórmula a las 13:13')
   })
 })

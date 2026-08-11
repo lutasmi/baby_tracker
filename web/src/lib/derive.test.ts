@@ -102,25 +102,20 @@ describe('guessSleepKind', () => {
 
 describe('feedDefaults', () => {
   it('sin toma previa no preselecciona nada', () => {
-    expect(feedDefaults(null)).toEqual({
-      breastMin: 0,
-      breastSide: null,
-      expressedMl: 0,
-      formulaMl: 0,
-    })
+    expect(feedDefaults(null)).toEqual({ expressedMl: 0, formulaMl: 0, nextSide: null })
   })
 
   it('repite las cantidades de la última toma', () => {
-    const d = feedDefaults(aFeed({ expressedMl: 30, formulaMl: 45 }))
-    expect(d).toMatchObject({ expressedMl: 30, formulaMl: 45, breastMin: 0 })
+    expect(feedDefaults(aFeed({ expressedMl: 30, formulaMl: 45 }))).toMatchObject({
+      expressedMl: 30,
+      formulaMl: 45,
+    })
   })
 
-  it('alterna el pecho respecto a la última toma', () => {
-    expect(feedDefaults(aFeed({ breastMin: 15, breastSide: 'izquierdo' }))).toMatchObject({
-      breastMin: 15,
-      breastSide: 'derecho',
-    })
-    expect(feedDefaults(aFeed({ breastMin: 15, breastSide: 'ambos' })).breastSide).toBe('ambos')
+  it('propone el pecho contrario al de la última toma', () => {
+    expect(feedDefaults(aFeed({ breastMin: 15, breastSide: 'izquierdo' })).nextSide).toBe('derecho')
+    expect(feedDefaults(aFeed({ breastMin: 15, breastSide: 'derecho' })).nextSide).toBe('izquierdo')
+    expect(feedDefaults(aFeed({ breastMin: 15, breastSide: 'ambos' })).nextSide).toBe('ambos')
   })
 })
 

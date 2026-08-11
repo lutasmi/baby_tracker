@@ -106,32 +106,30 @@ export function guessSleepKind(startDt: string): 'siesta' | 'nocturno' {
 }
 
 export interface FeedDefaults {
-  breastMin: number
-  breastSide: FeedRecord['breastSide']
   expressedMl: number
   formulaMl: number
+  /** Por qué pecho seguir: el contrario al de la última toma. */
+  nextSide: FeedRecord['breastSide']
 }
 
 /**
- * Con qué valores se abre el formulario de toma: repetir la última es casi
- * siempre lo correcto y ahorra pulsaciones, alternando el pecho respecto al
- * que se usó la vez anterior.
+ * Con qué valores se abre el formulario de toma: repetir las cantidades de la
+ * última es casi siempre lo correcto y ahorra pulsaciones.
  *
- * Sin tomas previas no se preselecciona nada: es preferible un toque más a
- * inventar una cantidad.
+ * Las tetadas no se preseleccionan —sus horas serían inventadas—, pero sí se
+ * propone el pecho contrario al de la vez anterior.
  */
 export function feedDefaults(lastFeed: FeedRecord | null): FeedDefaults {
-  if (!lastFeed) return { breastMin: 0, breastSide: null, expressedMl: 0, formulaMl: 0 }
+  if (!lastFeed) return { expressedMl: 0, formulaMl: 0, nextSide: null }
   return {
-    breastMin: lastFeed.breastMin,
-    breastSide:
+    expressedMl: lastFeed.expressedMl,
+    formulaMl: lastFeed.formulaMl,
+    nextSide:
       lastFeed.breastSide === 'izquierdo'
         ? 'derecho'
         : lastFeed.breastSide === 'derecho'
           ? 'izquierdo'
           : lastFeed.breastSide,
-    expressedMl: lastFeed.expressedMl,
-    formulaMl: lastFeed.formulaMl,
   }
 }
 

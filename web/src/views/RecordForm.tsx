@@ -3,11 +3,17 @@ import { getApi } from '../api'
 import { ApiError } from '../api/types'
 import { AmountField, MomentField, ScreenTitle, Seg, Toggle } from '../components/ui'
 import { handleAuthError, navigateReplace, useDay, useNow } from '../hooks'
-import { dateOf, diffMinutes, formatDuration, nowMadrid } from '../lib/dates'
+import { dateOf, diffMinutes, formatDuration, nowMadrid, timeOf } from '../lib/dates'
 import {
   buildInput,
+  feedSummary,
   initialState,
+  newSession,
+  nextSide,
+  sessionMinutes,
+  timesFromSessions,
   validate,
+  type BreastSession,
   type ComponentKey,
   type FormState,
 } from '../lib/recordform'
@@ -26,7 +32,6 @@ const NEW_TITLES: Record<RecordType, string> = {
 }
 
 const COMPONENT_CHIPS: { key: ComponentKey; label: string }[] = [
-  { key: 'breast', label: '🤱 Pecho' },
   { key: 'expressed', label: '🥛 Extraída' },
   { key: 'formula', label: '🍼 Fórmula' },
 ]
@@ -137,6 +142,7 @@ function RecordForm({ type, existing }: { type: RecordType; existing: BabyRecord
               toggle={toggleComponent}
               now={now}
               previousFeedStart={existing ? null : (data?.last.feed?.start ?? null)}
+              lastSide={data?.last.feed?.breastSide ?? null}
             />
           )}
           {type === 'diaper' && <DiaperFields s={s} set={set} now={now} />}
@@ -230,10 +236,20 @@ function FeedFields({
   toggle,
   now,
   previousFeedStart,
-}: FieldProps & { toggle: (key: ComponentKey) => void; previousFeedStart: string | null }) {
-  const duration = diffMinutes(s.start, s.end)
+  lastSide,
+}: FieldProps & {
+  toggle: (key: ComponentKey) => void
+  previousFeedStart: string | null
+  lastSide: BreastSide | null
+}) {
+  const times = timesFromSessions(s)
   // De inicio a inicio, que es como se cuenta lo de "cada tres horas".
-  const sincePrevious = previousFeedStart ? diffMinutes(previousFeedStart, s.start) : null
+  const sincePrevious = previousFeedStart ? diffMinutes(previousFeedStart, times.start) : null
+  const summary = feedSummary(s)
+
+  const setSession = (key: string, patch: Partial<BreastSession>) =>
+    set({ sessions: s.sessions.map((x) => (x.key === key ? { ...x, ...patch } : x)) })
+
   return (
     <>
       {sincePrevious != null && sincePrevious >= 0 && (
@@ -241,12 +257,63 @@ function FeedFields({
           <strong>{formatDuration(sincePrevious)}</strong> desde la toma anterior
         </div>
       )}
-      <MomentField label="Inicio" value={s.start} now={now} onChange={(start) => set({ start })} />
-      <MomentField label="Fin" value={s.end} now={now} onChange={(end) => set({ end })} />
-      {duration >= 0 && <DurationLine minutes={duration} />}
 
       <div class="field">
-        <span class="field-label">Qué ha tomado</span>
+        <span class="field-label">🤱 Pecho</span>
+        {/* Varias tetadas siguen siendo una sola toma: se suman los minutos y
+            las horas de la toma salen de la primera y la última. */}
+        {s.sessions.map((session, index) => (
+          <div class="session" key={session.key}>
+            <div class="session-head">
+              <span class="session-number">Tetada {index + 1}</span>
+              <span class="session-min">{formatDuration(sessionMinutes(session))}</span>
+              <button
+                type="button"
+                class="session-remove"
+                aria-label={`Quitar tetada ${index + 1}`}
+                onClick={() => set({ sessions: s.sessions.filter((x) => x.key !== session.key) })}
+              >
+                ×
+              </button>
+            </div>
+            <Seg<BreastSide>
+              options={[
+                { value: 'izquierdo', label: 'Izq.' },
+                { value: 'derecho', label: 'Der.' },
+                { value: 'ambos', label: 'Ambos' },
+              ]}
+              value={session.side}
+              onChange={(side) => setSession(session.key, { side })}
+            />
+            <MomentField
+              label="Empezó"
+              value={session.start}
+              now={now}
+              onChange={(start) => setSession(session.key, { start })}
+            />
+            <MomentField
+              label="Terminó"
+              value={session.end}
+              now={now}
+              onChange={(end) => setSession(session.key, { end })}
+            />
+          </div>
+        ))}
+        <button
+          type="button"
+          class="btn"
+          onClick={() =>
+            set({
+              sessions: [...s.sessions, newSession(nextSide(s.sessions, lastSide), now)],
+            })
+          }
+        >
+          + Añadir tetada
+        </button>
+      </div>
+
+      <div class="field">
+        <span class="field-label">🍼 Biberón</span>
         <div class="chips">
           {COMPONENT_CHIPS.map((c) => (
             <button
@@ -260,28 +327,6 @@ function FeedFields({
           ))}
         </div>
       </div>
-
-      {s.active.includes('breast') && (
-        <div class="field component-block">
-          <span class="field-label">🤱 Pecho directo</span>
-          <AmountField
-            value={s.breastMin}
-            onChange={(breastMin) => set({ breastMin })}
-            unit="min"
-            presets={[5, 10, 15, 20, 30]}
-            max={600}
-          />
-          <Seg<BreastSide | ''>
-            options={[
-              { value: 'izquierdo', label: 'Izq.' },
-              { value: 'derecho', label: 'Der.' },
-              { value: 'ambos', label: 'Ambos' },
-            ]}
-            value={s.breastSide ?? ''}
-            onChange={(v) => set({ breastSide: v || null })}
-          />
-        </div>
-      )}
 
       {s.active.includes('expressed') && (
         <div class="field component-block">
@@ -308,6 +353,18 @@ function FeedFields({
           />
         </div>
       )}
+
+      {/* Sin tetadas la toma es puntual y basta con una hora: "biberón de 60
+          ml a las 13:13". Con tetadas, las horas ya salen de ellas. */}
+      {s.sessions.length === 0 ? (
+        <MomentField label="Hora" value={s.start} now={now} onChange={(start) => set({ start })} />
+      ) : (
+        <div class="duration-line">
+          Toma de <strong>{timeOf(times.start)}</strong> a <strong>{timeOf(times.end)}</strong>
+        </div>
+      )}
+
+      {summary && <p class="field-hint feed-summary">{summary}</p>}
     </>
   )
 }
