@@ -142,4 +142,24 @@ describe('feedGaps', () => {
     const records = [aSleep({ start: '2026-08-07 08:00' }), aDiaper({ start: '2026-08-07 09:00' })]
     expect(feedGaps(records, null).size).toBe(0)
   })
+
+  it('una hidratación por medio no acorta el hueco de la siguiente toma', () => {
+    // Lo que se lee aquí es "cuánto llevaba sin comer": un consuelo de dos
+    // minutos a las 08:00 no es haber comido a las 08:00.
+    const records = [
+      aFeed({ id: 'a', start: '2026-08-07 06:00', end: '2026-08-07 06:20', formulaMl: 60 }),
+      aFeed({ id: 'h', start: '2026-08-07 08:00', end: '2026-08-07 08:02', breastMin: 2 }),
+      aFeed({ id: 'b', start: '2026-08-07 09:00', end: '2026-08-07 09:20', formulaMl: 60 }),
+    ]
+    const gaps = feedGaps(records, null)
+    expect(gaps.get('b')).toBe(180) // desde las 06:00, no desde las 08:00
+    // Y la hidratación no enseña hueco propio: no es lo que se está midiendo.
+    expect(gaps.has('h')).toBe(false)
+  })
+
+  it('tampoco cuenta como la toma anterior al día', () => {
+    const consuelo = aFeed({ start: '2026-08-06 23:30', end: '2026-08-06 23:32', breastMin: 2 })
+    const madrugada = aFeed({ id: 'm', start: '2026-08-07 02:45', formulaMl: 60 })
+    expect(feedGaps([madrugada], consuelo).has('m')).toBe(false)
+  })
 })

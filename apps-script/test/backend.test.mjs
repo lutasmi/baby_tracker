@@ -397,6 +397,22 @@ describe('un día de uso', () => {
     expect(day.previousFeed.id).toBe('toma-noche')
   })
 
+  it('la hidratación de anoche no es la toma anterior al día', () => {
+    liveTheDay()
+    backend.setNow(`${DAY} 16:10`)
+    backend.call(
+      'createRecord',
+      feed('toma-noche', [bibe('n1', '2026-08-06 23:00', 50, 'formula', '2026-08-06 23:20')])
+    )
+    backend.call(
+      'createRecord',
+      feed('consuelo-noche', [tetada('c1', '2026-08-06 23:50', '2026-08-06 23:52', 'izquierdo')])
+    )
+    // El hueco de la primera toma de hoy se mide desde la última comida de
+    // verdad, no desde el consuelo de dos minutos.
+    expect(backend.call('getDay', { date: DAY }).previousFeed.id).toBe('toma-noche')
+  })
+
   it('registra el peso en su pestaña y lo devuelve como último', () => {
     liveTheDay()
     backend.setNow(`${DAY} 17:00`)

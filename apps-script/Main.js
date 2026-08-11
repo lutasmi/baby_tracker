@@ -197,8 +197,15 @@ function getDay(req) {
       // que no lo cuenta el contador de la pantalla.
       if (!isHydration(r) && (!lastFeed || r.start > lastFeed.start)) lastFeed = r;
       // Última toma anterior al día consultado: da el hueco de la primera
-      // toma de la noche, que si no quedaría sin calcular.
-      if (r.start < dayStart && (!previousFeed || r.start > previousFeed.start)) previousFeed = r;
+      // toma de la noche, que si no quedaría sin calcular. Tampoco cuenta la
+      // hidratación: ese hueco contesta a "cuánto llevaba sin comer".
+      if (
+        !isHydration(r) &&
+        r.start < dayStart &&
+        (!previousFeed || r.start > previousFeed.start)
+      ) {
+        previousFeed = r;
+      }
     }
     if (r.type === 'diaper') {
       if (!lastDiaper || r.start > lastDiaper.start) lastDiaper = r;

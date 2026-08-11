@@ -153,7 +153,7 @@ No hay credenciales en el repositorio: la URL de la API y el Client ID (público
 - **Día de vida**: periodos de 24 h desde el instante del nacimiento. Un registro cuenta en el periodo en el que empieza, así que una toma que cruza el aniversario horario no se parte en dos.
 - **Datos del bebé** (nacimiento y peso al nacer): viven en la pestaña `Bebe`, una sola fila. Son comunes a todos los usuarios y se editan desde la pantalla de Ajustes o a mano en la hoja.
 - **Nada de recomendaciones**: la aplicación no propone objetivos de alimentación, no dice si un peso es normal ni avisa de que lleváis mucho sin registrar. Muestra lo registrado y deja el juicio a los padres y al pediatra.
-- **Hueco entre tomas**: se mide de inicio a inicio, que es como se cuenta lo de "cada tres horas".
+- **Hueco entre tomas**: se mide de inicio a inicio, que es como se cuenta lo de "cada tres horas", y solo entre tomas de verdad: la línea contesta a "cuánto llevaba sin comer", así que un rato corto al pecho ni tiene hueco propio ni reinicia el de la siguiente.
 - **Días naturales y días de vida conviven**: la pantalla principal y la evolución van por días de vida; la cronología, por días naturales, y lo dice en su cabecera para que no haya duda.
 - **La escala de kilos no empieza en cero**: con pesos de recién nacido la línea saldría plana. La referencia del nacimiento está siempre dibujada y el pie de la gráfica lo advierte.
 - **El cronómetro de sueño se inicia y se cierra donde corresponde**: la barra para cerrarlo solo aparece mientras hay un sueño abierto, y si lleva demasiado tiempo abierto lleva a corregirlo en vez de ofrecer cerrarlo de un toque, porque poner el fin "ahora" guardaría un sueño que no ocurrió.

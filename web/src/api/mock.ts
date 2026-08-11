@@ -256,7 +256,13 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
           // Ni la hidratación cuenta como última toma ni el pedete como última
           // caca: el reloj que se mira es el de lo que se está esperando.
           if (!isHydration(r) && (!lastFeed || r.start > lastFeed.start)) lastFeed = r
-          if (r.start < dayStart && (!previousFeed || r.start > previousFeed.start)) previousFeed = r
+          if (
+            !isHydration(r) &&
+            r.start < dayStart &&
+            (!previousFeed || r.start > previousFeed.start)
+          ) {
+            previousFeed = r
+          }
         }
         if (r.type === 'diaper') {
           if (!lastDiaper || r.start > lastDiaper.start) lastDiaper = r

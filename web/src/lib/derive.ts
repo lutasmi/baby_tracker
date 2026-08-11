@@ -141,15 +141,19 @@ export function feedDefaults(lastFeed: FeedRecord | null): FeedDefaults {
  * De inicio a inicio, que es como se cuenta lo de "cada tres horas". La toma
  * anterior al día llega aparte para que la primera de la madrugada tampoco se
  * quede sin su hueco.
+ *
+ * La hidratación no entra ni como una cosa ni como la otra: un consuelo de dos
+ * minutos ni tiene hueco propio que enseñar ni reinicia el de la siguiente
+ * toma. Esta línea contesta a "cuánto llevaba sin comer".
  */
 export function feedGaps(
   records: BabyRecord[],
   previousFeed: FeedRecord | null
 ): Map<string, number> {
   const gaps = new Map<string, number>()
-  let previousStart = previousFeed?.start ?? null
+  let previousStart = previousFeed && !isHydration(previousFeed) ? previousFeed.start : null
   for (const r of records) {
-    if (r.type !== 'feed') continue
+    if (r.type !== 'feed' || isHydration(r)) continue
     if (previousStart) {
       const minutes = diffMinutes(previousStart, r.start)
       if (minutes >= 0) gaps.set(r.id, minutes)
