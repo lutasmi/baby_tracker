@@ -3,11 +3,12 @@ import { getApi } from '../api'
 import { ApiError } from '../api/types'
 import { AmountField, MomentField, ScreenTitle, Seg, Toggle } from '../components/ui'
 import { handleAuthError, navigateReplace, useDay, useNow } from '../hooks'
-import { dateOf, diffMinutes, formatDuration, nowMadrid, timeOf } from '../lib/dates'
+import { addMinutes, dateOf, diffMinutes, formatDuration, nowMadrid, timeOf } from '../lib/dates'
 import {
   bottleItems,
   breastItems,
   buildInput,
+  endAfterStart,
   feedSummary,
   feedTimes,
   initialState,
@@ -15,6 +16,7 @@ import {
   newBreastItem,
   nextSide,
   validate,
+  withStart,
   type FormState,
 } from '../lib/recordform'
 import { formatKg, itemMinutes, newId } from '../lib/records'
@@ -209,7 +211,12 @@ function SleepFields({ s, set, now, isNew }: FieldProps & { isNew: boolean }) {
         value={s.sleepKind}
         onChange={(sleepKind) => set({ sleepKind })}
       />
-      <MomentField label="Se durmió" value={s.start} now={now} onChange={(start) => set({ start })} />
+      <MomentField
+        label="Se durmió"
+        value={s.start}
+        now={now}
+        onChange={(start) => set({ start, end: endAfterStart(start, s.end) })}
+      />
       <Seg
         options={[
           { value: 'done', label: 'Ya despertó' },
@@ -300,7 +307,9 @@ function FeedFields({
               label="Empezó"
               value={item.start}
               now={now}
-              onChange={(start) => setItem(item.id, { start })}
+              onChange={(start) =>
+                set({ items: s.items.map((x) => (x.id === item.id ? withStart(x, start) : x)) })
+              }
             />
             <MomentField
               label="Terminó"
@@ -358,7 +367,9 @@ function FeedFields({
               label={item.end ? 'Empezó' : 'Hora'}
               value={item.start}
               now={now}
-              onChange={(start) => setItem(item.id, { start })}
+              onChange={(start) =>
+                set({ items: s.items.map((x) => (x.id === item.id ? withStart(x, start) : x)) })
+              }
             />
             {item.end ? (
               <>
@@ -380,7 +391,7 @@ function FeedFields({
               <button
                 type="button"
                 class="btn-link"
-                onClick={() => setItem(item.id, { end: item.start })}
+                onClick={() => setItem(item.id, { end: addMinutes(item.start, 1) })}
               >
                 + Añadir hora de fin
               </button>

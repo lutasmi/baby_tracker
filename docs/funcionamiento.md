@@ -158,7 +158,9 @@ varias tetadas y varios biberones, y sigue siendo **una sola toma**.
 
 - **Tetadas**: se añaden con "+ Añadir tetada". Cada una tiene pecho (izquierdo,
   derecho, ambos o "no recuerdo"), hora de inicio y hora de fin. Al añadir una
-  se propone el pecho contrario al de la anterior.
+  se propone el pecho contrario al de la anterior, **empezando ahora y con el
+  fin un minuto por delante**: se anota al empezar, cuando aún no se sabe
+  cuánto va a durar, y se corrige el fin al terminar.
 - **Biberones**: se añaden con "+ Añadir biberón". Cada uno tiene tipo (extraída
   o fórmula), cantidad en ml y hora. La hora de fin es opcional: sin ella el
   biberón es puntual ("60 ml de fórmula a las 13:13").
@@ -195,6 +197,14 @@ Completo o aseo rápido, con hora y duración opcional.
 ### Peso
 
 Hora y gramos, que es como se lee la báscula; se muestra en kilos.
+
+### La hora de fin sigue a la de inicio
+
+Al mover el inicio de algo que dura —una tetada, un biberón con fin, un
+sueño—, el fin se mueve con él en dos casos: cuando es el que se propuso solo
+(un minuto después) y cuando el cambio lo dejaría antes del inicio, que no se
+podría guardar. **Un fin escrito a mano no se toca**: corregir el inicio de
+algo ya terminado no puede borrar lo que costó anotar.
 
 ### Reglas de validación
 

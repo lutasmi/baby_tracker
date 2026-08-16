@@ -47,21 +47,52 @@ export interface FormState {
 /** Margen para relojes desajustados al comprobar que algo no está en el futuro. */
 const FUTURE_MARGIN_MIN = 5
 
-/** Cuánto se propone que dure una tetada nueva antes de ajustarla. */
-const NEW_SESSION_MIN = 10
+/**
+ * Lo mínimo que se propone que dure algo, en minutos.
+ *
+ * Una tetada se apunta **cuando empieza**, que es cuando se tiene el móvil en
+ * la mano: en ese momento no se sabe cuánto va a durar. Así que se propone que
+ * acaba de empezar y el fin queda un minuto por delante, listo para corregirlo
+ * al terminar.
+ */
+const MIN_DURATION_MIN = 1
 
 // --- Elementos de la toma ----------------------------------------------------
 
-/** Una tetada nueva: acaba ahora y se propone que empezó hace un rato. */
+/** Una tetada nueva: empieza ahora y dura, de momento, un minuto. */
 export function newBreastItem(side: BreastSide, now: string): FeedItem {
   return {
     id: newId(),
     kind: 'pecho',
     side,
-    start: addMinutes(now, -NEW_SESSION_MIN),
-    end: now,
+    start: now,
+    end: addMinutes(now, MIN_DURATION_MIN),
     ml: 0,
   }
+}
+
+/**
+ * El mismo elemento con otro inicio, arrastrando el fin cuando toca.
+ *
+ * El fin sigue al inicio en dos casos: cuando es el que se propuso solo (un
+ * minuto después) y cuando el cambio lo dejaría antes del inicio, que no se
+ * puede guardar. Un fin escrito a mano **no se toca**: corregir la hora de
+ * inicio de una tetada ya terminada no puede borrar lo que costó anotar.
+ */
+export function withStart(item: FeedItem, start: string): FeedItem {
+  if (!item.end) return { ...item, start }
+  const automatico = item.end === addMinutes(item.start, MIN_DURATION_MIN)
+  const invalido = item.end <= start
+  return {
+    ...item,
+    start,
+    end: automatico || invalido ? addMinutes(start, MIN_DURATION_MIN) : item.end,
+  }
+}
+
+/** El fin de un sueño al mover su inicio: nunca puede quedarse detrás. */
+export function endAfterStart(start: string, end: string): string {
+  return end > start ? end : addMinutes(start, MIN_DURATION_MIN)
 }
 
 /** Un biberón nuevo: puntual, a esta hora, con la cantidad de costumbre. */

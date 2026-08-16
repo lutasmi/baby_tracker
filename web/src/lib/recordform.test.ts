@@ -7,6 +7,7 @@ import type { FeedInput, FeedItem } from '../types'
 import { breastSideOfItems, deriveFeed } from './records'
 import {
   buildInput,
+  endAfterStart,
   feedSummary,
   feedTimes,
   initialState,
@@ -14,6 +15,7 @@ import {
   newBreastItem,
   nextSide,
   validate,
+  withStart,
   type FormState,
 } from './recordform'
 
@@ -177,10 +179,14 @@ describe('ayudas al rellenar', () => {
     expect(nextSide([IZQ, bibe('2026-08-07 12:00', 60)], null)).toBe('derecho')
   })
 
-  it('una tetada nueva se propone acabando ahora', () => {
+  it('una tetada nueva empieza ahora y dura un minuto, para cerrarla luego', () => {
+    // Se apunta cuando empieza, que es cuando se tiene el móvil en la mano:
+    // en ese momento no se sabe cuánto va a durar.
     const item = newBreastItem('izquierdo', NOW)
-    expect(item.end).toBe(NOW)
-    expect(item.start).toBe('2026-08-07 15:50')
+    expect(item.start).toBe(NOW)
+    expect(item.end).toBe('2026-08-07 16:01')
+    // Y se puede guardar tal cual, sin tocar nada más.
+    expect(validate('feed', feedState([item]), NOW)).toBeNull()
   })
 
   it('un biberón nuevo es puntual, a esta hora', () => {
@@ -207,6 +213,44 @@ describe('ayudas al rellenar', () => {
     expect(saved(s)).toMatchObject({ formulaMl: 45, expressedMl: 20 })
     // Con la hora de ahora, no la de la toma anterior.
     expect(s.items.every((i) => i.start === NOW)).toBe(true)
+  })
+})
+
+describe('mover la hora de inicio', () => {
+  it('el fin recién propuesto sigue al inicio', () => {
+    const item = newBreastItem('izquierdo', NOW)
+    const movida = withStart(item, '2026-08-07 15:30')
+    expect(movida.start).toBe('2026-08-07 15:30')
+    expect(movida.end).toBe('2026-08-07 15:31')
+  })
+
+  it('un fin escrito a mano no se pierde al corregir el inicio', () => {
+    // Lo que costó anotar manda: aquí solo se estaba ajustando el inicio.
+    const terminada = tetada('izquierdo', '2026-08-07 14:00', '2026-08-07 14:25')
+    expect(withStart(terminada, '2026-08-07 13:55').end).toBe('2026-08-07 14:25')
+  })
+
+  it('si el cambio dejaría el fin detrás, se arrastra', () => {
+    // Guardar una tetada que acaba antes de empezar es imposible: en vez de
+    // dejar el formulario en error, el fin se mueve con el inicio.
+    const terminada = tetada('izquierdo', '2026-08-07 14:00', '2026-08-07 14:25')
+    const movida = withStart(terminada, '2026-08-07 14:40')
+    expect(movida.end).toBe('2026-08-07 14:41')
+    expect(validate('feed', feedState([movida]), NOW)).toBeNull()
+  })
+
+  it('un biberón puntual no gana una hora de fin por moverlo', () => {
+    const puntual = bibe('2026-08-07 13:13', 60)
+    expect(withStart(puntual, '2026-08-07 13:30')).toMatchObject({
+      start: '2026-08-07 13:30',
+      end: null,
+    })
+  })
+
+  it('el sueño tampoco deja el fin detrás del inicio', () => {
+    expect(endAfterStart('2026-08-07 14:00', '2026-08-07 15:00')).toBe('2026-08-07 15:00')
+    expect(endAfterStart('2026-08-07 16:00', '2026-08-07 15:00')).toBe('2026-08-07 16:01')
+    expect(endAfterStart('2026-08-07 15:00', '2026-08-07 15:00')).toBe('2026-08-07 15:01')
   })
 })
 
