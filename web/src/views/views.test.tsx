@@ -673,6 +673,19 @@ describe('Dashboard · navegar a tramos anteriores', () => {
     expect(html).toContain('consistencia líquida')
   })
 
+  it('las horas se mueven a saltos, hacia atrás y hacia delante', () => {
+    cacheDay(day())
+    const html = render(<NewRecord type="sleep" />)
+    // Restar a la izquierda, sumar a la derecha y "ahora" en medio.
+    for (const salto of ['−10', '−5', '−1', '+1', '+5', '+10']) {
+      expect(html).toContain(`>${salto}</button>`)
+    }
+    expect(html).toContain('aria-label="1 minuto antes"')
+    expect(html).toContain('aria-label="5 minutos después"')
+    expect(html).toContain('ahora')
+    expect(html.indexOf('minutos antes')).toBeLessThan(html.indexOf('minutos después'))
+  })
+
   it('el formulario del pañal pregunta las dos cantidades por separado', () => {
     const panal = aDiaper({ id: 'p-1', start: `${TODAY} 12:00`, pee: true, poop: true })
     cacheDay(day({ records: [panal] }))

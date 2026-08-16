@@ -198,6 +198,21 @@ Completo o aseo rápido, con hora y duración opcional.
 
 Hora y gramos, que es como se lee la báscula; se muestra en kilos.
 
+### Ajustar una hora
+
+Cada campo de hora lleva una fila de atajos que **suman y restan sobre la hora
+que hay**, no sobre la actual:
+
+```
+−10  −5  −1  [ahora]  +1  +5  +10
+```
+
+Pulsar dos veces −10 son veinte minutos menos, así que se puede ir acercando a
+la hora buena a golpes sin calcular nada; el salto de un minuto es para
+afinar. "ahora" es el único que salta a un
+sitio fijo. Para cambios mayores están los selectores de fecha y hora, que
+tienen precisión de un minuto.
+
 ### La hora de fin sigue a la de inicio
 
 Al mover el inicio de algo que dura —una tetada, un biberón con fin, un

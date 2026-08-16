@@ -112,13 +112,46 @@ export function StatTile({
   )
 }
 
-const QUICK_OFFSETS = [5, 15, 30, 60]
+/**
+ * Saltos de los atajos, en minutos, de mayor a menor. Se aplican sobre la hora
+ * que haya, así que se acumulan: el de un minuto es para afinar y los otros
+ * dos para llegar.
+ */
+const QUICK_STEPS = [10, 5, 1]
+
+/** Un salto de la fila de atajos: mueve la hora que haya, no la de ahora. */
+function StepButton({
+  minutes,
+  value,
+  onChange,
+}: {
+  minutes: number
+  value: string
+  onChange: (dt: string) => void
+}) {
+  const signo = minutes < 0 ? '−' : '+'
+  const cuantos = Math.abs(minutes)
+  return (
+    <button
+      type="button"
+      aria-label={`${cuantos} ${cuantos === 1 ? 'minuto' : 'minutos'} ${
+        minutes < 0 ? 'antes' : 'después'
+      }`}
+      onClick={() => onChange(addMinutes(value, minutes))}
+    >
+      {signo}
+      {cuantos}
+    </button>
+  )
+}
 
 /**
- * Fecha y hora con atajos relativos al momento actual. Lo habitual es anotar
- * algo que acaba de pasar ("hace 15 minutos"), así que esos casos se resuelven
- * de un toque; el resto se ajusta con los selectores nativos, que tienen
- * precisión de un minuto.
+ * Fecha y hora con atajos para moverla a saltos.
+ *
+ * Los atajos **suman y restan sobre lo que hay**, así que pulsar dos veces
+ * −15 son treinta minutos menos: se puede ir acercando a la hora buena sin
+ * calcular nada. "ahora" es el único que salta a un sitio fijo. El resto se
+ * ajusta con los selectores nativos, que tienen precisión de un minuto.
  */
 export function MomentField({
   label,
@@ -150,23 +183,18 @@ export function MomentField({
           }
         />
       </div>
+      {/* Restar a la izquierda, sumar a la derecha y el ahora en medio: la
+          fila se lee como una recta de tiempo. */}
       <div class="chips chips-quick">
+        {QUICK_STEPS.map((min) => (
+          <StepButton key={-min} minutes={-min} value={value} onChange={onChange} />
+        ))}
         <button type="button" class={value === now ? 'on' : ''} onClick={() => onChange(now)}>
           ahora
         </button>
-        {QUICK_OFFSETS.map((min) => {
-          const target = addMinutes(now, -min)
-          return (
-            <button
-              key={min}
-              type="button"
-              class={value === target ? 'on' : ''}
-              onClick={() => onChange(target)}
-            >
-              −{min < 60 ? `${min} min` : `${min / 60} h`}
-            </button>
-          )
-        })}
+        {[...QUICK_STEPS].reverse().map((min) => (
+          <StepButton key={min} minutes={min} value={value} onChange={onChange} />
+        ))}
       </div>
     </div>
   )
