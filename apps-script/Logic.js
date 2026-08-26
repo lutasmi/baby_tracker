@@ -28,8 +28,26 @@ var MOMENT_COLUMN = 'Hora';
 var SHEET_USERS = 'Usuarios';
 var SHEET_BABY = 'Bebe';
 
+var SHEET_MEDS = 'Medicamentos';
+
 var USER_COLUMNS = ['Usuario_ID', 'Email', 'Nombre', 'Activo', 'Rol', 'Fecha_Alta'];
 var BABY_COLUMNS = ['Fecha_Nacimiento', 'Hora_Nacimiento', 'Peso_Nacimiento_G'];
+
+/**
+ * El catálogo de medicación: la lista de la que se elige al registrar una
+ * dosis, para no escribir el nombre cada vez. No es un tipo de registro —no
+ * pasa a una hora, es una ficha que se mantiene—, así que tiene sus propias
+ * columnas y no sale de RECORD_TYPES.
+ *
+ * `Desde` y `Hasta` acotan el tratamiento, y de ahí sale si un medicamento
+ * está en curso: no hay columna "Activo" porque sería un segundo sitio donde
+ * decir lo mismo, y dos sitios acaban contradiciéndose.
+ */
+var MED_COLUMNS = ['ID', 'Nombre', 'Dosis', 'Unidad', 'Frecuencia', 'Desde', 'Hasta'].concat(
+  AUDIT_COLUMNS
+);
+/** La dosis lleva decimales: 0,6 ml de vitamina D no es 1 ml. */
+var MED_DECIMAL_COLUMNS = ['Dosis'];
 
 // ---------------------------------------------------------------------------
 // Declaración de los tipos de registro
@@ -38,9 +56,9 @@ var BABY_COLUMNS = ['Fecha_Nacimiento', 'Hora_Nacimiento', 'Peso_Nacimiento_G'];
 // Cada campo se describe con:
 //   key      nombre en la API (y en el frontend)
 //   column   nombre de la columna en la hoja
-//   kind     'int' | 'bool' | 'enum'
+//   kind     'int' | 'num' | 'bool' | 'enum' | 'text'
 //   values   solo en 'enum': código -> etiqueta que se escribe en la hoja
-//   max      solo en 'int'
+//   max      valor máximo en 'int' y 'num'; longitud máxima en 'text'
 //   required el registro no es válido sin él
 //
 // Y cada tipo con:
@@ -134,6 +152,26 @@ var RECORD_TYPES = {
     label: 'Peso',
     interval: false,
     fields: [{ key: 'grams', column: 'Gramos', kind: 'int', max: 30000, required: true }],
+  },
+
+  // Una dosis de medicación. Apunta al catálogo por su identificador y guarda
+  // **además el nombre que tenía en ese momento**: así la pestaña se entiende
+  // sola al leerla a mano, y renombrar o retirar un medicamento no reescribe
+  // lo que ya se le dio al bebé.
+  //
+  // La cantidad es la que se dio de verdad, que no tiene por qué ser la dosis
+  // habitual del catálogo. La unidad viaja con ella porque es lo que la hace
+  // legible: un 2 sin su "ml" no dice nada.
+  med: {
+    sheet: 'Medicacion',
+    label: 'Medicación',
+    interval: false,
+    fields: [
+      { key: 'medId', column: 'Medicamento_ID', kind: 'text', max: 80 },
+      { key: 'medName', column: 'Medicamento', kind: 'text', max: 80, required: true },
+      { key: 'amount', column: 'Cantidad', kind: 'num', max: 10000 },
+      { key: 'unit', column: 'Unidad', kind: 'text', max: 20 },
+    ],
   },
 };
 
@@ -320,6 +358,16 @@ function numOrNull(v) {
   return isFinite(n) ? Math.round(n) : null;
 }
 
+/**
+ * Número con decimales, redondeado a dos. La coma vale como separador: es lo
+ * que escribe quien edita la hoja a mano y lo que devuelve Sheets en español.
+ */
+function decimalOrNull(v) {
+  if (v === '' || v == null) return null;
+  var n = Number(String(v).replace(',', '.'));
+  return isFinite(n) ? Math.round(n * 100) / 100 : null;
+}
+
 // ---------------------------------------------------------------------------
 // Validación y normalización de registros entrantes
 // ---------------------------------------------------------------------------
@@ -330,6 +378,16 @@ var FUTURE_MARGIN_MIN = 10;
 function boundedInt(value, max, what) {
   if (value == null || value === '' || value === false) return 0;
   var n = numOrNull(value);
+  if (n == null || n < 0 || n > max) {
+    throw apiError('VALIDATION', 'Valor no válido para ' + what + '.');
+  }
+  return n;
+}
+
+/** Como boundedInt, pero conservando los decimales: una dosis es 0,6 ml. */
+function boundedNum(value, max, what) {
+  if (value == null || value === '' || value === false) return 0;
+  var n = decimalOrNull(value);
   if (n == null || n < 0 || n > max) {
     throw apiError('VALIDATION', 'Valor no válido para ' + what + '.');
   }
@@ -399,8 +457,14 @@ function normalizeAndValidate(input, now) {
     var value;
     if (field.kind === 'int') {
       value = boundedInt(raw, field.max, field.column);
+    } else if (field.kind === 'num') {
+      value = boundedNum(raw, field.max, field.column);
     } else if (field.kind === 'bool') {
       value = raw === true || raw === 'TRUE' || raw === 1;
+    } else if (field.kind === 'text') {
+      value = String(raw == null ? '' : raw)
+        .trim()
+        .slice(0, field.max || 80);
     } else {
       value = readEnum(raw, field);
     }
@@ -842,10 +906,12 @@ function recordToRow(record, deleted) {
   for (var i = 0; i < spec.fields.length; i++) {
     var field = spec.fields[i];
     var value = record[field.key];
-    if (field.kind === 'int') {
+    if (field.kind === 'int' || field.kind === 'num') {
       row[field.column] = value ? value : '';
     } else if (field.kind === 'bool') {
       row[field.column] = value ? 'TRUE' : '';
+    } else if (field.kind === 'text') {
+      row[field.column] = value || '';
     } else {
       row[field.column] = value ? field.values[value] || value : '';
     }
@@ -895,8 +961,12 @@ function rowToRecord(type, row) {
     var cell = row[field.column];
     if (field.kind === 'int') {
       record[field.key] = numOrNull(cell) || 0;
+    } else if (field.kind === 'num') {
+      record[field.key] = decimalOrNull(cell) || 0;
     } else if (field.kind === 'bool') {
       record[field.key] = isTruthyCell(cell);
+    } else if (field.kind === 'text') {
+      record[field.key] = String(cell == null ? '' : cell).trim();
     } else {
       record[field.key] = reverseValues(field.values)[normText(cell)] || null;
     }
@@ -1005,6 +1075,97 @@ function lifeDayTotals(records, rangeStart, rangeEnd) {
 }
 
 // ---------------------------------------------------------------------------
+// Catálogo de medicación (pestaña Medicamentos)
+// ---------------------------------------------------------------------------
+//
+// Una ficha por medicamento, con su dosis habitual y su pauta. Al registrar
+// una dosis se elige de aquí, que es lo único que evita escribir el nombre a
+// las cuatro de la mañana.
+//
+// La frecuencia es **informativa**: se enseña, no se calcula con ella. La
+// aplicación muestra lo que se ha registrado y no deduce si toca una dosis,
+// porque un olvido al anotar convertiría esa deducción en una mentira sobre
+// medicación.
+
+function normalizeMedication(input) {
+  if (!input || typeof input !== 'object') throw apiError('VALIDATION', 'Falta el medicamento.');
+
+  var id = String(input.id == null ? '' : input.id).trim();
+  if (!id || id.length > 80) throw apiError('VALIDATION', 'Identificador no válido.');
+
+  var name = String(input.name == null ? '' : input.name)
+    .trim()
+    .slice(0, 80);
+  if (!name) throw apiError('VALIDATION', 'El medicamento necesita un nombre.');
+
+  var from = String(input.from == null ? '' : input.from).trim();
+  var to = String(input.to == null ? '' : input.to).trim();
+  if (from && !isValidDate(from)) {
+    throw apiError('VALIDATION', 'La fecha de inicio del tratamiento no es válida.');
+  }
+  if (to && !isValidDate(to)) {
+    throw apiError('VALIDATION', 'La fecha de fin del tratamiento no es válida.');
+  }
+  if (from && to && to < from) {
+    throw apiError('VALIDATION', 'El tratamiento no puede acabar antes de empezar.');
+  }
+
+  return {
+    id: id,
+    name: name,
+    dose: boundedNum(input.dose, 10000, 'la dosis'),
+    unit: String(input.unit == null ? '' : input.unit)
+      .trim()
+      .slice(0, 20),
+    frequency: String(input.frequency == null ? '' : input.frequency)
+      .trim()
+      .slice(0, 60),
+    from: from || null,
+    to: to || null,
+  };
+}
+
+/** Medicamento -> fila. La auditoría la pone quien escribe (Main.js). */
+function medicationToRow(med, deleted) {
+  return {
+    ID: med.id,
+    Nombre: med.name,
+    Dosis: med.dose ? med.dose : '',
+    Unidad: med.unit || '',
+    Frecuencia: med.frequency || '',
+    Desde: med.from || '',
+    Hasta: med.to || '',
+    Eliminado: deleted ? 'TRUE' : '',
+  };
+}
+
+/**
+ * Fila -> medicamento, o null si la fila no dice nada.
+ *
+ * Lo que identifica la ficha es el nombre, así que una fila escrita a mano en
+ * la hoja —sin identificador, que es cosa de la aplicación— sigue valiendo:
+ * se le da uno derivado del nombre. Añadir un medicamento desde Sheets tiene
+ * que funcionar igual que añadirlo desde la aplicación.
+ */
+function rowToMedication(row) {
+  var name = String(row.Nombre == null ? '' : row.Nombre).trim();
+  if (!name) return null;
+  var id = String(row.ID == null ? '' : row.ID).trim() || 'nombre:' + normText(name);
+  return {
+    medication: {
+      id: id,
+      name: name,
+      dose: decimalOrNull(row.Dosis) || 0,
+      unit: String(row.Unidad == null ? '' : row.Unidad).trim(),
+      frequency: String(row.Frecuencia == null ? '' : row.Frecuencia).trim(),
+      from: parseDateCell(row.Desde) || null,
+      to: parseDateCell(row.Hasta) || null,
+    },
+    deleted: isTruthyCell(row.Eliminado),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Ajustes: nacimiento y objetivos (pestaña Bebe)
 // ---------------------------------------------------------------------------
 
@@ -1057,6 +1218,9 @@ if (typeof module !== 'undefined' && module.exports) {
     BABY_COLUMNS: BABY_COLUMNS,
     SHEET_USERS: SHEET_USERS,
     SHEET_BABY: SHEET_BABY,
+    SHEET_MEDS: SHEET_MEDS,
+    MED_COLUMNS: MED_COLUMNS,
+    MED_DECIMAL_COLUMNS: MED_DECIMAL_COLUMNS,
     recordTypeNames: recordTypeNames,
     columnsFor: columnsFor,
     startColumnOf: startColumnOf,
@@ -1096,6 +1260,9 @@ if (typeof module !== 'undefined' && module.exports) {
     lifeDayRange: lifeDayRange,
     lifeDayTotals: lifeDayTotals,
     defaultSettings: defaultSettings,
+    normalizeMedication: normalizeMedication,
+    medicationToRow: medicationToRow,
+    rowToMedication: rowToMedication,
     normalizeSettings: normalizeSettings,
     babyRowToSettings: babyRowToSettings,
     settingsToBabyRow: settingsToBabyRow,

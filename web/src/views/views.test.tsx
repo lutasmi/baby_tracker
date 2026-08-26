@@ -7,11 +7,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { addDays, nowMadrid } from '../lib/dates'
 import { lifeDayRange, lifeDayTotals } from '../lib/lifeday'
 import { cacheDay, clearDayCache } from '../store'
-import { aDay, aDiaper, aFeed, aHistoryDay, aSleep, aWeight, someTotals } from '../test-fixtures'
+import {
+  aDay,
+  aDiaper,
+  aFeed,
+  aHistoryDay,
+  aMed,
+  aMedication,
+  aSleep,
+  aWeight,
+  someTotals,
+} from '../test-fixtures'
 import type { DayData } from '../types'
 import { WeightChart } from '../components/WeightChart'
 import { Dashboard } from './Dashboard'
 import { BarList, HistoryView, WeightList } from './History'
+import { MedicationsView } from './Medications'
 import { EditRecord, NewRecord } from './RecordForm'
 import { SettingsView } from './Settings'
 import { Timeline } from './Timeline'
@@ -777,8 +788,15 @@ describe('Dashboard · accesos que faltaban', () => {
 
   it('pesar es un acceso rápido más, sin botones sueltos al final', () => {
     const html = renderDashboard(day())
-    // Los cinco registros se crean desde la misma cuadrícula.
-    for (const c of ['action-feed', 'action-diaper', 'action-sleep', 'action-bath', 'action-weight']) {
+    // Todos los registros se crean desde la misma cuadrícula.
+    for (const c of [
+      'action-feed',
+      'action-diaper',
+      'action-sleep',
+      'action-bath',
+      'action-weight',
+      'action-med',
+    ]) {
       expect(html).toContain(c)
     }
     // Y la tarjeta del peso se queda solo con la información.
@@ -791,5 +809,90 @@ describe('Dashboard · accesos que faltaban', () => {
     const html = render(<HistoryView metric="weight" />)
     // La pestaña de peso ya viene elegida, sin tener que buscarla.
     expect(html).toContain('<button type="button" class="on">⚖️ Peso</button>')
+  })
+})
+
+describe('Medicación', () => {
+  const vitd = aMedication({ id: 'm-vitd', name: 'Vitamina D', dose: 0.6, unit: 'ml' })
+  const apiretal = aMedication({
+    id: 'm-api',
+    name: 'Apiretal',
+    dose: 2.4,
+    unit: 'ml',
+    frequency: 'cada 6 h',
+    to: addDays(TODAY, -1),
+  })
+
+  it('el formulario elige solo cuando hay un único tratamiento en curso', () => {
+    cacheDay(day({ medications: [vitd] }))
+    const html = render(<NewRecord type="med" />)
+    // Ya elegido y con su dosis puesta: registrarlo es pulsar Guardar.
+    expect(html).toContain('<button type="button" class="on">Vitamina D</button>')
+    expect(html).toContain('value="0,6"')
+    expect(html).not.toContain('Elige el medicamento')
+  })
+
+  it('con varios, la lista se enseña sin elegir por su cuenta', () => {
+    cacheDay(day({ medications: [vitd, aMedication({ id: 'm-2', name: 'Hierro' })] }))
+    const html = render(<NewRecord type="med" />)
+    expect(html).toContain('Vitamina D')
+    expect(html).toContain('Hierro')
+    expect(html).toContain('Elige el medicamento')
+  })
+
+  it('un tratamiento terminado no estorba, pero se puede sacar', () => {
+    cacheDay(day({ medications: [apiretal] }))
+    const html = render(<NewRecord type="med" />)
+    expect(html).toContain('Hoy no hay ningún tratamiento en curso')
+    expect(html).toContain('Ver los que no están en tratamiento')
+  })
+
+  it('sin catálogo, el formulario dice cómo empezar', () => {
+    cacheDay(day({ medications: [] }))
+    const html = render(<NewRecord type="med" />)
+    expect(html).toContain('Todavía no hay ningún medicamento en la lista')
+    expect(html).toContain('+ Nuevo medicamento')
+  })
+
+  it('la lista se gestiona en su pantalla, con dosis, pauta y tratamiento', () => {
+    cacheDay(day({ medications: [vitd, apiretal] }))
+    const html = render(<MedicationsView />)
+    expect(html).toContain('Vitamina D')
+    expect(html).toContain('0,6 ml')
+    expect(html).toContain('cada 6 h')
+    // El que ya no está en curso sigue en la lista, marcado.
+    expect(html).toContain('no está en curso')
+    expect(html).toContain('+ Añadir medicamento')
+  })
+
+  it('la pantalla de la lista explica para qué sirve cuando está vacía', () => {
+    cacheDay(day({ medications: [] }))
+    const html = render(<MedicationsView />)
+    expect(html).toContain('registrar una dosis es elegir de la lista')
+  })
+
+  it('desde Ajustes se llega a la lista', () => {
+    cacheDay(day())
+    expect(render(<SettingsView />)).toContain('💊 Medicación')
+  })
+
+  it('la dosis se lee en la cronología por su nombre', () => {
+    const dosis = aMed({ start: `${TODAY} 08:20`, medName: 'Vitamina D', amount: 0.6, unit: 'ml' })
+    cacheDay(day({ records: [dosis] }))
+    const html = render(<Timeline date={TODAY} />)
+    expect(html).toContain('💊')
+    expect(html).toContain('Vitamina D')
+    expect(html).toContain('0,6 ml')
+    expect(html).toContain('08:20')
+  })
+
+  it('la franja del día enseña la medicación solo cuando la hay', () => {
+    expect(renderDashboard(day({ records: [aFeed({ start: `${TODAY} 08:00` })] }))).not.toContain(
+      'strip-med'
+    )
+    clearDayCache()
+    expect(renderDashboard(day({ records: [aMed({ start: `${TODAY} 08:20` })] }))).toContain(
+      'strip-med'
+    )
   })
 })

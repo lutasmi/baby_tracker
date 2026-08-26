@@ -20,8 +20,10 @@ una columna a una pestaña.
 | `Panales` | Cambios de pañal |
 | `Banos` | Baños y aseos |
 | `Peso` | Pesadas |
+| `Medicacion` | Dosis que se le han dado |
 | `Usuarios` | Quién puede entrar |
 | `Bebe` | Nacimiento y peso al nacer (una sola fila) |
+| `Medicamentos` | El catálogo: qué medicamentos hay, con su dosis y su pauta |
 
 ### Columnas comunes a los registros
 
@@ -104,7 +106,41 @@ Una toma con dos tetadas y un biberón son tres filas:
 > En gramos, que es como se lee la báscula, y se muestra en kilos. La variación
 > respecto al nacimiento se calcula, no se guarda.
 
+**`Medicacion`** — `Medicamento_ID`, `Medicamento`, `Cantidad`, `Unidad`
+
+> Cada dosis apunta al catálogo por su identificador y guarda **además el
+> nombre que tenía el medicamento en ese momento**. Es el único dato que se
+> escribe dos veces en toda la aplicación, y es a propósito: la pestaña se
+> entiende sola al leerla a mano, y renombrar o retirar un medicamento no
+> reescribe lo que ya se le dio al bebé.
+
+> `Cantidad` es la que se dio de verdad, no la del catálogo, y **admite
+> decimales**: 0,6 ml de vitamina D redondeados a 1 ml serían casi el doble de
+> lo recetado. La unidad viaja con ella porque un 2 suelto no dice nada.
+
 **`Bebe`** — `Fecha_Nacimiento`, `Hora_Nacimiento`, `Peso_Nacimiento_G`
+
+**`Medicamentos`** — `Nombre`, `Dosis`, `Unidad`, `Frecuencia`, `Desde`, `Hasta`
+
+> No es un tipo de registro: no pasa a una hora, es una ficha que se mantiene.
+> Existe para una sola cosa —elegir en vez de escribir el nombre a las cuatro
+> de la mañana—, y por eso la dosis y la unidad son solo el valor que se
+> propone al registrar.
+
+> **No hay columna `Activo`.** Que un tratamiento esté en curso sale de `Desde`
+> y `Hasta`, con `Hasta` vacío como "sin fin". Una casilla aparte sería un
+> segundo sitio donde decir lo mismo, y dos sitios acaban contradiciéndose.
+
+> `Frecuencia` es texto libre ("cada 8 h", "2 veces al día") y es
+> **informativa**: se enseña, no se calcula con ella. La aplicación no dice si
+> toca una dosis, porque un olvido al anotar convertiría esa deducción en una
+> mentira sobre medicación. La unidad también es libre: lo que recete el
+> pediatra, no una lista cerrada.
+
+> **Se puede añadir un medicamento a mano en la hoja.** Una fila con solo el
+> nombre vale: lo que identifica la ficha es el nombre, y si no hay `ID` se
+> deriva de él. Al corregirla desde la aplicación se reescribe esa misma fila,
+> sin duplicarla.
 
 ## Lo que se calcula y no se guarda
 
@@ -118,6 +154,7 @@ contradecir a los registros.
 | Totales del día de vida | De los registros que empiezan dentro del periodo |
 | Tomas frente a hidrataciones, cacas frente a pedetes | De los minutos de pecho y de la consistencia ([reglas](funcionamiento.md#qué-cuenta-como-toma-y-qué-como-caca)) |
 | Variación del peso | Del peso al nacer de la pestaña `Bebe` |
+| Si un tratamiento está en curso | De `Desde` y `Hasta` del catálogo, comparados con hoy |
 
 ## Dónde se declara todo esto
 
@@ -145,9 +182,17 @@ diaper: {
 }
 ```
 
-Tipos de campo disponibles: `int` (con `max`), `bool` y `enum` (con `values`,
-que es a la vez la lista de valores válidos y la etiqueta que se escribe en la
-hoja). Cualquier campo puede llevar `required: true`.
+Tipos de campo disponibles:
+
+| `kind` | Para qué | `max` |
+|---|---|---|
+| `int` | Números enteros: gramos, mililitros, minutos | Valor máximo |
+| `num` | Números con decimales, como la cantidad de una dosis | Valor máximo |
+| `bool` | Sí o no: `TRUE` o celda vacía | — |
+| `enum` | Lista cerrada; `values` es a la vez los valores válidos y la etiqueta que se escribe en la hoja | — |
+| `text` | Texto libre: el nombre de un medicamento, su unidad | Longitud máxima |
+
+Cualquier campo puede llevar `required: true`.
 
 La toma es la excepción: se declara con `grouped: true` y no tiene `fields`,
 porque sus columnas y su conversión no son genéricas. Todo lo suyo está junto
@@ -179,6 +224,23 @@ weight: {
 }
 ```
 
+Y `med`, que se añadió más tarde todavía, no necesitó nada distinto: solo
+campos de texto y uno decimal.
+
+```js
+med: {
+  sheet: 'Medicacion',
+  label: 'Medicación',
+  interval: false,
+  fields: [
+    { key: 'medId', column: 'Medicamento_ID', kind: 'text', max: 80 },
+    { key: 'medName', column: 'Medicamento', kind: 'text', max: 80, required: true },
+    { key: 'amount', column: 'Cantidad', kind: 'num', max: 10000 },
+    { key: 'unit', column: 'Unidad', kind: 'text', max: 20 },
+  ],
+}
+```
+
 ## Cómo añadir un tipo de registro
 
 1. Una entrada nueva en `RECORD_TYPES` con su pestaña y sus campos.
@@ -205,8 +267,8 @@ los sitios donde falta tratarlo.
 
 ## Rendimiento
 
-Cada petición (`getDay` y `getHistory`) lee las cinco pestañas de registros, más
-`Usuarios` y `Bebe`. `getDay` devuelve además los registros del día de vida en
+Cada petición (`getDay` y `getHistory`) lee las seis pestañas de registros, más
+`Usuarios`, `Bebe` y `Medicamentos`. `getDay` devuelve además los registros del día de vida en
 curso, que casi siempre cae a caballo de dos días naturales: así la pantalla
 principal pinta su franja sin una segunda petición.
 Con el volumen de un bebé son unas décimas de segundo sobre los 1-3 s que ya

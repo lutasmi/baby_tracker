@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aBath, aDiaper, aFeed, aSleep } from '../test-fixtures'
+import { aBath, aDiaper, aFeed, aMed, aSleep } from '../test-fixtures'
 import { nowPct, stripLanes, stripTicks } from './daystrip'
 
 const START = '2026-08-07 09:17'
@@ -92,5 +92,27 @@ describe('nowPct', () => {
   it('devuelve null si ahora queda fuera', () => {
     expect(nowPct(START, END, '2026-08-06 10:00')).toBeNull()
     expect(nowPct(START, END, '2026-08-09 10:00')).toBeNull()
+  })
+})
+
+describe('el carril de medicación', () => {
+  it('solo aparece los días que hay dosis', () => {
+    // Un carril vacío todos los días es ruido: la mayoría de los bebés no
+    // toman nada la mayor parte del tiempo.
+    const sin = stripLanes([aFeed({ start: '2026-08-07 10:00' })], START, END, NOW)
+    expect(sin.map((l) => l.key)).not.toContain('med')
+
+    const con = stripLanes([aMed({ start: '2026-08-07 10:00' })], START, END, NOW)
+    const med = con.find((l) => l.key === 'med')
+    expect(med?.marks).toHaveLength(1)
+    expect(med?.marks[0].label).toContain('Medicación')
+  })
+
+  it('una dosis es un instante, no un tramo', () => {
+    const [lane] = stripLanes([aMed({ start: '2026-08-07 21:17' })], START, END, NOW).filter(
+      (l) => l.key === 'med'
+    )
+    expect(lane.marks[0].widthPct).toBe(0)
+    expect(lane.marks[0].leftPct).toBeCloseTo(50, 1)
   })
 })

@@ -76,12 +76,19 @@ Todo lo que necesita la pantalla principal en una sola llamada:
 | `previousFeed` | Última toma anterior a esa fecha, para el hueco de la primera |
 | `lifeDay` | Día de vida **en curso** (según la hora del servidor) con sus totales y sus registros; `null` sin fecha de nacimiento |
 | `settings` | Nacimiento y peso al nacer |
+| `medications` | El catálogo de medicación, ordenado por nombre |
 | `users` | Correo → nombre visible, para mostrar quién anotó cada cosa |
 | `serverNow` | Hora del servidor, en hora de Madrid |
 
 `last.feed` y `last.poop` excluyen hidrataciones y pedetes; `last.diaper` no
 excluye nada. Ver
 [Qué cuenta como toma y qué como caca](funcionamiento.md#qué-cuenta-como-toma-y-qué-como-caca).
+
+El catálogo viaja aquí, y no en una acción aparte, para que el formulario de
+una dosis abra con la lista puesta: registrar tiene que costar lo mismo que
+antes de que existiera la medicación. Si la pestaña `Medicamentos` todavía no
+existe —código actualizado sin ejecutar `setup()`— llega vacío en lugar de
+tumbar la petición.
 
 ### `getHistory`
 
@@ -127,6 +134,44 @@ Borrado lógico. Es idempotente: borrar algo que ya no existe también responde
 ```
 
 Escribe la pestaña `Bebe`, que es común a todos los usuarios.
+
+### `saveMedication`
+
+```jsonc
+{
+  "action": "saveMedication",
+  "medication": {
+    "id": "uuid",
+    "name": "Vitamina D",
+    "dose": 0.6,
+    "unit": "ml",
+    "frequency": "cada 24 h",
+    "from": "2026-08-01",
+    "to": null
+  }
+}
+→ el medicamento guardado
+```
+
+Alta y corrección en la misma acción: el `id` lo genera el cliente, así que
+guardar dos veces corrige la misma ficha en lugar de duplicarla. `name` es lo
+único obligatorio. `from` y `to` son fechas (`yyyy-MM-dd`) o `null`; `to` vacío
+es un tratamiento sin fin.
+
+La auditoría (`Creado_Por`, `Creado_En`, …) la pone el servidor en la hoja y no
+viaja en la respuesta: la ficha es una lista de la compra, no un registro de lo
+que le pasó al bebé.
+
+### `deleteMedication`
+
+```jsonc
+{ "action": "deleteMedication", "id": "uuid" }
+→ { "deleted": true }
+```
+
+Lo retira del catálogo con borrado lógico. **Las dosis ya registradas se quedan
+como están**, con el nombre que tenían: lo que se le dio al bebé no depende de
+que su ficha siga en la lista. Idempotente, como `deleteRecord`.
 
 ## Garantías
 

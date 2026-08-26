@@ -9,7 +9,7 @@ import type { BabyRecord } from '../types'
 import { addMinutes, diffMinutes, timeOf } from './dates'
 import { isStaleSleep } from './derive'
 
-export type LaneKey = 'sleep' | 'feed' | 'pee' | 'poop'
+export type LaneKey = 'sleep' | 'feed' | 'pee' | 'poop' | 'med'
 
 export interface StripMark {
   id: string
@@ -28,11 +28,21 @@ export interface StripLane {
   marks: StripMark[]
 }
 
-const LANES: { key: LaneKey; icon: string; name: string; match: (r: BabyRecord) => boolean }[] = [
+const LANES: {
+  key: LaneKey
+  icon: string
+  name: string
+  match: (r: BabyRecord) => boolean
+  /** El carril solo aparece los días que tiene algo que enseñar. */
+  onlyWhenUsed?: boolean
+}[] = [
   { key: 'sleep', icon: '😴', name: 'Sueño', match: (r) => r.type === 'sleep' },
   { key: 'feed', icon: '🍼', name: 'Tomas', match: (r) => r.type === 'feed' },
   { key: 'pee', icon: '💧', name: 'Pises', match: (r) => r.type === 'diaper' && r.pee },
   { key: 'poop', icon: '💩', name: 'Cacas', match: (r) => r.type === 'diaper' && r.poop },
+  // La medicación va y viene: mientras hay tratamiento interesa ver a qué
+  // horas se dio, y el resto del tiempo su carril no debe ocupar sitio.
+  { key: 'med', icon: '💊', name: 'Medicación', match: (r) => r.type === 'med', onlyWhenUsed: true },
   // Baños y pesadas no tienen carril: son de cada varios días y su fila salía
   // vacía casi siempre. Están en la cronología, que es donde se buscan.
 ]
@@ -60,11 +70,9 @@ export function stripLanes(
   const total = Math.max(1, diffMinutes(start, end))
   const pct = (dt: string) => clamp((diffMinutes(start, dt) / total) * 100)
 
-  return LANES.map((lane) => ({
-    key: lane.key,
-    icon: lane.icon,
-    name: lane.name,
-    marks: records.filter(lane.match).map((r) => {
+  const out: StripLane[] = []
+  for (const lane of LANES) {
+    const marks = records.filter(lane.match).map((r) => {
       const left = pct(r.start)
       const right = pct(drawnEnd(r, now))
       return {
@@ -73,8 +81,11 @@ export function stripLanes(
         widthPct: Math.max(0, right - left),
         label: `${lane.name} · ${timeOf(r.start)}`,
       }
-    }),
-  }))
+    })
+    if (lane.onlyWhenUsed && marks.length === 0) continue
+    out.push({ key: lane.key, icon: lane.icon, name: lane.name, marks })
+  }
+  return out
 }
 
 /** Marcas de hora cada 6 h en punto que caen dentro del periodo. */

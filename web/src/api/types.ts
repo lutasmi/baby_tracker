@@ -2,6 +2,7 @@ import type {
   BabyRecord,
   DayData,
   History,
+  Medication,
   RecordInput,
   RecordType,
   Settings,
@@ -48,4 +49,11 @@ export interface Api {
   /** El tipo indica en qué pestaña está el registro. */
   deleteRecord(type: RecordType, id: string): Promise<void>
   updateSettings(settings: Settings): Promise<Settings>
+  /**
+   * Alta o corrección de un medicamento del catálogo. El identificador lo pone
+   * el cliente, así que reintentar corrige la misma ficha en vez de duplicarla.
+   */
+  saveMedication(medication: Medication): Promise<Medication>
+  /** Lo retira del selector; las dosis ya registradas se quedan como están. */
+  deleteMedication(id: string): Promise<void>
 }

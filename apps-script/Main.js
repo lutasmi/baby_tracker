@@ -3,7 +3,8 @@
  *
  * Se despliega como aplicación web ("Ejecutar como: yo", acceso: "Cualquier
  * usuario"). El frontend envía POST con JSON y recibe JSON:
- *   petición:  { action, token?, idToken?, date?, record?, type?, id?, settings? }
+ *   petición:  { action, token?, idToken?, date?, record?, type?, id?, settings?,
+ *                medication? }
  *   respuesta: { ok: true, data } | { ok: false, error: { code, message } }
  *
  * Códigos de error: AUTH (volver a iniciar sesión), FORBIDDEN (usuario no
@@ -63,6 +64,10 @@ function route(req) {
       return deleteRecord(req, session);
     case 'updateSettings':
       return writeSettings(req.settings);
+    case 'saveMedication':
+      return saveMedication(req, session);
+    case 'deleteMedication':
+      return deleteMedication(req, session);
     case 'logout':
       return logout(req.token);
     default:
@@ -239,6 +244,10 @@ function getDay(req) {
     users: usersDisplayMap(),
     serverNow: now,
     settings: settings,
+    // El catálogo viaja con el día para que el formulario de una dosis abra
+    // con la lista puesta, sin otra petición de por medio: registrar tiene que
+    // costar lo mismo que antes de que existiera la medicación.
+    medications: readMedications(),
     // Siempre el día de vida en curso (según `now`), con independencia de la
     // fecha consultada: es lo que necesita la pantalla principal.
     lifeDay: currentLifeDay(settings, all, now),
@@ -440,6 +449,52 @@ function deleteRecord(req, session) {
       record.updatedAt = nowMadrid();
       writeRecordRow(type, recordToRow(record, true), rowNumber);
     }
+    return { deleted: true };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Catálogo de medicación
+// ---------------------------------------------------------------------------
+
+/**
+ * Alta o modificación de un medicamento. El identificador lo genera el
+ * cliente, así que reintentar corrige la misma ficha en lugar de duplicarla.
+ */
+function saveMedication(req, session) {
+  var med = normalizeMedication(req.medication);
+  var now = nowMadrid();
+  return withLock(function () {
+    var rowNumber = findMedicationRow(med.id);
+    var row = medicationToRow(med, false);
+    if (rowNumber === -1) {
+      row.Creado_Por = session.email;
+      row.Creado_En = now;
+    } else {
+      // Quién y cuándo lo creó se quedan como estaban: writeRowAt solo escribe
+      // las columnas que van en el objeto.
+      row.Modificado_Por = session.email;
+      row.Modificado_En = now;
+    }
+    writeMedicationRow(row, rowNumber);
+    return med;
+  });
+}
+
+/**
+ * Retira un medicamento del catálogo. Borrado lógico, como todo lo demás: las
+ * dosis que ya se dieron siguen contando lo que pasó.
+ */
+function deleteMedication(req, session) {
+  var id = String(req.id == null ? '' : req.id).trim();
+  if (!id) throw apiError('VALIDATION', 'Falta el identificador.');
+  return withLock(function () {
+    var rowNumber = findMedicationRow(id);
+    if (rowNumber === -1) return { deleted: true }; // ya no está: idempotente
+    writeMedicationRow(
+      { Eliminado: 'TRUE', Modificado_Por: session.email, Modificado_En: nowMadrid() },
+      rowNumber
+    );
     return { deleted: true };
   });
 }

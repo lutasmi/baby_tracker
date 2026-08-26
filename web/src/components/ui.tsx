@@ -1,5 +1,7 @@
 import type { ComponentChildren } from 'preact'
+import { useState } from 'preact/hooks'
 import { addMinutes } from '../lib/dates'
+import { formatAmount } from '../lib/medications'
 
 /** Cabecera de pantalla secundaria con botón de volver. */
 export function ScreenTitle({ title, right }: { title: string; right?: ComponentChildren }) {
@@ -109,6 +111,59 @@ export function StatTile({
     <button class="kpi-tile kpi-tile-link" onClick={() => onEdit(editId)}>
       {body}
     </button>
+  )
+}
+
+/**
+ * Cantidad con decimales, para las dosis.
+ *
+ * Redondear al entero más cercano no vale aquí: 0,6 ml de vitamina D pasarían
+ * a ser 1 ml, casi el doble de lo recetado. Se teclea con coma o con punto,
+ * como lo escriba cada uno, y la unidad se enseña al lado porque un 2 suelto
+ * no dice nada.
+ *
+ * Mientras se escribe manda el texto tecleado: '0,' todavía no es un número, y
+ * convertirlo en ese momento borraría la coma recién puesta.
+ */
+export function DecimalField({
+  value,
+  unit,
+  max = 10000,
+  onChange,
+  autoFocus,
+}: {
+  value: number
+  unit: string
+  max?: number
+  onChange: (v: number) => void
+  autoFocus?: boolean
+}) {
+  const [typed, setTyped] = useState<string | null>(null)
+  return (
+    <div class="stepper">
+      <div class="stepper-input">
+        <input
+          type="text"
+          inputMode="decimal"
+          value={typed ?? (value ? formatAmount(value) : '')}
+          placeholder="0"
+          aria-label={unit || 'Cantidad'}
+          autoFocus={autoFocus}
+          onInput={(e) => {
+            const raw = (e.target as HTMLInputElement).value
+            setTyped(raw)
+            const n = Number(raw.replace(',', '.'))
+            if (raw.trim() === '') onChange(0)
+            else if (Number.isFinite(n) && n >= 0) {
+              onChange(Math.min(max, Math.round(n * 100) / 100))
+            }
+          }}
+          // Al salir del campo vuelve a mandar el valor guardado, ya normalizado.
+          onBlur={() => setTyped(null)}
+        />
+        {unit && <small>{unit}</small>}
+      </div>
+    </div>
   )
 }
 

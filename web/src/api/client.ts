@@ -5,6 +5,7 @@ import type {
   BabyRecord,
   DayData,
   History,
+  Medication,
   RecordInput,
   RecordType,
   Settings,
@@ -122,5 +123,11 @@ export const realApi: Api = {
   },
   updateSettings(settings: Settings) {
     return call<Settings>('updateSettings', { settings })
+  },
+  saveMedication(medication: Medication) {
+    return call<Medication>('saveMedication', { medication })
+  },
+  async deleteMedication(id: string) {
+    await call('deleteMedication', { id })
   },
 }

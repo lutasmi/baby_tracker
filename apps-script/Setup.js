@@ -3,8 +3,8 @@
  *
  * Ejecuta setup() una vez desde el editor de Apps Script (botón "Ejecutar").
  * Crea la hoja si no existe y prepara una pestaña por tipo de registro, más
- * `Usuarios` y `Bebe`. Es seguro ejecutarlo varias veces: solo añade lo que
- * falta y nunca borra datos.
+ * `Usuarios`, `Bebe` y el catálogo `Medicamentos`. Es seguro ejecutarlo varias
+ * veces: solo añade lo que falta y nunca borra datos.
  *
  * Si vienes de una versión anterior, la pestaña `Eventos` se deja intacta. La
  * aplicación ya no la lee: consérvala como histórico el tiempo que quieras y
@@ -26,11 +26,18 @@ function setup() {
 
   setupSheet(ss, SHEET_USERS, USER_COLUMNS, []);
   setupSheet(ss, SHEET_BABY, BABY_COLUMNS, ['Peso_Nacimiento_G']);
+  setupSheet(ss, SHEET_MEDS, MED_COLUMNS, [], MED_DECIMAL_COLUMNS);
 
   var types = recordTypeNames();
   for (var i = 0; i < types.length; i++) {
     var type = types[i];
-    setupSheet(ss, RECORD_TYPES[type].sheet, columnsFor(type), numericColumnsFor(type));
+    setupSheet(
+      ss,
+      RECORD_TYPES[type].sheet,
+      columnsFor(type),
+      numericColumnsFor(type),
+      decimalColumnsFor(type)
+    );
     Logger.log('✔ Pestaña "' + RECORD_TYPES[type].sheet + '" lista.');
   }
 
@@ -51,7 +58,7 @@ function setup() {
   Logger.log('Siguiente paso: Implementar > Administrar implementaciones > nueva versión.');
 }
 
-/** Columnas de un tipo que guardan números, no texto. */
+/** Columnas de un tipo que guardan números enteros, no texto. */
 function numericColumnsFor(type) {
   var spec = RECORD_TYPES[type];
   if (spec.grouped) return FEED_NUMERIC_COLUMNS.slice();
@@ -62,12 +69,23 @@ function numericColumnsFor(type) {
   return out;
 }
 
+/** Columnas de un tipo que admiten decimales, como la cantidad de una dosis. */
+function decimalColumnsFor(type) {
+  var spec = RECORD_TYPES[type];
+  var out = [];
+  if (spec.grouped) return out;
+  for (var i = 0; i < spec.fields.length; i++) {
+    if (spec.fields[i].kind === 'num') out.push(spec.fields[i].column);
+  }
+  return out;
+}
+
 /**
  * Crea la pestaña si falta y garantiza que están todas las columnas. Las
  * columnas que ya existen no se tocan ni se reordenan; las que faltan se
  * añaden al final, de modo que actualizar nunca pierde datos.
  */
-function setupSheet(ss, name, headers, numericColumns) {
+function setupSheet(ss, name, headers, numericColumns, decimalColumns) {
   var sheet = ss.getSheetByName(name);
   if (!sheet) sheet = ss.insertSheet(name);
 
@@ -94,11 +112,16 @@ function setupSheet(ss, name, headers, numericColumns) {
 
   // Las columnas de fecha/hora y las de texto se fuerzan a texto para que
   // Sheets no las reinterprete; así la celda contiene exactamente lo escrito.
+  // Las de decimales llevan su formato: con '0', una dosis de 0,6 ml se vería
+  // como 1 en la hoja.
+  var decimals = decimalColumns || [];
   var header = sheet.getRange(1, 1, 1, width).getValues()[0];
   for (var c = 0; c < width; c++) {
-    var isNumeric = indexOfText(numericColumns, header[c]) !== -1;
+    var format = '@';
+    if (indexOfText(numericColumns, header[c]) !== -1) format = '0';
+    else if (indexOfText(decimals, header[c]) !== -1) format = '0.##';
     var a1 = columnLetter(c + 1) + '2:' + columnLetter(c + 1);
-    sheet.getRange(a1).setNumberFormat(isNumeric ? '0' : '@');
+    sheet.getRange(a1).setNumberFormat(format);
   }
 }
 

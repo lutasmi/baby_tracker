@@ -13,12 +13,14 @@ import type {
   FeedItemKind,
   FeedRecord,
   Amount,
+  Medication,
   RecordInput,
   RecordType,
   SleepKind,
 } from '../types'
 import { addMinutes, diffMinutes, timeOf } from './dates'
 import { feedDefaults, guessSleepKind } from './derive'
+import { activeOn } from './medications'
 import { breastMinutesOf, feedSpan, itemMinutes, mlOfItems, newId } from './records'
 
 export interface FormState {
@@ -41,6 +43,11 @@ export interface FormState {
   poopAmount: Amount | ''
   consistency: Consistency | ''
   grams: number
+  /** La dosis: qué medicamento del catálogo, cuánto y de qué. */
+  medId: string
+  medName: string
+  amount: number
+  unit: string
   notes: string
 }
 
@@ -150,7 +157,8 @@ export function initialState(
   type: RecordType,
   existing: BabyRecord | null,
   lastFeed: FeedRecord | null,
-  now: string
+  now: string,
+  medications: Medication[] = []
 ): FormState {
   const base: FormState = {
     start: now,
@@ -166,6 +174,10 @@ export function initialState(
     poopAmount: '',
     consistency: '',
     grams: 0,
+    medId: '',
+    medName: '',
+    amount: 0,
+    unit: '',
     notes: '',
   }
 
@@ -188,6 +200,13 @@ export function initialState(
       }
       case 'diaper':
         return { ...base, pee: true }
+      // Con un solo tratamiento en curso no hay nada que elegir: se propone
+      // ese, con su dosis de siempre, y registrar es un botón.
+      case 'med': {
+        const activos = activeOn(medications, now.slice(0, 10))
+        if (activos.length !== 1) return base
+        return { ...base, ...chosenMedication(activos[0]) }
+      }
       case 'bath':
       case 'weight':
         return base
@@ -216,7 +235,20 @@ export function initialState(
       return { ...state, bathKind: r.kind, bathDurationMin: r.durationMin }
     case 'weight':
       return { ...state, grams: r.grams }
+    case 'med':
+      return { ...state, medId: r.medId, medName: r.medName, amount: r.amount, unit: r.unit }
   }
+}
+
+/**
+ * Lo que rellena elegir un medicamento: su nombre y su dosis habitual, que es
+ * la que casi siempre se da. La cantidad sigue siendo editable, porque la que
+ * cuenta es la que se dio de verdad.
+ */
+export function chosenMedication(
+  m: Medication
+): Pick<FormState, 'medId' | 'medName' | 'amount' | 'unit'> {
+  return { medId: m.id, medName: m.name, amount: m.dose, unit: m.unit }
 }
 
 /** Traduce el estado del formulario al registro que viaja a la API. */
@@ -255,6 +287,15 @@ export function buildInput(id: string, type: RecordType, s: FormState): RecordIn
       }
     case 'weight':
       return { ...common, type: 'weight', grams: s.grams }
+    case 'med':
+      return {
+        ...common,
+        type: 'med',
+        medId: s.medId,
+        medName: s.medName,
+        amount: s.amount,
+        unit: s.unit,
+      }
   }
 }
 
@@ -303,5 +344,6 @@ export function validate(type: RecordType, s: FormState, now: string): string | 
   }
 
   if (type === 'weight' && !s.grams) return 'Indica el peso en gramos.'
+  if (type === 'med' && !s.medName) return 'Elige el medicamento.'
   return null
 }

@@ -2,11 +2,12 @@
 // API en cada situación que se da con un bebé de verdad.
 
 import { describe, expect, it } from 'vitest'
-import { aDiaper, aFeed, aSleep } from '../test-fixtures'
+import { aDiaper, aFeed, aMed, aMedication, aSleep } from '../test-fixtures'
 import type { FeedInput, FeedItem } from '../types'
 import { breastSideOfItems, deriveFeed } from './records'
 import {
   buildInput,
+  chosenMedication,
   endAfterStart,
   feedSummary,
   feedTimes,
@@ -509,6 +510,80 @@ describe('detalle del pañal', () => {
     expect(initialState('diaper', panal, null, NOW)).toMatchObject({
       peeAmount: 'poco',
       consistency: 'pedete',
+    })
+  })
+})
+
+describe('medicación', () => {
+  const vitd = aMedication({ id: 'm-vitd', name: 'Vitamina D', dose: 0.6, unit: 'ml' })
+  const apiretal = aMedication({ id: 'm-api', name: 'Apiretal', dose: 2.4, unit: 'ml' })
+
+  it('con un solo tratamiento en curso viene ya elegido, con su dosis', () => {
+    // Es el caso de todos los días: registrar la vitamina D tiene que ser un
+    // botón, no una elección entre una sola cosa.
+    expect(initialState('med', null, null, NOW, [vitd])).toMatchObject({
+      medId: 'm-vitd',
+      medName: 'Vitamina D',
+      amount: 0.6,
+      unit: 'ml',
+    })
+  })
+
+  it('con dos, no elige por su cuenta', () => {
+    expect(initialState('med', null, null, NOW, [vitd, apiretal])).toMatchObject({
+      medId: '',
+      medName: '',
+    })
+  })
+
+  it('un tratamiento terminado no se propone', () => {
+    const terminado = aMedication({ ...vitd, to: '2026-08-01' })
+    expect(initialState('med', null, null, NOW, [terminado]).medName).toBe('')
+  })
+
+  it('elegir un medicamento trae su nombre y su dosis habitual', () => {
+    expect(chosenMedication(apiretal)).toEqual({
+      medId: 'm-api',
+      medName: 'Apiretal',
+      amount: 2.4,
+      unit: 'ml',
+    })
+  })
+
+  it('guarda la cantidad que se dio de verdad, no la del catálogo', () => {
+    const s = { ...initialState('med', null, null, NOW, [vitd]), amount: 1.2 }
+    expect(buildInput('id', 'med', s)).toMatchObject({
+      type: 'med',
+      medId: 'm-vitd',
+      medName: 'Vitamina D',
+      amount: 1.2,
+      unit: 'ml',
+    })
+  })
+
+  it('sin medicamento no se puede guardar', () => {
+    const s = initialState('med', null, null, NOW, [])
+    expect(validate('med', s, NOW)).toMatch(/Elige el medicamento/)
+  })
+
+  it('la cantidad es opcional: lo esencial es qué se le dio y cuándo', () => {
+    const s = { ...initialState('med', null, null, NOW, [vitd]), amount: 0 }
+    expect(validate('med', s, NOW)).toBeNull()
+    expect(buildInput('id', 'med', s)).toMatchObject({ amount: 0 })
+  })
+
+  it('la hora no puede estar en el futuro', () => {
+    const s = { ...initialState('med', null, null, NOW, [vitd]), start: '2026-08-07 17:00' }
+    expect(validate('med', s, NOW)).toMatch(/futuro/)
+  })
+
+  it('reabrir una dosis vuelve con lo que se dio, aunque cambie el catálogo', () => {
+    const dosis = aMed({ medId: 'm-vitd', medName: 'Vitamina D', amount: 0.6, unit: 'ml' })
+    expect(initialState('med', dosis, null, NOW, [])).toMatchObject({
+      medId: 'm-vitd',
+      medName: 'Vitamina D',
+      amount: 0.6,
+      unit: 'ml',
     })
   })
 })

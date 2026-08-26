@@ -220,3 +220,79 @@ describe('evolución', () => {
     expect(days).toEqual([])
   })
 })
+
+describe('catálogo de medicación', () => {
+  const dosis = (id: string, start: string, amount = 0.6): RecordInput => ({
+    id,
+    type: 'med',
+    start,
+    medId: 'm-nuevo',
+    medName: 'Dalsy',
+    amount,
+    unit: 'ml',
+    notes: '',
+  })
+
+  it('viene con lo que ya hay dado de alta, ordenado por nombre', async () => {
+    const day = await api.getDay(TODAY)
+    expect(day.medications.map((m) => m.name)).toEqual(['Apiretal', 'Vitamina D'])
+  })
+
+  it('un medicamento nuevo aparece en el día siguiente que se pide', async () => {
+    await api.saveMedication({
+      id: 'm-nuevo',
+      name: 'Dalsy',
+      dose: 2.5,
+      unit: 'ml',
+      frequency: 'cada 8 h',
+      from: null,
+      to: null,
+    })
+    const day = await api.getDay(TODAY)
+    expect(day.medications.find((m) => m.id === 'm-nuevo')).toMatchObject({
+      name: 'Dalsy',
+      dose: 2.5,
+    })
+  })
+
+  it('la dosis registrada guarda el nombre y la cantidad que se dio', async () => {
+    const r = await api.createRecord(dosis('d-1', `${TODAY} 09:00`, 1.2))
+    expect(r).toMatchObject({ type: 'med', medName: 'Dalsy', amount: 1.2, unit: 'ml' })
+    const day = await api.getDay(TODAY)
+    expect(day.records.some((x) => x.id === 'd-1')).toBe(true)
+  })
+
+  it('retirar un medicamento no borra las dosis que ya se dieron', async () => {
+    await api.createRecord(dosis('d-1', `${TODAY} 09:00`))
+    await api.deleteMedication('med-vitd')
+    const day = await api.getDay(TODAY)
+    expect(day.medications.some((m) => m.id === 'med-vitd')).toBe(false)
+    expect(day.records.some((x) => x.id === 'd-1')).toBe(true)
+  })
+
+  it('rechaza una ficha sin nombre y una dosis sin medicamento', async () => {
+    await expect(
+      api.saveMedication({
+        id: 'm-x',
+        name: '  ',
+        dose: 0,
+        unit: '',
+        frequency: '',
+        from: null,
+        to: null,
+      })
+    ).rejects.toThrow(/nombre/)
+    await expect(
+      api.createRecord({
+        id: 'd-2',
+        type: 'med',
+        start: `${TODAY} 09:00`,
+        medId: 'm-nuevo',
+        medName: '',
+        amount: 0.6,
+        unit: 'ml',
+        notes: '',
+      })
+    ).rejects.toThrow(/Medicamento/)
+  })
+})

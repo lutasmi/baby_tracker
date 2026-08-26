@@ -1,13 +1,21 @@
 import { useMemo, useRef, useState } from 'preact/hooks'
 import { getApi } from '../api'
 import { ApiError } from '../api/types'
-import { AmountField, MomentField, ScreenTitle, Seg, Toggle } from '../components/ui'
+import { MedicationFields } from '../components/MedicationFields'
+import { AmountField, DecimalField, MomentField, ScreenTitle, Seg, Toggle } from '../components/ui'
 import { handleAuthError, navigateReplace, useDay, useNow } from '../hooks'
 import { addMinutes, dateOf, diffMinutes, formatDuration, nowMadrid, timeOf } from '../lib/dates'
+import {
+  activeOn,
+  emptyMedication,
+  formatDose,
+  medicationProblem,
+} from '../lib/medications'
 import {
   bottleItems,
   breastItems,
   buildInput,
+  chosenMedication,
   endAfterStart,
   feedSummary,
   feedTimes,
@@ -31,6 +39,7 @@ import type {
   FeedItem,
   FeedItemKind,
   Amount,
+  Medication,
   RecordType,
   SleepKind,
 } from '../types'
@@ -41,6 +50,7 @@ const NEW_TITLES: Record<RecordType, string> = {
   diaper: 'Registrar pañal',
   bath: 'Registrar baño',
   weight: 'Registrar peso',
+  med: 'Registrar medicación',
 }
 
 const BOTTLE_LABELS: Record<FeedItemKind, string> = {
@@ -74,9 +84,10 @@ export function EditRecord({ id }: { id: string }) {
 function RecordForm({ type, existing }: { type: RecordType; existing: BabyRecord | null }) {
   const now = useNow()
   const today = now.slice(0, 10)
-  // La última toma rellena los valores por defecto; la caché lo resuelve al
-  // instante cuando se llega desde el dashboard.
-  const { data } = useDay(today)
+  // La última toma y el catálogo de medicación rellenan los valores por
+  // defecto; la caché lo resuelve al instante cuando se llega desde el
+  // dashboard.
+  const { data, reload } = useDay(today)
   const [state, setState] = useState<FormState | null>(null)
   const [saving, setSaving] = useState(false)
   const idRef = useRef(existing?.id ?? newId())
@@ -84,7 +95,15 @@ function RecordForm({ type, existing }: { type: RecordType; existing: BabyRecord
   // propuestas se muevan solas mientras se está mirando la pantalla.
   const openedAt = useRef(nowMadrid())
 
-  const s = state ?? initialState(type, existing, data?.last.feed ?? null, openedAt.current)
+  const s =
+    state ??
+    initialState(
+      type,
+      existing,
+      data?.last.feed ?? null,
+      openedAt.current,
+      data?.medications ?? []
+    )
   const set = (patch: Partial<FormState>) => setState({ ...s, ...patch })
 
   const problem = useMemo(() => validate(type, s, now), [type, s, now])
@@ -157,6 +176,15 @@ function RecordForm({ type, existing }: { type: RecordType; existing: BabyRecord
           {type === 'diaper' && <DiaperFields s={s} set={set} now={now} />}
           {type === 'bath' && <BathFields s={s} set={set} now={now} />}
           {type === 'weight' && <WeightFields s={s} set={set} now={now} />}
+          {type === 'med' && (
+            <MedFields
+              s={s}
+              set={set}
+              now={now}
+              meds={data?.medications ?? []}
+              onCatalogChange={reload}
+            />
+          )}
 
           <div class="field">
             <span class="field-label">Nota (opcional)</span>
@@ -551,6 +579,152 @@ function WeightFields({ s, set, now }: FieldProps) {
         />
         {s.grams > 0 && <div class="field-hint">= {formatKg(s.grams)}</div>}
       </div>
+    </>
+  )
+}
+
+/**
+ * Registrar una dosis: elegir de la lista y guardar.
+ *
+ * El catálogo existe justo para esto —no escribir el nombre a las cuatro de la
+ * mañana—, así que la lista va arriba del todo y con un tratamiento único en
+ * curso viene ya elegida. Dar de alta un medicamento se puede hacer aquí
+ * mismo: cuando el pediatra receta algo hay que darlo en ese momento, no
+ * después de pasar por Ajustes.
+ */
+function MedFields({
+  s,
+  set,
+  now,
+  meds,
+  onCatalogChange,
+}: FieldProps & { meds: Medication[]; onCatalogChange: () => Promise<void> }) {
+  const today = now.slice(0, 10)
+  const [showAll, setShowAll] = useState(false)
+  const [draft, setDraft] = useState<Medication | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const enCurso = activeOn(meds, today)
+  const visibles = showAll ? meds : enCurso
+  const chosen = meds.find((m) => m.id === s.medId) ?? null
+  // Al corregir una dosis de un medicamento ya retirado sigue viéndose cuál
+  // era: lo que se le dio al bebé no depende de que su ficha siga en la lista.
+  const retirado = s.medName !== '' && !meds.some((m) => m.id === s.medId)
+
+  async function addDraft() {
+    if (!draft) return
+    const problem = medicationProblem(draft)
+    if (problem) {
+      showToast(problem, 'error')
+      return
+    }
+    setSaving(true)
+    try {
+      const saved = await getApi().saveMedication({ ...draft, name: draft.name.trim() })
+      set(chosenMedication(saved))
+      setDraft(null)
+      showToast('Medicamento añadido ✓')
+      await onCatalogChange()
+    } catch (err) {
+      if (!handleAuthError(err)) {
+        showToast(
+          err instanceof ApiError ? err.message : 'No se pudo guardar el medicamento.',
+          'error'
+        )
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <div class="field">
+        <span class="field-label">💊 Medicamento</span>
+        {visibles.length === 0 && !retirado && (
+          <p class="field-hint">
+            {meds.length === 0
+              ? 'Todavía no hay ningún medicamento en la lista. Añade el primero y quedará ' +
+                'guardado para las siguientes veces.'
+              : 'Hoy no hay ningún tratamiento en curso.'}
+          </p>
+        )}
+        <div class="chips">
+          {visibles.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              class={m.id === s.medId ? 'on' : ''}
+              onClick={() => set(chosenMedication(m))}
+            >
+              {m.name}
+            </button>
+          ))}
+          {retirado && (
+            <button type="button" class="on" disabled>
+              {s.medName}
+            </button>
+          )}
+        </div>
+        {meds.length > enCurso.length && !showAll && (
+          <button type="button" class="btn-link" onClick={() => setShowAll(true)}>
+            Ver los que no están en tratamiento
+          </button>
+        )}
+        {!draft && (
+          <button
+            type="button"
+            class="btn-link"
+            onClick={() => setDraft(emptyMedication(newId()))}
+          >
+            + Nuevo medicamento
+          </button>
+        )}
+      </div>
+
+      {draft && (
+        <div class="session">
+          <div class="session-head">
+            <span class="session-number">Nuevo medicamento</span>
+            <button
+              type="button"
+              class="session-remove"
+              aria-label="Cancelar"
+              onClick={() => setDraft(null)}
+            >
+              ×
+            </button>
+          </div>
+          <MedicationFields value={draft} onChange={setDraft} autoFocus />
+          <button
+            type="button"
+            class="btn btn-primary"
+            disabled={saving}
+            onClick={() => void addDraft()}
+          >
+            {saving ? 'Guardando…' : 'Añadir y elegir'}
+          </button>
+        </div>
+      )}
+
+      <MomentField label="Hora" value={s.start} now={now} onChange={(start) => set({ start })} />
+
+      {s.medName !== '' && (
+        <div class="field">
+          <span class="field-label">Cantidad (opcional)</span>
+          <DecimalField value={s.amount} unit={s.unit} onChange={(amount) => set({ amount })} />
+          {chosen && chosen.dose > 0 && chosen.dose !== s.amount && (
+            <button
+              type="button"
+              class="btn-link"
+              onClick={() => set({ amount: chosen.dose })}
+            >
+              Volver a la dosis de siempre ({formatDose(chosen.dose, chosen.unit)})
+            </button>
+          )}
+          {chosen?.frequency && <p class="field-hint">Pauta: {chosen.frequency}</p>}
+        </div>
+      )}
     </>
   )
 }

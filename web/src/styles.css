@@ -27,6 +27,8 @@
   --bath-soft: #e4f3fb;
   --weight: #576374;
   --weight-soft: #eceff3;
+  --med: #b0459a;
+  --med-soft: #fbeaf7;
 
   --radius: 16px;
   --radius-sm: 12px;
@@ -59,6 +61,8 @@
     --bath-soft: #16303f;
     --weight: #9fb0c4;
     --weight-soft: #262c35;
+    --med: #dd82c9;
+    --med-soft: #3a2036;
     --shadow: none;
   }
 }
@@ -266,6 +270,7 @@ button {
 .action-diaper { background: var(--diaper-soft); color: var(--diaper); }
 .action-bath { background: var(--bath-soft); color: var(--bath); }
 .action-weight { background: var(--weight-soft); color: var(--weight); }
+.action-med { background: var(--med-soft); color: var(--med); }
 
 /* ---------- Navegación entre tramos ---------- */
 
@@ -1107,6 +1112,51 @@ select:focus {
   flex-shrink: 0;
 }
 
+/* ---------- Catálogo de medicación ---------- */
+
+/* Una ficha de la lista: se lee de un vistazo y toda la fila la abre. */
+.med-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.med-name {
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.med-meta {
+  grid-column: 1;
+  font-size: 13px;
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
+.med-row .stat-edit {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+/* Un tratamiento que ya no está en curso: sigue en la lista, pero no se propone. */
+.med-tag {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-soft);
+}
+
 /* ---------- Franja del día ---------- */
 
 .strip {
@@ -1192,6 +1242,7 @@ select:focus {
 .strip-feed { background: var(--feed); }
 .strip-pee { background: var(--bath); }
 .strip-poop { background: var(--diaper); }
+.strip-med { background: var(--med); }
 
 /* Pie de la franja: desde cuándo está despierto o dormido. */
 .strip-caption {

@@ -26,6 +26,7 @@ const FILTERS: { type: RecordType; label: string }[] = [
   { type: 'sleep', label: '😴 Sueño' },
   { type: 'bath', label: '🛁 Baños' },
   { type: 'weight', label: '⚖️ Peso' },
+  { type: 'med', label: '💊 Medicación' },
 ]
 
 /** Un tramo de la cronología: un día natural o un día de vida. */

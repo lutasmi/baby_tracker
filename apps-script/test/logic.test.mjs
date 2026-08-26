@@ -49,7 +49,7 @@ const bath = (p = {}) => ({
 describe('declaración de tipos', () => {
   it('cada tipo tiene su propia pestaña', () => {
     const sheets = L.recordTypeNames().map((t) => L.RECORD_TYPES[t].sheet)
-    expect(sheets).toEqual(['Sueno', 'Tomas', 'Panales', 'Banos', 'Peso'])
+    expect(sheets).toEqual(['Sueno', 'Tomas', 'Panales', 'Banos', 'Peso', 'Medicacion'])
     expect(new Set(sheets).size).toBe(sheets.length)
   })
 
@@ -337,6 +337,182 @@ describe('normalizeAndValidate · peso', () => {
     expect(L.columnsFor('weight')).toContain('Hora')
     expect(L.columnsFor('weight')).toContain('Gramos')
     expect(L.columnsFor('weight')).not.toContain('Hora_Inicio')
+  })
+})
+
+
+describe('normalizeAndValidate · medicación', () => {
+  const med = (p = {}) => ({
+    id: 'uuid-6',
+    type: 'med',
+    start: '2026-08-07 12:00',
+    medId: 'm-1',
+    medName: 'Vitamina D',
+    amount: 0.6,
+    unit: 'ml',
+    notes: '',
+    ...p,
+  })
+
+  it('guarda el medicamento, la cantidad y su unidad', () => {
+    expect(L.normalizeAndValidate(med(), NOW)).toMatchObject({
+      medId: 'm-1',
+      medName: 'Vitamina D',
+      amount: 0.6,
+      unit: 'ml',
+    })
+  })
+
+  it('la cantidad conserva los decimales', () => {
+    // Con enteros, 0,6 ml de vitamina D serían 1 ml: seis veces la dosis.
+    expect(L.normalizeAndValidate(med({ amount: '2,5' }), NOW).amount).toBe(2.5)
+    expect(L.normalizeAndValidate(med({ amount: 0.625 }), NOW).amount).toBe(0.63)
+  })
+
+  it('exige el nombre del medicamento y recorta los textos', () => {
+    expect(() => L.normalizeAndValidate(med({ medName: '  ' }), NOW)).toThrow(/Medicamento/)
+    expect(L.normalizeAndValidate(med({ medName: '  Apiretal  ' }), NOW).medName).toBe('Apiretal')
+  })
+
+  it('la cantidad es opcional: lo esencial es qué se le dio y cuándo', () => {
+    expect(L.normalizeAndValidate(med({ amount: null, unit: '' }), NOW)).toMatchObject({
+      amount: 0,
+      unit: '',
+    })
+  })
+
+  it('rechaza cantidades imposibles', () => {
+    expect(() => L.normalizeAndValidate(med({ amount: 99999 }), NOW)).toThrow(/Cantidad/)
+    expect(() => L.normalizeAndValidate(med({ amount: -1 }), NOW)).toThrow(/Cantidad/)
+  })
+
+  it('es un registro puntual con sus columnas propias', () => {
+    const cols = L.columnsFor('med')
+    expect(cols).toEqual(
+      expect.arrayContaining(['Hora', 'Medicamento_ID', 'Medicamento', 'Cantidad', 'Unidad'])
+    )
+    expect(cols).not.toContain('Hora_Inicio')
+  })
+
+  it('va y vuelve entre registro y fila sin perder los decimales', () => {
+    const record = {
+      ...L.normalizeAndValidate(med({ notes: 'con la toma' }), NOW),
+      createdBy: 'ana@example.com',
+      createdAt: NOW,
+      updatedBy: null,
+      updatedAt: null,
+    }
+    const row = L.recordToRow(record, false)
+    expect(row).toMatchObject({
+      Hora: '2026-08-07 12:00',
+      Medicamento_ID: 'm-1',
+      Medicamento: 'Vitamina D',
+      Cantidad: 0.6,
+      Unidad: 'ml',
+      Notas: 'con la toma',
+    })
+    expect(L.rowToRecord('med', row).record).toMatchObject({
+      medName: 'Vitamina D',
+      amount: 0.6,
+      unit: 'ml',
+    })
+  })
+
+  it('lee una dosis escrita a mano con la coma decimal', () => {
+    const row = {
+      ID: 'a-mano',
+      Fecha: '07/08/2026',
+      Hora: '13:20',
+      Medicamento: 'Apiretal',
+      Cantidad: '2,4',
+      Unidad: 'ml',
+      Eliminado: '',
+    }
+    expect(L.rowToRecord('med', row).record).toMatchObject({
+      start: '2026-08-07 13:20',
+      medName: 'Apiretal',
+      amount: 2.4,
+    })
+  })
+})
+
+describe('catálogo de medicación', () => {
+  const catalogo = (p = {}) => ({
+    id: 'm-1',
+    name: 'Vitamina D',
+    dose: 0.6,
+    unit: 'ml',
+    frequency: 'cada 24 h',
+    from: '2026-08-01',
+    to: null,
+    ...p,
+  })
+
+  it('normaliza una ficha completa', () => {
+    expect(L.normalizeMedication(catalogo())).toEqual({
+      id: 'm-1',
+      name: 'Vitamina D',
+      dose: 0.6,
+      unit: 'ml',
+      frequency: 'cada 24 h',
+      from: '2026-08-01',
+      to: null,
+    })
+  })
+
+  it('exige nombre e identificador', () => {
+    expect(() => L.normalizeMedication(catalogo({ name: '   ' }))).toThrow(/nombre/)
+    expect(() => L.normalizeMedication(catalogo({ id: '' }))).toThrow(/Identificador/)
+  })
+
+  it('valida las fechas del tratamiento', () => {
+    expect(() => L.normalizeMedication(catalogo({ from: '01/08/2026' }))).toThrow(/inicio/)
+    expect(() => L.normalizeMedication(catalogo({ to: '2026-13-01' }))).toThrow(/fin/)
+    expect(() =>
+      L.normalizeMedication(catalogo({ from: '2026-08-10', to: '2026-08-01' }))
+    ).toThrow(/antes de empezar/)
+  })
+
+  it('la unidad y la frecuencia son texto libre', () => {
+    const m = L.normalizeMedication(catalogo({ unit: 'gotas', frequency: '2 veces al día' }))
+    expect(m).toMatchObject({ unit: 'gotas', frequency: '2 veces al día' })
+  })
+
+  it('va y vuelve entre ficha y fila', () => {
+    const row = L.medicationToRow(L.normalizeMedication(catalogo({ to: '2026-08-12' })), false)
+    expect(row).toMatchObject({
+      ID: 'm-1',
+      Nombre: 'Vitamina D',
+      Dosis: 0.6,
+      Unidad: 'ml',
+      Frecuencia: 'cada 24 h',
+      Desde: '2026-08-01',
+      Hasta: '2026-08-12',
+    })
+    expect(L.rowToMedication(row)).toEqual({ medication: catalogo({ to: '2026-08-12' }), deleted: false })
+  })
+
+  it('una ficha añadida a mano, sin identificador, sigue valiendo', () => {
+    // Añadir un medicamento desde Sheets tiene que funcionar igual que
+    // añadirlo desde la aplicación: el nombre es lo que la identifica.
+    const parsed = L.rowToMedication({ Nombre: 'Apiretal', Dosis: '2,4', Unidad: 'ml' })
+    expect(parsed.medication).toMatchObject({ id: 'nombre:apiretal', name: 'Apiretal', dose: 2.4 })
+  })
+
+  it('una fila sin nombre no es una ficha', () => {
+    expect(L.rowToMedication({ ID: 'm-9', Nombre: '   ' })).toBeNull()
+  })
+
+  it('lee las fechas escritas en otro formato y la marca de retirada', () => {
+    const parsed = L.rowToMedication({
+      ID: 'm-2',
+      Nombre: 'Hierro',
+      Desde: '01/08/2026',
+      Hasta: '',
+      Eliminado: 'TRUE',
+    })
+    expect(parsed.deleted).toBe(true)
+    expect(parsed.medication).toMatchObject({ from: '2026-08-01', to: null })
   })
 })
 
