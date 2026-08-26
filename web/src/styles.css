@@ -221,19 +221,13 @@ button {
 
 /* ---------- Rejilla de acciones rápidas ---------- */
 
-/* Dos arriba y tres abajo: los de arriba son los que se pulsan a diario. */
+/* Dos filas de tres. Arriba, lo de cada pocas horas —toma, pañal y sueño—; abajo
+   lo ocasional. Con seis botones, la rejilla anterior (dos grandes arriba y tres
+   debajo) dejaba el sexto solo en una tercera fila. */
 .action-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-}
-
-.action-grid > :nth-child(-n + 2) {
-  grid-column: span 3;
-}
-
-.action-grid > :nth-child(n + 3) {
-  grid-column: span 2;
 }
 
 .action-btn {

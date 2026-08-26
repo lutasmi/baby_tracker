@@ -124,8 +124,8 @@ día de vida 1.
 **Barra de sueño abierto.** Solo aparece si hay uno; ver
 [Sueño sin cerrar](#sueño-sin-cerrar).
 
-**Accesos rápidos.** Seis botones: toma y pañal arriba (los de cada pocas
-horas), sueño, baño, peso y medicación debajo.
+**Accesos rápidos.** Seis botones en dos filas de tres: arriba toma, pañal y
+sueño —lo de cada pocas horas—; abajo baño, peso y medicación.
 
 **El tramo de un vistazo.** Una franja de 24 h con un carril por cada cosa que
 pasa varias veces al día —sueño, tomas, pises, cacas— donde cada registro se
