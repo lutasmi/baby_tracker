@@ -205,6 +205,9 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
               <button class="action-btn action-weight" onClick={() => navigate('#/nuevo/peso')}>
                 <span class="icon">⚖️</span>Peso
               </button>
+              <button class="action-btn action-med" onClick={() => navigate('#/nuevo/medicacion')}>
+                <span class="icon">💊</span>Medicación
+              </button>
             </div>
 
             <div class="card">

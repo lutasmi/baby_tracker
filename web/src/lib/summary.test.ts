@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aBath, aDiaper, aFeed, aSleep } from '../test-fixtures'
+import { aBath, aDiaper, aFeed, aMed, aSleep } from '../test-fixtures'
 import { recordDetail, recordIcon, recordTimeParts, recordTitle } from './summary'
 
 describe('recordTitle', () => {
@@ -166,5 +166,25 @@ describe('recordTimeParts', () => {
       const sueno = aSleep({ start: '2026-08-11 22:00', end: '2026-08-12 06:00' })
       expect(recordTimeParts(sueno, tramo)).toMatchObject({ time: '22:00', note: 'sigue' })
     })
+  })
+})
+
+describe('una dosis de medicación', () => {
+  it('se titula con el nombre del medicamento', () => {
+    // Es lo que se busca al repasar la cronología: qué se le dio, no que fue
+    // "medicación".
+    expect(recordTitle(aMed({ medName: 'Apiretal' }))).toBe('Apiretal')
+    expect(recordIcon(aMed())).toBe('💊')
+  })
+
+  it('el detalle es la cantidad con su unidad, con decimales', () => {
+    expect(recordDetail(aMed({ amount: 0.6, unit: 'ml' }))).toBe('0,6 ml')
+    expect(recordDetail(aMed({ amount: 2.4, unit: 'ml', notes: 'con la toma' }))).toBe(
+      '2,4 ml · con la toma'
+    )
+  })
+
+  it('sin cantidad anotada no inventa un cero', () => {
+    expect(recordDetail(aMed({ amount: 0, unit: 'ml' }))).toBe('')
   })
 })

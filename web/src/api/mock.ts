@@ -17,6 +17,7 @@ import type {
   History,
   HistoryDay,
   LifeDay,
+  Medication,
   RecordInput,
   RecordType,
   Settings,
@@ -141,12 +142,50 @@ function seedRecords(): BabyRecord[] {
       notes: '',
       createdAt: `${today} 09:00`,
     },
+    {
+      ...AUDIT,
+      id: 'seed-medicacion',
+      type: 'med',
+      start: `${today} 08:20`,
+      medId: 'med-vitd',
+      medName: 'Vitamina D',
+      amount: 0.6,
+      unit: 'ml',
+      notes: '',
+      createdAt: `${today} 08:20`,
+    },
+  ]
+}
+
+/** El catálogo de partida: un tratamiento en curso y otro ya terminado. */
+function seedMedications(): Medication[] {
+  const today = nowMadrid().slice(0, 10)
+  return [
+    {
+      id: 'med-vitd',
+      name: 'Vitamina D',
+      dose: 0.6,
+      unit: 'ml',
+      frequency: 'cada 24 h',
+      from: addDays(today, -4),
+      to: null,
+    },
+    {
+      id: 'med-apiretal',
+      name: 'Apiretal',
+      dose: 2.4,
+      unit: 'ml',
+      frequency: 'cada 6 h si tiene fiebre',
+      from: addDays(today, -3),
+      to: addDays(today, -1),
+    },
   ]
 }
 
 export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
   const wait = waiter(latencyMs)
   const records = new Map<string, BabyRecord>(seedRecords().map((r) => [r.id, r]))
+  const medications = new Map<string, Medication>(seedMedications().map((m) => [m.id, m]))
   const me = { email: 'ana@example.com', name: 'Ana' }
   // Nacimiento cinco días antes de hoy, para que el día de vida sea visible.
   let settings: Settings = {
@@ -181,6 +220,9 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
     }
     if (input.type === 'weight' && !input.grams) {
       throw new ApiError('VALIDATION', 'Falta Gramos.')
+    }
+    if (input.type === 'med' && !input.medName.trim()) {
+      throw new ApiError('VALIDATION', 'Falta Medicamento.')
     }
     if (input.type === 'sleep' && !input.end && openSleepOther(input.id)) {
       throw new ApiError('ACTIVE_SLEEP', 'Ya hay un sueño en curso. Finalízalo antes de empezar otro.')
@@ -293,6 +335,7 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
         },
         previousFeed,
         users: USERS,
+        medications: sortedMedications(),
         serverNow: now,
         settings,
         lifeDay: currentLifeDay(all, now),
@@ -371,5 +414,29 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
       settings = next
       return settings
     },
+
+    async saveMedication(medication: Medication): Promise<Medication> {
+      await wait()
+      if (!medication.name.trim()) {
+        throw new ApiError('VALIDATION', 'El medicamento necesita un nombre.')
+      }
+      if (medication.from && medication.to && medication.to < medication.from) {
+        throw new ApiError('VALIDATION', 'El tratamiento no puede acabar antes de empezar.')
+      }
+      medications.set(medication.id, medication)
+      return medication
+    },
+
+    async deleteMedication(id: string): Promise<void> {
+      await wait()
+      medications.delete(id)
+    },
+  }
+
+  /** El catálogo llega ordenado por nombre, como en el backend real. */
+  function sortedMedications(): Medication[] {
+    return [...medications.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
+    )
   }
 }

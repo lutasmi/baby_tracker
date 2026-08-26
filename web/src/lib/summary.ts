@@ -4,6 +4,7 @@ import type { BabyRecord, DiaperRecord, FeedRecord } from '../types'
 import { durationOf, endOf } from '../types'
 import { formatDuration, timeOf } from './dates'
 import { isHydration } from './lifeday'
+import { formatDose } from './medications'
 import { formatKg } from './records'
 
 const SLEEP_LABELS: Record<string, string> = { siesta: 'Siesta', nocturno: 'Sueño nocturno' }
@@ -38,6 +39,8 @@ export function recordIcon(r: BabyRecord): string {
       return '🛁'
     case 'weight':
       return '⚖️'
+    case 'med':
+      return '💊'
   }
 }
 
@@ -56,6 +59,9 @@ export function recordTitle(r: BabyRecord): string {
       return BATH_LABELS[r.kind] ?? 'Baño'
     case 'weight':
       return 'Peso'
+    // El nombre del medicamento es el título: es lo que se busca al repasar.
+    case 'med':
+      return r.medName || 'Medicación'
   }
 }
 
@@ -97,6 +103,9 @@ export function recordDetail(r: BabyRecord): string {
     }
   } else if (r.type === 'weight') {
     parts.push(formatKg(r.grams))
+  } else if (r.type === 'med') {
+    const dose = formatDose(r.amount, r.unit)
+    if (dose) parts.push(dose)
   }
 
   if (r.notes) parts.push(r.notes)

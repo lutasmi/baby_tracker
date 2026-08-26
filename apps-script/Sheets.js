@@ -2,7 +2,8 @@
  * Baby Tracker — acceso a Google Sheets.
  *
  * La hoja de cálculo es la fuente de verdad y tiene **una pestaña por tipo de
- * registro** (`Sueno`, `Tomas`, `Panales`, `Banos`), más `Usuarios` y `Bebe`.
+ * registro** (`Sueno`, `Tomas`, `Panales`, `Banos`, `Peso`, `Medicacion`), más
+ * `Usuarios`, `Bebe` y el catálogo `Medicamentos`.
  * Las columnas se localizan por el nombre de su cabecera, de modo que
  * reordenarlas o añadir columnas propias a mano no rompe la aplicación.
  *
@@ -287,6 +288,64 @@ function usersDisplayMap() {
   var map = {};
   for (var i = 0; i < users.length; i++) map[users[i].email] = users[i].name;
   return map;
+}
+
+// ---------------------------------------------------------------------------
+// Catálogo de medicación
+// ---------------------------------------------------------------------------
+
+/** Filas del catálogo: [{medication, deleted, rowNumber}]. */
+function readMedicationRows() {
+  var entry = sheetWithColumns(SHEET_MEDS, MED_COLUMNS);
+  var values = entry.sheet.getDataRange().getValues();
+  var out = [];
+  for (var r = 1; r < values.length; r++) {
+    var parsed = rowToMedication(rowObject(values[r], MED_COLUMNS, entry.map));
+    if (!parsed) continue;
+    parsed.rowNumber = r + 1;
+    out.push(parsed);
+  }
+  return out;
+}
+
+/**
+ * Los medicamentos vivos del catálogo, por nombre.
+ *
+ * Si la pestaña todavía no existe se devuelve la lista vacía en lugar de
+ * fallar: quien actualice el código sin ejecutar `setup()` se queda sin
+ * catálogo, no sin aplicación. Al escribir sí se avisa, que es cuando hace
+ * falta saberlo.
+ */
+function readMedications() {
+  if (!getSpreadsheet().getSheetByName(SHEET_MEDS)) return [];
+  var rows = readMedicationRows();
+  var out = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (!rows[i].deleted) out.push(rows[i].medication);
+  }
+  out.sort(function (a, b) {
+    var x = normText(a.name);
+    var y = normText(b.name);
+    return x < y ? -1 : x > y ? 1 : 0;
+  });
+  return out;
+}
+
+/**
+ * Número de fila de un medicamento, o -1. Busca con la misma regla con la que
+ * se lee, para que una ficha añadida a mano se corrija en su sitio en vez de
+ * duplicarse.
+ */
+function findMedicationRow(id) {
+  var rows = readMedicationRows();
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].medication.id === id) return rows[i].rowNumber;
+  }
+  return -1;
+}
+
+function writeMedicationRow(row, rowNumber) {
+  writeRowAt(sheetWithColumns(SHEET_MEDS, MED_COLUMNS), row, rowNumber);
 }
 
 // ---------------------------------------------------------------------------

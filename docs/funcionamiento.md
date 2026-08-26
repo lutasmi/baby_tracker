@@ -13,6 +13,7 @@ Para el modelo de datos —pestañas y columnas— está
 - [Cronología](#cronología)
 - [Evolución](#evolución)
 - [Datos del bebé](#datos-del-bebé)
+- [Medicación](#medicación)
 - [Acceso y sesión](#acceso-y-sesión)
 - [Comportamiento en fallo](#comportamiento-en-fallo)
 
@@ -123,14 +124,17 @@ día de vida 1.
 **Barra de sueño abierto.** Solo aparece si hay uno; ver
 [Sueño sin cerrar](#sueño-sin-cerrar).
 
-**Accesos rápidos.** Cinco botones: toma y pañal arriba (los de cada pocas
-horas), sueño, baño y peso debajo.
+**Accesos rápidos.** Seis botones: toma y pañal arriba (los de cada pocas
+horas), sueño, baño, peso y medicación debajo.
 
-**El tramo de un vistazo.** Una franja de 24 h con cuatro carriles —sueño,
-tomas, pises, cacas— donde cada registro se dibuja en su hora: los que duran, como
-barra; los puntuales, como punto. Marca dónde estamos ahora y cada hito abre su
-registro. Baños y pesadas no tienen carril y se consultan en la cronología; si
-el tramo solo tiene de eso, la franja lo dice en vez de quedarse en blanco.
+**El tramo de un vistazo.** Una franja de 24 h con un carril por cada cosa que
+pasa varias veces al día —sueño, tomas, pises, cacas— donde cada registro se
+dibuja en su hora: los que duran, como barra; los puntuales, como punto. Marca
+dónde estamos ahora y cada hito abre su registro. El carril de medicación
+**solo aparece los días que hay dosis**, porque la mayor parte del tiempo no
+hay tratamiento y su fila estaría siempre vacía. Baños y pesadas no tienen
+carril y se consultan en la cronología; si el tramo solo tiene de eso, la
+franja lo dice en vez de quedarse en blanco.
 Debajo, si hay sueños registrados, una línea dice si consta dormido o despierto
 y desde cuándo.
 
@@ -198,6 +202,24 @@ Completo o aseo rápido, con hora y duración opcional.
 
 Hora y gramos, que es como se lee la báscula; se muestra en kilos.
 
+### Medicación
+
+Se elige el medicamento de la lista, se ajusta la hora y ya está: la cantidad
+viene puesta con la dosis de siempre y solo se toca si ese día fue distinta.
+**Con un único tratamiento en curso viene ya elegido**, que es el caso de todos
+los días, y registrar la dosis es pulsar Guardar.
+
+La lista enseña los tratamientos en curso hoy. Los que ya terminaron se pueden
+sacar con un enlace, para registrar una dosis fuera de fechas sin tener que
+tocar el catálogo.
+
+Si el pediatra acaba de recetar algo, **"+ Nuevo medicamento" lo da de alta
+aquí mismo**: la dosis hay que darla en ese momento, no después de pasar por
+Ajustes. Queda guardado en la lista para las siguientes veces.
+
+La cantidad admite decimales, con coma o con punto. Al corregir una dosis de un
+medicamento ya retirado, se sigue viendo cuál era.
+
 ### Ajustar una hora
 
 Cada campo de hora lleva una fila de atajos que **suman y restan sobre la hora
@@ -232,6 +254,8 @@ Comunes al formulario y al backend, que las vuelve a comprobar:
 - Una toma necesita al menos una tetada o un biberón; cada tetada, hora de fin;
   cada biberón, una cantidad mayor que cero.
 - Un pañal necesita pis, caca o las dos cosas. Un peso necesita gramos.
+- Una dosis necesita un medicamento. La cantidad es opcional: lo esencial es
+  qué se le dio y cuándo.
 
 ## Cronología
 
@@ -241,8 +265,8 @@ La lista de lo registrado, en tramos.
 dos extremos y el resumen de lo que hubo dentro: dormido, tomas, leche y
 pañales.
 
-**Filtro por tipo.** Chips para ver solo tomas, pañales, sueño, baños o peso; se
-pueden combinar. Sin ninguno puesto se ve todo. El resumen de la cabecera y los
+**Filtro por tipo.** Chips para ver solo tomas, pañales, sueño, baños, peso o
+medicación; se pueden combinar. Sin ninguno puesto se ve todo. El resumen de la cabecera y los
 huecos entre tomas no cambian al filtrar: describen el tramo, no lo que se está
 mirando.
 
@@ -295,6 +319,39 @@ usuarios**: viven en la hoja, no en el dispositivo.
 Sin fecha de nacimiento la aplicación funciona, pero sin días de vida ni
 evolución. Sin peso al nacer se pueden registrar pesadas, pero no su variación.
 
+Desde aquí se llega también a la lista de medicación.
+
+## Medicación
+
+La lista de medicamentos del bebé, con su dosis habitual, su pauta y las fechas
+del tratamiento. Existe para una sola cosa: **elegir en vez de escribir el
+nombre cada vez**.
+
+Cuelga de Ajustes porque se toca de tarde en tarde —cuando recetan algo o
+cuando se acaba un tratamiento—, no varias veces al día. Registrar la dosis, que
+sí es de todos los días, tiene su propio botón en la pantalla principal.
+
+De cada medicamento se guarda:
+
+| Campo | Para qué |
+|---|---|
+| Nombre | Lo único obligatorio. Es el título con el que aparece la dosis en la cronología |
+| Dosis y unidad | Lo que se propone al registrar. La unidad es libre: ml, gotas, comprimidos, lo que sea |
+| Frecuencia | La pauta, tal cual: "cada 8 h", "2 veces al día" |
+| Desde y hasta | El tratamiento. Sin fecha de fin, no se retira solo |
+
+**La frecuencia se enseña, no se calcula.** La aplicación no dice si toca una
+dosis ni cuánto falta para la siguiente, por la misma razón por la que no
+deduce nada más: si una dosis se olvida anotar, el cálculo mentiría, y con
+medicación eso no es un contador desajustado.
+
+Un medicamento fuera de sus fechas sigue en la lista, marcado, pero no se
+propone al registrar. Quitarlo de la lista **no toca las dosis ya
+registradas**: lo que se le dio al bebé no depende de que su ficha siga ahí.
+
+La lista es común a todos los usuarios y también se puede editar a mano en la
+pestaña `Medicamentos` de la hoja de cálculo.
+
 ## Acceso y sesión
 
 Se entra con Google. El backend verifica el token contra Google, comprueba que
@@ -336,6 +393,6 @@ horas.
 ## Lo que la aplicación no hace
 
 No propone objetivos de alimentación, no valora si un peso es normal, no avisa
-de que lleváis mucho sin registrar y no deduce lo que está pasando ahora a
-partir de lo que no se ha registrado. Muestra lo anotado y deja el juicio a
+de que lleváis mucho sin registrar, no recuerda que toca una dosis y no deduce
+lo que está pasando ahora a partir de lo que no se ha registrado. Muestra lo anotado y deja el juicio a
 quien lo lee.

@@ -8,6 +8,7 @@ import { showToast, subscribeToast, type Toast } from './toast'
 import type { RecordType } from './types'
 import { Dashboard } from './views/Dashboard'
 import { HistoryView, METRIC_ROUTES } from './views/History'
+import { MedicationsView } from './views/Medications'
 import { EditRecord, NewRecord } from './views/RecordForm'
 import { Login } from './views/Login'
 import { SettingsView } from './views/Settings'
@@ -75,6 +76,7 @@ const FORM_TYPES: Record<string, RecordType> = {
   panal: 'diaper',
   bano: 'bath',
   peso: 'weight',
+  medicacion: 'med',
 }
 
 function Screen({
@@ -98,6 +100,9 @@ function Screen({
   }
   if (route.startsWith('#/evolucion')) {
     return <HistoryView metric={METRIC_ROUTES[route.split('/')[2] ?? '']} />
+  }
+  if (route.startsWith('#/ajustes/medicamentos')) {
+    return <MedicationsView />
   }
   if (route.startsWith('#/ajustes')) {
     return <SettingsView />

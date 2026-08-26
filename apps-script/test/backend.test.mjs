@@ -21,10 +21,20 @@ beforeEach(() => {
 })
 
 describe('instalación', () => {
-  it('crea una pestaña por tipo de registro, más Usuarios y Bebe', () => {
+  it('crea una pestaña por tipo de registro, más Usuarios, Bebe y el catálogo', () => {
     const names = backend.spreadsheet().getSheets().map((s) => s.getName())
     expect(names).toEqual(
-      expect.arrayContaining(['Usuarios', 'Bebe', 'Sueno', 'Tomas', 'Panales', 'Banos', 'Peso'])
+      expect.arrayContaining([
+        'Usuarios',
+        'Bebe',
+        'Sueno',
+        'Tomas',
+        'Panales',
+        'Banos',
+        'Peso',
+        'Medicacion',
+        'Medicamentos',
+      ])
     )
     expect(names).not.toContain('Hoja 1') // la pestaña por defecto se retira
   })
@@ -71,6 +81,10 @@ describe('instalación', () => {
     expect(backend.columnFormat('Tomas', 'Duracion_Min')).toBe('0')
     expect(backend.columnFormat('Peso', 'Gramos')).toBe('0')
     expect(backend.columnFormat('Bebe', 'Peso_Nacimiento_G')).toBe('0')
+
+    // Las dosis llevan decimales: con formato entero, 0,6 ml se vería como 1.
+    expect(backend.columnFormat('Medicacion', 'Cantidad')).toBe('0.##')
+    expect(backend.columnFormat('Medicamentos', 'Dosis')).toBe('0.##')
 
     // Las horas se guardan como texto para que Sheets no las reinterprete.
     expect(backend.columnFormat('Tomas', 'Hora_Inicio')).toBe('@')
@@ -506,6 +520,134 @@ describe('evolución por días de vida', () => {
 
   it('sin fecha de nacimiento no hay evolución que mostrar', () => {
     expect(backend.call('getHistory', {})).toEqual({ birth: null, days: [], weights: [] })
+  })
+})
+
+
+describe('medicación', () => {
+  const vitaminaD = {
+    id: 'm-vitd',
+    name: 'Vitamina D',
+    dose: 0.6,
+    unit: 'ml',
+    frequency: 'cada 24 h',
+    from: '2026-08-01',
+    to: null,
+  }
+
+  const dosis = (id, start, p = {}) =>
+    record({
+      id,
+      type: 'med',
+      start,
+      medId: 'm-vitd',
+      medName: 'Vitamina D',
+      amount: 0.6,
+      unit: 'ml',
+      notes: '',
+      ...p,
+    })
+
+  it('el catálogo se da de alta y viaja con el día', () => {
+    backend.call('saveMedication', { medication: vitaminaD })
+
+    const day = backend.call('getDay', { date: DAY })
+    expect(day.medications).toEqual([vitaminaD])
+    expect(backend.sheet('Medicamentos').asObjects()[0]).toMatchObject({
+      Nombre: 'Vitamina D',
+      Dosis: 0.6,
+      Unidad: 'ml',
+      Frecuencia: 'cada 24 h',
+      Desde: '2026-08-01',
+      Hasta: '',
+      Creado_Por: 'ana@example.com',
+    })
+  })
+
+  it('guardar dos veces la misma ficha la corrige en su sitio', () => {
+    backend.call('saveMedication', { medication: vitaminaD })
+    backend.setNow(`${DAY} 09:00`)
+    backend.call('saveMedication', { medication: { ...vitaminaD, dose: 1, unit: 'gota' } })
+
+    const filas = backend.sheet('Medicamentos').asObjects()
+    expect(filas).toHaveLength(1)
+    expect(filas[0]).toMatchObject({
+      Dosis: 1,
+      Unidad: 'gota',
+      // Quién la creó no se pierde al corregirla.
+      Creado_Por: 'ana@example.com',
+      Creado_En: `${DAY} 08:00`,
+      Modificado_En: `${DAY} 09:00`,
+    })
+  })
+
+  it('la dosis registrada guarda el nombre además del identificador', () => {
+    backend.call('saveMedication', { medication: vitaminaD })
+    backend.setNow(`${DAY} 09:30`)
+    backend.call('createRecord', dosis('d-1', `${DAY} 09:00`))
+
+    expect(backend.sheet('Medicacion').asObjects()[0]).toMatchObject({
+      Hora: `${DAY} 09:00`,
+      Medicamento_ID: 'm-vitd',
+      Medicamento: 'Vitamina D',
+      Cantidad: 0.6,
+      Unidad: 'ml',
+    })
+    const day = backend.call('getDay', { date: DAY })
+    expect(day.records.find((r) => r.id === 'd-1')).toMatchObject({
+      type: 'med',
+      medName: 'Vitamina D',
+      amount: 0.6,
+      unit: 'ml',
+    })
+  })
+
+  it('retirar un medicamento no toca las dosis que ya se dieron', () => {
+    backend.call('saveMedication', { medication: vitaminaD })
+    backend.setNow(`${DAY} 09:30`)
+    backend.call('createRecord', dosis('d-1', `${DAY} 09:00`))
+    backend.call('deleteMedication', { id: 'm-vitd' })
+
+    const day = backend.call('getDay', { date: DAY })
+    expect(day.medications).toEqual([]) // fuera del selector
+    // Pero lo que se le dio al bebé sigue contado, y con su nombre.
+    expect(day.records.find((r) => r.id === 'd-1')).toMatchObject({ medName: 'Vitamina D' })
+    expect(backend.sheet('Medicamentos').asObjects()[0]).toMatchObject({ Eliminado: 'TRUE' })
+  })
+
+  it('una ficha escrita a mano en la hoja se usa y se corrige en su fila', () => {
+    const hoja = backend.sheet('Medicamentos')
+    // Solo el nombre y la dosis, como quien la apunta desde el móvil en Sheets.
+    hoja.appendRow(['', 'Apiretal', '2,4', 'ml'])
+
+    const [med] = backend.call('getDay', { date: DAY }).medications
+    expect(med).toMatchObject({ id: 'nombre:apiretal', name: 'Apiretal', dose: 2.4, unit: 'ml' })
+
+    backend.call('saveMedication', { medication: { ...med, frequency: 'cada 6 h' } })
+    const filas = hoja.asObjects()
+    expect(filas).toHaveLength(1)
+    expect(filas[0]).toMatchObject({ Nombre: 'Apiretal', Frecuencia: 'cada 6 h' })
+  })
+
+  it('el catálogo llega ordenado por nombre', () => {
+    backend.call('saveMedication', { medication: { ...vitaminaD, id: 'm-2', name: 'Zinc' } })
+    backend.call('saveMedication', { medication: { ...vitaminaD, id: 'm-3', name: 'Apiretal' } })
+    backend.call('saveMedication', { medication: vitaminaD })
+
+    expect(backend.call('getDay', { date: DAY }).medications.map((m) => m.name)).toEqual([
+      'Apiretal',
+      'Vitamina D',
+      'Zinc',
+    ])
+  })
+
+  it('rechaza una ficha sin nombre y una dosis sin medicamento', () => {
+    expect(() => backend.call('saveMedication', { medication: { id: 'm-x', name: '' } })).toThrow(
+      /nombre/
+    )
+    expect(() =>
+      backend.call('createRecord', dosis('d-2', `${DAY} 07:00`, { medName: '' }))
+    ).toThrow(/Medicamento/)
   })
 })
 

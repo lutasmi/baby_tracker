@@ -7,7 +7,7 @@
 //
 // Las fechas-hora son siempre hora local de Madrid: 'yyyy-MM-dd HH:mm'.
 
-export type RecordType = 'sleep' | 'feed' | 'diaper' | 'bath' | 'weight'
+export type RecordType = 'sleep' | 'feed' | 'diaper' | 'bath' | 'weight' | 'med'
 
 export type SleepKind = 'siesta' | 'nocturno'
 export type BathKind = 'completo' | 'aseo'
@@ -101,7 +101,30 @@ export interface WeightRecord extends RecordBase {
   grams: number
 }
 
-export type BabyRecord = SleepRecord | FeedRecord | DiaperRecord | BathRecord | WeightRecord
+/**
+ * Una dosis de medicación.
+ *
+ * Apunta al catálogo por `medId` y guarda **además el nombre que tenía en ese
+ * momento**: renombrar o retirar un medicamento no puede reescribir lo que ya
+ * se le dio al bebé.
+ */
+export interface MedRecord extends RecordBase {
+  type: 'med'
+  medId: string
+  medName: string
+  /** Lo que se dio de verdad, con decimales (0,6 ml). 0 si no se anotó. */
+  amount: number
+  /** Texto libre: lo que recete el pediatra, no una lista cerrada. */
+  unit: string
+}
+
+export type BabyRecord =
+  | SleepRecord
+  | FeedRecord
+  | DiaperRecord
+  | BathRecord
+  | WeightRecord
+  | MedRecord
 
 /** Registros con intervalo, para el código que trata inicio y fin. */
 export type IntervalRecord = SleepRecord | FeedRecord
@@ -141,6 +164,32 @@ export type RecordInput =
   | Omit<DiaperRecord, Audit>
   | Omit<BathRecord, Audit>
   | Omit<WeightRecord, Audit>
+  | Omit<MedRecord, Audit>
+
+// --- Catálogo de medicación ---------------------------------------------------
+
+/**
+ * Ficha de un medicamento: lo que se elige al registrar una dosis para no
+ * escribir el nombre cada vez.
+ *
+ * `frequency` es **informativa**: se enseña, no se calcula con ella. La
+ * aplicación no deduce si toca una dosis, porque un olvido al anotar
+ * convertiría esa deducción en una mentira sobre medicación.
+ *
+ * Que un medicamento esté en curso sale de `from` y `to`, no de una marca
+ * aparte: `to` vacío es un tratamiento sin fin.
+ */
+export interface Medication {
+  id: string
+  name: string
+  /** Dosis habitual, la que se propone al registrar. 0 si no se ha indicado. */
+  dose: number
+  unit: string
+  frequency: string
+  /** 'yyyy-MM-dd'. */
+  from: string | null
+  to: string | null
+}
 
 // --- Usuarios y ajustes -------------------------------------------------------
 
@@ -227,6 +276,11 @@ export interface DayData {
    */
   previousFeed: FeedRecord | null
   users: Record<string, string> // email -> nombre visible
+  /**
+   * El catálogo de medicación viaja con el día para que el formulario de una
+   * dosis abra con la lista puesta, sin otra petición de por medio.
+   */
+  medications: Medication[]
   serverNow: string
   settings: Settings
   lifeDay: LifeDay | null // null mientras no haya fecha de nacimiento

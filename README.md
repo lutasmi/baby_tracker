@@ -11,13 +11,14 @@ Las pautas de trabajo del proyecto están en [AGENTS.md](AGENTS.md).
 ## Qué hace
 
 - **Acceso con Google**, restringido a los usuarios autorizados en la hoja `Usuarios`.
-- **Cinco tipos de registro**: sueño, tomas, pañales, baños y peso. Todos con hora, nota opcional, autor y fecha de creación y de modificación.
+- **Seis tipos de registro**: sueño, tomas, pañales, baños, peso y medicación. Todos con hora, nota opcional, autor y fecha de creación y de modificación.
 - **Dos calendarios**: día de vida (24 h desde la hora exacta de nacimiento) o día natural (00:00–23:59). Se elige en la pantalla principal y en la cronología, y la preferencia se recuerda.
 - **Pantalla principal**: contadores del tramo (pises, cacas, pedetes, tomas, hidratación y leche), cuánto hace del último de cada cosa, una franja de 24 h con lo que ha pasado y a qué hora, la última pesada con su variación, y accesos para registrar. Se puede navegar a tramos anteriores.
 - **Una toma contiene varias tetadas y varios biberones**, cada uno con su hora. El intervalo y los totales de la toma se derivan de ellos.
 - **Un rato al pecho de menos de 5 minutos cuenta como hidratación, no como toma**, y un pedete no cuenta como caca. El corte vale en todas las pantallas y en todos los contadores.
 - **Sueño** con inicio y fin, registrable a posteriori, con cronómetro auxiliar de un toque. Un sueño sin cerrar no significa que el bebé siga dormido.
 - **Pañales** con pis y caca independientes, cada uno con su cantidad, y la caca con su consistencia.
+- **Medicación** con una lista propia de medicamentos —dosis, unidad, pauta y fechas del tratamiento— para elegir al registrar en vez de escribir. La pauta se enseña; la aplicación no avisa de cuándo toca la siguiente dosis.
 - **Cronología** por tramos, de lo más reciente a lo más antiguo, con filtro por tipo, huecos entre tomas y encadenado de tramos sin salir de la pantalla.
 - **Evolución** de los últimos 14 días de vida en barras, y el peso en una gráfica con eje temporal real y la referencia del nacimiento.
 - **Todo es corregible después**, desde la misma pantalla con la que se creó.
@@ -43,7 +44,7 @@ Cada tipo de registro tiene **su propia pestaña** en la hoja de cálculo, con s
 
 - **Frontend**: Vite + TypeScript + Preact, en [web/](web/). Sin más dependencias de ejecución. Hora local de Madrid en todo el dominio (`Europe/Madrid`).
 - **Backend**: Google Apps Script, en [apps-script/](apps-script/). Cuatro archivos sin build. Verifica el ID token de Google, emite sesiones propias (180 días), valida cada registro y escribe en la hoja bajo bloqueo. Los tipos de registro se declaran en un único sitio (`RECORD_TYPES`) y el resto del backend es genérico.
-- **Datos**: una hoja de cálculo con una pestaña por tipo (`Sueno`, `Tomas`, `Panales`, `Banos`, `Peso`), más `Usuarios` y `Bebe`. En `Tomas` hay **una fila por cada tetada y cada biberón**, unidas por `Toma_ID`. Borrado lógico en la columna `Eliminado`. Se puede editar a mano sin romper la aplicación.
+- **Datos**: una hoja de cálculo con una pestaña por tipo (`Sueno`, `Tomas`, `Panales`, `Banos`, `Peso`, `Medicacion`), más `Usuarios`, `Bebe` y el catálogo `Medicamentos`. En `Tomas` hay **una fila por cada tetada y cada biberón**, unidas por `Toma_ID`. Borrado lógico en la columna `Eliminado`. Se puede editar a mano sin romper la aplicación.
 - Todo el hosting utilizado (GitHub Pages, Apps Script, Sheets) es gratuito.
 
 ### Estructura del repositorio
@@ -82,7 +83,7 @@ Necesitas una cuenta de Google y unos 20 minutos. Son tres piezas: la hoja + App
    - `apps-script/appsscript.json` → `appsscript.json`
    - `apps-script/Main.js`, `apps-script/Sheets.js`, `apps-script/Logic.js`, `apps-script/Setup.js`
    > Alternativa con [clasp](https://github.com/google/clasp): copia `apps-script/.clasp.json.example` a `apps-script/.clasp.json`, pon tu `scriptId` y ejecuta `npx clasp push` dentro de `apps-script/`.
-4. Ejecuta la función **`setup`** (selector de funciones → `setup` → Ejecutar) y autoriza los permisos. En el registro verás la URL de la hoja de cálculo creada, con una pestaña por tipo de registro (`Sueno`, `Tomas`, `Panales`, `Banos`, `Peso`), más `Usuarios` (tú ya estás dado de alta) y `Bebe`.
+4. Ejecuta la función **`setup`** (selector de funciones → `setup` → Ejecutar) y autoriza los permisos. En el registro verás la URL de la hoja de cálculo creada, con una pestaña por tipo de registro (`Sueno`, `Tomas`, `Panales`, `Banos`, `Peso`, `Medicacion`), más `Usuarios` (tú ya estás dado de alta), `Bebe` y `Medicamentos`.
    - Si prefieres usar una hoja existente, añade antes la propiedad `SPREADSHEET_ID` (paso 3.2) y ejecuta `setup` después.
 
 ### 2. Client ID de OAuth (login con Google)
@@ -171,6 +172,6 @@ Si un cambio toca las dos partes, entre los pasos 3 y 4 hay unos minutos en los 
 
 ## Funcionalidad futura
 
-Cola local sin conexión con sincronización, recordatorios, estadísticas semanales/mensuales, ventanas de sueño ([diseño](docs/prediccion-sueno-tomas.md)), medicación, hitos, exportaciones y fotos en los registros ([análisis](docs/fotos.md)).
+Cola local sin conexión con sincronización, recordatorios, estadísticas semanales/mensuales, ventanas de sueño ([diseño](docs/prediccion-sueno-tomas.md)), hitos, exportaciones y fotos en los registros ([análisis](docs/fotos.md)).
 
 Cómo añadir un campo o un tipo de registro nuevo: [docs/modelo-de-datos.md](docs/modelo-de-datos.md#cómo-añadir-un-campo-a-un-tipo).

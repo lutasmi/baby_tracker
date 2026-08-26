@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks'
 import { getApi } from '../api'
 import { ApiError } from '../api/types'
 import { AmountField, ScreenTitle } from '../components/ui'
-import { handleAuthError, navigateReplace, useDay, useNow } from '../hooks'
+import { handleAuthError, navigate, navigateReplace, useDay, useNow } from '../hooks'
 import { isValidDate } from '../lib/dates'
 import { lifeDayNumber } from '../lib/lifeday'
 import { formatKg } from '../lib/records'
@@ -120,6 +120,21 @@ export function SettingsView() {
               )}
             </div>
           </div>
+
+          {/* La medicación es una lista que se mantiene, no un dato del bebé:
+              tiene su propia pantalla y desde aquí solo se llega a ella. */}
+          <button
+            type="button"
+            class="card med-row"
+            onClick={() => navigate('#/ajustes/medicamentos')}
+          >
+            <span class="med-name">💊 Medicación</span>
+            <span class="med-meta">
+              Los medicamentos del bebé, con su dosis y su pauta, para elegirlos al registrar una
+              dosis en vez de escribirlos.
+            </span>
+            <span class="stat-edit">›</span>
+          </button>
 
           <p class="field-hint">Estos datos son comunes: los ve todo el que usa la aplicación.</p>
 

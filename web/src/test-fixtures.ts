@@ -11,6 +11,8 @@ import type {
   FeedRecord,
   HistoryDay,
   LifeDayTotals,
+  MedRecord,
+  Medication,
   SleepRecord,
   WeightRecord,
 } from './types'
@@ -133,6 +135,34 @@ export function aWeight(p: Partial<WeightRecord> = {}): WeightRecord {
   }
 }
 
+export function aMed(p: Partial<MedRecord> = {}): MedRecord {
+  return {
+    ...AUDIT,
+    id: nextId(),
+    type: 'med',
+    start: '2026-08-07 08:20',
+    medId: 'm-vitd',
+    medName: 'Vitamina D',
+    amount: 0.6,
+    unit: 'ml',
+    notes: '',
+    ...p,
+  }
+}
+
+export function aMedication(p: Partial<Medication> = {}): Medication {
+  return {
+    id: 'm-vitd',
+    name: 'Vitamina D',
+    dose: 0.6,
+    unit: 'ml',
+    frequency: 'cada 24 h',
+    from: null,
+    to: null,
+    ...p,
+  }
+}
+
 export function aDay(p: Partial<DayData> = {}): DayData {
   return {
     date: '2026-08-07',
@@ -141,6 +171,7 @@ export function aDay(p: Partial<DayData> = {}): DayData {
     last: { feed: null, diaper: null, pee: null, poop: null, sleepEnd: null, weight: null },
     previousFeed: null,
     users: { 'ana@example.com': 'Ana' },
+    medications: [],
     serverNow: '2026-08-07 12:00',
     settings: { birth: null, birthWeightG: 0 },
     lifeDay: null,
