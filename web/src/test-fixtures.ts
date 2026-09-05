@@ -13,6 +13,7 @@ import type {
   LifeDayTotals,
   MedRecord,
   Medication,
+  NoteRecord,
   SleepRecord,
   WeightRecord,
 } from './types'
@@ -146,6 +147,18 @@ export function aMed(p: Partial<MedRecord> = {}): MedRecord {
     amount: 0.6,
     unit: 'ml',
     notes: '',
+    ...p,
+  }
+}
+
+export function aNote(p: Partial<NoteRecord> = {}): NoteRecord {
+  return {
+    ...AUDIT,
+    id: nextId(),
+    type: 'note',
+    start: '2026-08-07 21:40',
+    starred: false,
+    notes: 'Hoy solo quería estar en brazos.',
     ...p,
   }
 }

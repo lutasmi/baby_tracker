@@ -13,6 +13,8 @@
 
 var TZ = 'Europe/Madrid';
 var SESSION_DAYS = 180;
+/** Cuántas notas trae el diario si no se pide otra cosa. */
+var DEFAULT_NOTES = 60;
 
 function nowMadrid() {
   return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
@@ -56,6 +58,8 @@ function route(req) {
       return getDay(req);
     case 'getHistory':
       return getHistory(req);
+    case 'getNotes':
+      return getNotes(req);
     case 'createRecord':
       return createRecord(req, session);
     case 'updateRecord':
@@ -289,6 +293,39 @@ function getHistory(req) {
     });
   }
   return { birth: settings.birth, days: days, weights: weights };
+}
+
+/**
+ * Las notas del diario, de la más reciente a la más antigua.
+ *
+ * Es la única lectura que no va por día. Un diario se relee seguido, saltando
+ * los días en los que no se escribió nada, así que pedirlo día a día no vale:
+ * serían decenas de peticiones para encontrar cuatro notas.
+ *
+ * Lee una sola pestaña, frente a las nueve de `getDay`. Van también el
+ * nacimiento y los usuarios porque la pantalla numera los días de vida y dice
+ * quién escribió cada nota, y así se abre sin depender de otra petición.
+ */
+function getNotes(req) {
+  var limit = Math.min(365, Math.max(1, Number(req.limit) || DEFAULT_NOTES));
+  var rows = readRecordsOfType('note');
+  var notes = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (!rows[i].deleted) notes.push(rows[i].record);
+  }
+  // De la más reciente a la más antigua, que es como se relee.
+  notes.sort(function (a, b) {
+    if (a.start !== b.start) return a.start < b.start ? 1 : -1;
+    return a.id < b.id ? 1 : -1;
+  });
+  var settings = readSettings();
+  return {
+    notes: notes.slice(0, limit),
+    // Con esto la pantalla sabe si ofrecer traer más, sin adivinarlo.
+    more: notes.length > limit,
+    birth: settings.birth,
+    users: usersDisplayMap(),
+  };
 }
 
 function weightsOf(records) {

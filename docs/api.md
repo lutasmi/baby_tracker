@@ -100,6 +100,23 @@ tumbar la petición.
 Del día de vida más reciente al más antiguo, con un máximo de 60. `weights` son
 todas las pesadas con su hora, para la gráfica de eje temporal.
 
+### `getNotes`
+
+```jsonc
+{ "action": "getNotes", "limit": 60 }
+→ { "notes": [ … ], "more": false, "birth": "…", "users": { … } }
+```
+
+Las notas del diario, **de la más reciente a la más antigua**, con un máximo de
+365 y 60 por defecto. `more` dice si hay más antiguas de las que se han traído,
+para que la pantalla ofrezca cargarlas sin adivinarlo.
+
+Es la única lectura que no va por día: un diario se relee saltando los días en
+los que no se escribió nada, así que pedirlo día a día serían decenas de
+peticiones para encontrar cuatro notas. A cambio lee una sola pestaña, frente a
+las nueve de `getDay`. El nacimiento y los usuarios van dentro porque la
+pantalla numera los días de vida y firma cada nota.
+
 ### `createRecord` / `updateRecord`
 
 ```jsonc

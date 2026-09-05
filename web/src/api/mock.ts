@@ -11,6 +11,7 @@ import type {
   BabyRecord,
   DayData,
   DiaperRecord,
+  Diary,
   FeedItem,
   FeedItemKind,
   FeedRecord,
@@ -18,6 +19,7 @@ import type {
   HistoryDay,
   LifeDay,
   Medication,
+  NoteRecord,
   RecordInput,
   RecordType,
   Settings,
@@ -144,6 +146,26 @@ function seedRecords(): BabyRecord[] {
     },
     {
       ...AUDIT,
+      id: 'seed-nota-hito',
+      type: 'note',
+      start: `${yesterday} 12:30`,
+      starred: true,
+      notes:
+        'Primera vez que salimos a desayunar fuera de casa. Aguantó todo el rato despierto y tranquilo.',
+      createdBy: 'luis@example.com',
+      createdAt: `${yesterday} 12:35`,
+    },
+    {
+      ...AUDIT,
+      id: 'seed-nota',
+      type: 'note',
+      start: `${today} 21:40`,
+      starred: false,
+      notes: 'Tarde irritable, solo quería estar en brazos. Ha costado dormirlo.',
+      createdAt: `${today} 21:40`,
+    },
+    {
+      ...AUDIT,
       id: 'seed-medicacion',
       type: 'med',
       start: `${today} 08:20`,
@@ -223,6 +245,9 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
     }
     if (input.type === 'med' && !input.medName.trim()) {
       throw new ApiError('VALIDATION', 'Falta Medicamento.')
+    }
+    if (input.type === 'note' && !input.notes.trim()) {
+      throw new ApiError('VALIDATION', 'La nota no puede estar vacía.')
     }
     if (input.type === 'sleep' && !input.end && openSleepOther(input.id)) {
       throw new ApiError('ACTIVE_SLEEP', 'Ya hay un sueño en curso. Finalízalo antes de empezar otro.')
@@ -369,6 +394,21 @@ export function createMockApi({ latencyMs = DEFAULT_LATENCY_MS } = {}): Api {
         })
       }
       return { birth: settings.birth, days: out, weights }
+    },
+
+    async getNotes(limit: number): Promise<Diary> {
+      await wait()
+      const all = [...records.values()]
+        .filter((r): r is NoteRecord => r.type === 'note')
+        // De la más reciente a la más antigua, que es como se relee un diario.
+        .sort((a, b) => (a.start < b.start ? 1 : -1))
+      const wanted = Math.min(365, Math.max(1, limit || 60))
+      return {
+        notes: all.slice(0, wanted),
+        more: all.length > wanted,
+        birth: settings.birth,
+        users: USERS,
+      }
     },
 
     async createRecord(input: RecordInput): Promise<BabyRecord> {

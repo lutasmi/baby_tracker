@@ -1106,6 +1106,68 @@ select:focus {
   flex-shrink: 0;
 }
 
+/* ---------- Notas y diario ---------- */
+
+/* El texto de una nota es el registro entero: campo grande desde el principio,
+   no una línea que se queda corta. */
+.note-input {
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.5;
+  font-family: inherit;
+}
+
+.diary-day {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diary-date {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 6px 2px 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+/* Cuántos días tenía: la pregunta que uno se hace al releer el diario. */
+.diary-lifeday {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.diary-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  width: 100%;
+}
+
+.diary-note-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.diary-text {
+  /* Los saltos de línea se conservan: una nota se escribe por párrafos. */
+  white-space: pre-wrap;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.diary-author {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
 /* ---------- Catálogo de medicación ---------- */
 
 /* Una ficha de la lista: se lee de un vistazo y toda la fila la abre. */
@@ -1410,6 +1472,27 @@ select:focus {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+/* Los destinos de abajo: se reparten a partes iguales, sean dos o tres. Con
+   tres, "Cronología" no cabe al lado de su icono, así que van apilados. */
+.nav-links {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 10px;
+}
+
+.nav-links .btn {
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 6px;
+  font-size: 13px;
+}
+
+.nav-links .icon {
+  font-size: 20px;
+  line-height: 1.2;
 }
 
 /* ---------- Avisos y estados ---------- */

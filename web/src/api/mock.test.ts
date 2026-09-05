@@ -296,3 +296,52 @@ describe('catálogo de medicación', () => {
     ).rejects.toThrow(/Medicamento/)
   })
 })
+
+describe('diario', () => {
+  const nota = (id: string, start: string, notes: string, starred = false): RecordInput => ({
+    id,
+    type: 'note',
+    start,
+    starred,
+    notes,
+  })
+
+  it('trae lo ya escrito, de lo más reciente a lo más antiguo', async () => {
+    const diario = await api.getNotes(60)
+    expect(diario.notes.length).toBeGreaterThan(1)
+    const [primera, segunda] = diario.notes
+    expect(primera.start >= segunda.start).toBe(true)
+    expect(diario.more).toBe(false)
+  })
+
+  it('una nota nueva encabeza el diario', async () => {
+    await api.createRecord(nota('n-1', `${TODAY} 23:30`, 'Última del día.', true))
+    const diario = await api.getNotes(60)
+    expect(diario.notes[0]).toMatchObject({ id: 'n-1', starred: true, notes: 'Última del día.' })
+  })
+
+  it('el límite corta y avisa de que hay más', async () => {
+    const diario = await api.getNotes(1)
+    expect(diario.notes).toHaveLength(1)
+    expect(diario.more).toBe(true)
+  })
+
+  it('rechaza una nota sin texto', async () => {
+    await expect(api.createRecord(nota('n-2', `${TODAY} 10:00`, '   '))).rejects.toThrow(
+      /no puede estar vacía/
+    )
+  })
+
+  it('borrarla la saca del diario', async () => {
+    await api.createRecord(nota('n-3', `${TODAY} 10:00`, 'Me arrepiento.'))
+    await api.deleteRecord('note', 'n-3')
+    const diario = await api.getNotes(60)
+    expect(diario.notes.some((n) => n.id === 'n-3')).toBe(false)
+  })
+
+  it('es un registro más: también cuenta en el día', async () => {
+    await api.createRecord(nota('n-4', `${TODAY} 10:00`, 'Buen día.'))
+    const day = await api.getDay(TODAY)
+    expect(day.records.some((r) => r.id === 'n-4')).toBe(true)
+  })
+})

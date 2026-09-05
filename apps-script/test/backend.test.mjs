@@ -34,6 +34,7 @@ describe('instalación', () => {
         'Peso',
         'Medicacion',
         'Medicamentos',
+        'Notas',
       ])
     )
     expect(names).not.toContain('Hoja 1') // la pestaña por defecto se retira
@@ -648,6 +649,81 @@ describe('medicación', () => {
     expect(() =>
       backend.call('createRecord', dosis('d-2', `${DAY} 07:00`, { medName: '' }))
     ).toThrow(/Medicamento/)
+  })
+})
+
+
+describe('notas del día', () => {
+  const nota = (id, start, notes, starred = false) =>
+    record({ id, type: 'note', start, starred, notes })
+
+  it('se guarda en su pestaña, con su hora y su texto', () => {
+    backend.setNow(`${DAY} 21:45`)
+    backend.call('createRecord', nota('n-1', `${DAY} 21:40`, 'Tarde irritable.'))
+
+    expect(backend.sheet('Notas').asObjects()[0]).toMatchObject({
+      Hora: `${DAY} 21:40`,
+      Destacada: '',
+      Notas: 'Tarde irritable.',
+      Creado_Por: 'ana@example.com',
+    })
+  })
+
+  it('el diario las devuelve de la más reciente a la más antigua', () => {
+    backend.setNow(`${DAY} 22:00`)
+    backend.call('createRecord', nota('n-1', `${DAY} 09:00`, 'Por la mañana.'))
+    backend.call('createRecord', nota('n-2', `${DAY} 21:40`, 'Por la noche.'))
+    backend.call('createRecord', nota('n-3', '2026-08-06 12:30', 'Ayer.', true))
+
+    const diario = backend.call('getNotes', {})
+    expect(diario.notes.map((n) => n.id)).toEqual(['n-2', 'n-1', 'n-3'])
+    expect(diario.more).toBe(false)
+    expect(diario.notes[2]).toMatchObject({ starred: true, notes: 'Ayer.' })
+    // Trae con qué numerar los días y con qué firmar cada nota.
+    expect(diario.users).toMatchObject({ 'ana@example.com': expect.any(String) })
+    expect('birth' in diario).toBe(true)
+  })
+
+  it('el límite corta y avisa de que hay más', () => {
+    backend.setNow(`${DAY} 22:00`)
+    for (let i = 1; i <= 4; i++) {
+      backend.call('createRecord', nota(`n-${i}`, `${DAY} 0${i}:00`, `Nota ${i}.`))
+    }
+
+    const dos = backend.call('getNotes', { limit: 2 })
+    expect(dos.notes.map((n) => n.id)).toEqual(['n-4', 'n-3'])
+    expect(dos.more).toBe(true)
+
+    expect(backend.call('getNotes', { limit: 50 }).more).toBe(false)
+  })
+
+  it('una nota borrada desaparece del diario', () => {
+    backend.setNow(`${DAY} 22:00`)
+    backend.call('createRecord', nota('n-1', `${DAY} 09:00`, 'Se me ha ido la mano.'))
+    backend.call('deleteRecord', { type: 'note', id: 'n-1' })
+
+    expect(backend.call('getNotes', {}).notes).toEqual([])
+    // Borrado lógico, como todo: la fila sigue ahí marcada.
+    expect(backend.sheet('Notas').asObjects()[0]).toMatchObject({ Eliminado: 'TRUE' })
+  })
+
+  it('es un registro más: también sale en el día y en la cronología', () => {
+    backend.setNow(`${DAY} 22:00`)
+    backend.call('createRecord', nota('n-1', `${DAY} 21:40`, 'Por la noche.'))
+
+    const day = backend.call('getDay', { date: DAY })
+    expect(day.records.find((r) => r.id === 'n-1')).toMatchObject({
+      type: 'note',
+      notes: 'Por la noche.',
+    })
+  })
+
+  it('rechaza una nota sin texto', () => {
+    backend.setNow(`${DAY} 22:00`)
+    expect(() => backend.call('createRecord', nota('n-1', `${DAY} 21:40`, '   '))).toThrow(
+      /no puede estar vacía/
+    )
+    expect(backend.sheet('Notas').asObjects()).toEqual([])
   })
 })
 

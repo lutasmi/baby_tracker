@@ -4,6 +4,7 @@ import { loadSession } from '../session'
 import type {
   BabyRecord,
   DayData,
+  Diary,
   History,
   Medication,
   RecordInput,
@@ -111,6 +112,9 @@ export const realApi: Api = {
   },
   getHistory(days: number) {
     return call<History>('getHistory', { days })
+  },
+  getNotes(limit: number) {
+    return call<Diary>('getNotes', { limit })
   },
   createRecord(input: RecordInput) {
     return call<BabyRecord>('createRecord', { record: input })

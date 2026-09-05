@@ -2,7 +2,7 @@
 // API en cada situación que se da con un bebé de verdad.
 
 import { describe, expect, it } from 'vitest'
-import { aDiaper, aFeed, aMed, aMedication, aSleep } from '../test-fixtures'
+import { aDiaper, aFeed, aMed, aMedication, aNote, aSleep } from '../test-fixtures'
 import type { FeedInput, FeedItem } from '../types'
 import { breastSideOfItems, deriveFeed } from './records'
 import {
@@ -585,5 +585,44 @@ describe('medicación', () => {
       amount: 0.6,
       unit: 'ml',
     })
+  })
+})
+
+describe('nota del día', () => {
+  const estado = (p = {}) => ({ ...initialState('note', null, null, NOW), ...p })
+
+  it('se abre vacía y a la hora de ahora', () => {
+    expect(estado()).toMatchObject({ notes: '', starred: false, start: NOW })
+  })
+
+  it('sin texto no se puede guardar', () => {
+    expect(validate('note', estado(), NOW)).toMatch(/Escribe la nota/)
+    expect(validate('note', estado({ notes: '   ' }), NOW)).toMatch(/Escribe la nota/)
+    expect(validate('note', estado({ notes: 'Buen día.' }), NOW)).toBeNull()
+  })
+
+  it('el texto viaja en notes, que es donde vive en todos los registros', () => {
+    const s = estado({ notes: '  Salimos a pasear.  ', starred: true })
+    expect(buildInput('id', 'note', s)).toEqual({
+      id: 'id',
+      type: 'note',
+      start: NOW,
+      notes: 'Salimos a pasear.',
+      starred: true,
+    })
+  })
+
+  it('reabrir una nota vuelve con su texto y su estrella', () => {
+    const nota = aNote({ notes: 'Primera vez fuera de casa.', starred: true })
+    expect(initialState('note', nota, null, NOW)).toMatchObject({
+      notes: 'Primera vez fuera de casa.',
+      starred: true,
+      start: nota.start,
+    })
+  })
+
+  it('la hora no puede estar en el futuro', () => {
+    const s = estado({ notes: 'Algo.', start: '2026-08-07 18:00' })
+    expect(validate('note', s, NOW)).toMatch(/futuro/)
   })
 })

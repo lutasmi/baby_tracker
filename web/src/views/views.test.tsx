@@ -14,6 +14,7 @@ import {
   aHistoryDay,
   aMed,
   aMedication,
+  aNote,
   aSleep,
   aWeight,
   someTotals,
@@ -22,6 +23,8 @@ import type { DayData } from '../types'
 import { WeightChart } from '../components/WeightChart'
 import { Dashboard } from './Dashboard'
 import { BarList, HistoryView, WeightList } from './History'
+import { DiaryList } from './Diary'
+import { diaryDays } from '../lib/diary'
 import { MedicationsView } from './Medications'
 import { EditRecord, NewRecord } from './RecordForm'
 import { SettingsView } from './Settings'
@@ -894,5 +897,99 @@ describe('Medicación', () => {
     expect(renderDashboard(day({ records: [aMed({ start: `${TODAY} 08:20` })] }))).toContain(
       'strip-med'
     )
+  })
+})
+
+describe('Notas del día', () => {
+  it('el formulario abre con el texto grande y sin pedir la nota dos veces', () => {
+    cacheDay(day())
+    const html = render(<NewRecord type="note" />)
+    expect(html).toContain('<textarea')
+    expect(html).toContain('Qué ha pasado')
+    expect(html).toContain('⭐ Destacada')
+    // La nota es el registro entero: el campo "Nota (opcional)" de los demás
+    // tipos aquí sobraría.
+    expect(html).not.toContain('Nota (opcional)')
+  })
+
+  it('los demás formularios conservan su nota opcional', () => {
+    cacheDay(day())
+    expect(render(<NewRecord type="bath" />)).toContain('Nota (opcional)')
+  })
+
+  it('reabrir una nota trae su texto y su estrella', () => {
+    const nota = aNote({
+      id: 'nota-1',
+      start: `${TODAY} 21:40`,
+      notes: 'Primera vez que salimos a desayunar fuera.',
+      starred: true,
+    })
+    cacheDay(day({ records: [nota] }))
+    const html = render(<EditRecord id="nota-1" />)
+    expect(html).toContain('Primera vez que salimos a desayunar fuera.')
+    expect(html).toContain('aria-pressed="true"')
+  })
+
+  it('el diario agrupa por fecha y dice qué día de vida era', () => {
+    const notes = [
+      aNote({ id: 'n1', start: `${TODAY} 21:40`, notes: 'Tarde irritable.' }),
+      aNote({ id: 'n2', start: `${TODAY} 09:00`, notes: 'Buena mañana.' }),
+      aNote({ id: 'n3', start: `${addDays(TODAY, -1)} 12:30`, notes: 'Paseo.', starred: true }),
+    ]
+    const html = render(
+      <DiaryList
+        days={diaryDays(notes, BIRTH)}
+        today={TODAY}
+        users={{ 'ana@example.com': 'Ana' }}
+      />
+    )
+    expect(html).toContain('Hoy')
+    expect(html).toContain('Ayer')
+    expect(html).toContain(`día ${LIFE_DAY}`)
+    expect(html).toContain('Tarde irritable.')
+    expect(html).toContain('Paseo.')
+    // La estrella se ve sin abrir la nota.
+    expect(html).toContain('⭐')
+    expect(html).toContain('Ana')
+  })
+
+  it('lo último arriba, también dentro de un mismo día', () => {
+    const notes = [
+      aNote({ id: 'n1', start: `${TODAY} 09:00`, notes: 'Primera.' }),
+      aNote({ id: 'n2', start: `${TODAY} 21:40`, notes: 'Segunda.' }),
+    ]
+    const html = render(<DiaryList days={diaryDays(notes, BIRTH)} today={TODAY} users={{}} />)
+    expect(html.indexOf('Segunda.')).toBeLessThan(html.indexOf('Primera.'))
+  })
+
+  it('sin fecha de nacimiento la fecha va sola, sin inventar días', () => {
+    const html = render(
+      <DiaryList
+        days={diaryDays([aNote({ start: `${TODAY} 10:00` })], null)}
+        today={TODAY}
+        users={{}}
+      />
+    )
+    expect(html).toContain('Hoy')
+    expect(html).not.toContain('día ')
+  })
+
+  it('la nota se lee en la cronología con su texto', () => {
+    const nota = aNote({ start: `${TODAY} 21:40`, notes: 'Solo quería estar en brazos.' })
+    cacheDay(day({ records: [nota] }))
+    const html = render(<Timeline date={TODAY} />)
+    expect(html).toContain('📝')
+    expect(html).toContain('Solo quería estar en brazos.')
+    expect(html).toContain('📝 Notas') // y su filtro
+  })
+
+  it('el diario es el tercer destino de la pantalla principal', () => {
+    const html = renderDashboard(day())
+    expect(html).toContain('Diario')
+    expect(html).toContain('Cronología')
+    expect(html).toContain('Evolución')
+    // Y la cuadrícula de registrar se queda en seis: una nota no se escribe
+    // con una mano y en tres segundos, así que no compite por ese sitio.
+    expect(html.match(/class="action-btn/g)).toHaveLength(6)
   })
 })

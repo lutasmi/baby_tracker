@@ -11,6 +11,7 @@ Para el modelo de datos —pestañas y columnas— está
 - [Pantalla principal](#pantalla-principal)
 - [Registrar y corregir](#registrar-y-corregir)
 - [Cronología](#cronología)
+- [Diario](#diario)
 - [Evolución](#evolución)
 - [Datos del bebé](#datos-del-bebé)
 - [Medicación](#medicación)
@@ -143,7 +144,9 @@ nacer en una pastilla verde (por encima) o roja (por debajo). Se ve siempre,
 también mirando tramos pasados, porque es la última que haya, no la del tramo.
 Al pulsarla se abre para corregirla.
 
-**Cronología y Evolución.** Los dos accesos al resto de la aplicación.
+**Cronología, Diario y Evolución.** Los tres accesos al resto de la aplicación.
+El diario está aquí y no en la cuadrícula de registrar: una nota no se escribe
+con una mano y en tres segundos, se escribe cuando el día ya ha pasado.
 
 ## Registrar y corregir
 
@@ -220,6 +223,15 @@ Ajustes. Queda guardado en la lista para las siguientes veces.
 La cantidad admite decimales, con coma o con punto. Al corregir una dosis de un
 medicamento ya retirado, se sigue viendo cuál era.
 
+### Nota del día
+
+Un cuadro de texto grande, la hora —puesta a la de ahora, casi nunca se toca— y
+una marca de **destacada**. Nada más: la nota es el texto.
+
+A diferencia del resto de formularios, aquí no hay campo de "nota opcional",
+porque sería pedir dos veces lo mismo. Y el texto admite 2.000 caracteres en
+lugar de los 500 de las notas de otros registros: aquí no es una coletilla.
+
 ### Ajustar una hora
 
 Cada campo de hora lleva una fila de atajos que **suman y restan sobre la hora
@@ -256,6 +268,7 @@ Comunes al formulario y al backend, que las vuelve a comprobar:
 - Un pañal necesita pis, caca o las dos cosas. Un peso necesita gramos.
 - Una dosis necesita un medicamento. La cantidad es opcional: lo esencial es
   qué se le dio y cuándo.
+- Una nota necesita texto. Es lo único que tiene.
 
 ## Cronología
 
@@ -265,8 +278,8 @@ La lista de lo registrado, en tramos.
 dos extremos y el resumen de lo que hubo dentro: dormido, tomas, leche y
 pañales.
 
-**Filtro por tipo.** Chips para ver solo tomas, pañales, sueño, baños, peso o
-medicación; se pueden combinar. Sin ninguno puesto se ve todo. El resumen de la cabecera y los
+**Filtro por tipo.** Chips para ver solo tomas, pañales, sueño, baños, peso,
+medicación o notas; se pueden combinar. Sin ninguno puesto se ve todo. El resumen de la cabecera y los
 huecos entre tomas no cambian al filtrar: describen el tramo, no lo que se está
 mirando.
 
@@ -297,6 +310,27 @@ aunque se encadenen varios tramos.
 el tramo que contiene esa fecha.
 
 Cada fila abre su registro para corregirlo, y muestra quién lo anotó.
+
+## Diario
+
+Las notas seguidas, sin el ruido de tomas y pañales. Es la pantalla que gana
+valor con el tiempo: dentro de un año, lo que se relee es esto.
+
+**Por fechas del calendario**, de la más reciente a la más antigua, con el
+**día de vida al lado** cuando se sabe. Se agrupa por día natural porque un
+diario se busca así —"el día que salimos a desayunar"—, y el número de día de
+vida contesta a la otra pregunta, la de cuántos días tenía. Los días en los que
+no se escribió nada no aparecen: dejar sus huecos convertiría el repaso en un
+desierto.
+
+Cada nota lleva su hora, su texto con los saltos de línea que se escribieron y
+quién la anotó. Al pulsarla se abre para corregirla, como cualquier registro.
+
+**⭐ Destacadas.** El filtro solo aparece cuando hay alguna destacada: con tres
+notas seguidas, elegir entre "todas" y "destacadas" no ayuda a nadie.
+
+Se cargan 60 de golpe y hay un botón para traer las anteriores. Y se escribe
+desde aquí, con el botón de arriba.
 
 ## Evolución
 

@@ -51,6 +51,7 @@ const NEW_TITLES: Record<RecordType, string> = {
   bath: 'Registrar baño',
   weight: 'Registrar peso',
   med: 'Registrar medicación',
+  note: 'Escribir nota',
 }
 
 const BOTTLE_LABELS: Record<FeedItemKind, string> = {
@@ -185,16 +186,21 @@ function RecordForm({ type, existing }: { type: RecordType; existing: BabyRecord
               onCatalogChange={reload}
             />
           )}
+          {type === 'note' && <NoteFields s={s} set={set} now={now} />}
 
-          <div class="field">
-            <span class="field-label">Nota (opcional)</span>
-            <input
-              type="text"
-              value={s.notes}
-              placeholder="Ej.: le costó dormirse"
-              onInput={(e) => set({ notes: (e.target as HTMLInputElement).value })}
-            />
-          </div>
+          {/* En una nota el texto es el registro y ya está arriba, grande:
+              repetir aquí "Nota (opcional)" sería pedir dos veces lo mismo. */}
+          {type !== 'note' && (
+            <div class="field">
+              <span class="field-label">Nota (opcional)</span>
+              <input
+                type="text"
+                value={s.notes}
+                placeholder="Ej.: le costó dormirse"
+                onInput={(e) => set({ notes: (e.target as HTMLInputElement).value })}
+              />
+            </div>
+          )}
 
           {problem && <div class="banner banner-warn">{problem}</div>}
 
@@ -725,6 +731,46 @@ function MedFields({
           {chosen?.frequency && <p class="field-hint">Pauta: {chosen.frequency}</p>}
         </div>
       )}
+    </>
+  )
+}
+
+/**
+ * Escribir una nota del día.
+ *
+ * El texto va primero y ocupa sitio: aquí no es una coletilla de otro registro,
+ * es el registro entero. La hora viene puesta y casi nunca se toca, porque una
+ * nota se escribe sobre el día que se está acabando.
+ */
+function NoteFields({ s, set, now }: FieldProps) {
+  return (
+    <>
+      <div class="field">
+        <span class="field-label">📝 Qué ha pasado</span>
+        <textarea
+          class="note-input"
+          rows={6}
+          maxLength={2000}
+          value={s.notes}
+          placeholder="Hoy solo quería estar en brazos…"
+          autoFocus
+          onInput={(e) => set({ notes: (e.target as HTMLTextAreaElement).value })}
+        />
+      </div>
+
+      <MomentField label="Hora" value={s.start} now={now} onChange={(start) => set({ start })} />
+
+      <div class="field">
+        <Toggle
+          label="⭐ Destacada"
+          checked={s.starred}
+          onChange={(starred) => set({ starred })}
+        />
+        <p class="field-hint">
+          Para las que no quieres que se pierdan entre las demás: una primera vez, un día que
+          merece la pena recordar. El diario deja verlas aparte.
+        </p>
+      </div>
     </>
   )
 }

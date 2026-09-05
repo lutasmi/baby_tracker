@@ -7,7 +7,7 @@
 //
 // Las fechas-hora son siempre hora local de Madrid: 'yyyy-MM-dd HH:mm'.
 
-export type RecordType = 'sleep' | 'feed' | 'diaper' | 'bath' | 'weight' | 'med'
+export type RecordType = 'sleep' | 'feed' | 'diaper' | 'bath' | 'weight' | 'med' | 'note'
 
 export type SleepKind = 'siesta' | 'nocturno'
 export type BathKind = 'completo' | 'aseo'
@@ -118,6 +118,22 @@ export interface MedRecord extends RecordBase {
   unit: string
 }
 
+/**
+ * Una nota del día: "hoy solo quería estar en brazos".
+ *
+ * No va asociada a ningún otro registro. **Su contenido es `notes`**, el campo
+ * que ya comparten todos; la diferencia es que aquí no es opcional, porque una
+ * nota vacía no es nada.
+ *
+ * Lleva su hora como cualquier otro registro, y así cae sola en el tramo que le
+ * toca en los dos calendarios.
+ */
+export interface NoteRecord extends RecordBase {
+  type: 'note'
+  /** Digna de recordar: una primera vez, un día que no se quiere olvidar. */
+  starred: boolean
+}
+
 export type BabyRecord =
   | SleepRecord
   | FeedRecord
@@ -125,6 +141,7 @@ export type BabyRecord =
   | BathRecord
   | WeightRecord
   | MedRecord
+  | NoteRecord
 
 /** Registros con intervalo, para el código que trata inicio y fin. */
 export type IntervalRecord = SleepRecord | FeedRecord
@@ -165,6 +182,7 @@ export type RecordInput =
   | Omit<BathRecord, Audit>
   | Omit<WeightRecord, Audit>
   | Omit<MedRecord, Audit>
+  | Omit<NoteRecord, Audit>
 
 // --- Catálogo de medicación ---------------------------------------------------
 
@@ -189,6 +207,22 @@ export interface Medication {
   /** 'yyyy-MM-dd'. */
   from: string | null
   to: string | null
+}
+
+// --- Diario -------------------------------------------------------------------
+
+/**
+ * Las notas seguidas, de la más reciente a la más antigua.
+ *
+ * Es la única lectura que no va por día: un diario se relee saltando los días
+ * en los que no se escribió nada.
+ */
+export interface Diary {
+  notes: NoteRecord[]
+  /** Hay más antiguas de las que se han traído. */
+  more: boolean
+  birth: string | null
+  users: Record<string, string>
 }
 
 // --- Usuarios y ajustes -------------------------------------------------------
