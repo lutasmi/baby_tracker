@@ -68,6 +68,8 @@ var MED_DECIMAL_COLUMNS = ['Dosis'];
 //   openAllowed  true si puede guardarse sin cerrar (cronómetro)
 //   minDuration  duración mínima cuando está cerrado
 //   requireAny   al menos uno de estos campos debe tener valor
+//   requireNotes el texto de la nota es el registro: sin él no hay nada
+//   notesMax     tope del texto; por defecto NOTES_MAX
 
 var RECORD_TYPES = {
   sleep: {
@@ -172,6 +174,26 @@ var RECORD_TYPES = {
       { key: 'amount', column: 'Cantidad', kind: 'num', max: 10000 },
       { key: 'unit', column: 'Unidad', kind: 'text', max: 20 },
     ],
+  },
+
+  // Una nota del día: "hoy solo quería estar en brazos". No va asociada a
+  // ningún otro registro, aunque todo influya.
+  //
+  // Es el tipo más pequeño que hay: no tiene campos propios más que la
+  // estrella, porque **su contenido es la columna `Notas` que ya comparten
+  // todos**. Lo único suyo de verdad es que ahí el texto no es opcional: una
+  // nota vacía no es nada.
+  //
+  // Lleva su hora como cualquier otro registro, y por eso cae sola en el tramo
+  // que le toca en los dos calendarios. Una "nota del día" sin hora habría
+  // obligado a elegir de qué día hablamos, natural o de vida.
+  note: {
+    sheet: 'Notas',
+    label: 'Nota',
+    interval: false,
+    requireNotes: true,
+    notesMax: 2000,
+    fields: [{ key: 'starred', column: 'Destacada', kind: 'bool' }],
   },
 };
 
@@ -375,6 +397,13 @@ function decimalOrNull(v) {
 /** Margen para relojes desajustados al comprobar que algo no está en el futuro. */
 var FUTURE_MARGIN_MIN = 10;
 
+/**
+ * Tope del texto de la nota. En casi todos los tipos la nota es una coletilla
+ * ("le costó dormirse") y 500 sobran; en las del diario el texto es el
+ * registro entero, así que ese tipo declara el suyo.
+ */
+var NOTES_MAX = 500;
+
 function boundedInt(value, max, what) {
   if (value == null || value === '' || value === false) return 0;
   var n = numOrNull(value);
@@ -426,8 +455,13 @@ function normalizeAndValidate(input, now) {
     start: start,
     notes: String(input.notes == null ? '' : input.notes)
       .trim()
-      .slice(0, 500),
+      .slice(0, spec.notesMax || NOTES_MAX),
   };
+
+  // Hay un tipo cuyo contenido es la nota: sin texto no hay registro.
+  if (spec.requireNotes && !out.notes) {
+    throw apiError('VALIDATION', 'La nota no puede estar vacía.');
+  }
 
   if (spec.interval) {
     var end = input.end == null || input.end === '' ? null : String(input.end).trim();
@@ -1214,6 +1248,7 @@ if (typeof module !== 'undefined' && module.exports) {
     RECORD_TYPES: RECORD_TYPES,
     COMMON_COLUMNS: COMMON_COLUMNS,
     AUDIT_COLUMNS: AUDIT_COLUMNS,
+    NOTES_MAX: NOTES_MAX,
     USER_COLUMNS: USER_COLUMNS,
     BABY_COLUMNS: BABY_COLUMNS,
     SHEET_USERS: SHEET_USERS,

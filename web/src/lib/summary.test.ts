@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aBath, aDiaper, aFeed, aMed, aSleep } from '../test-fixtures'
+import { aBath, aDiaper, aFeed, aMed, aNote, aSleep } from '../test-fixtures'
 import { recordDetail, recordIcon, recordTimeParts, recordTitle } from './summary'
 
 describe('recordTitle', () => {
@@ -186,5 +186,21 @@ describe('una dosis de medicación', () => {
 
   it('sin cantidad anotada no inventa un cero', () => {
     expect(recordDetail(aMed({ amount: 0, unit: 'ml' }))).toBe('')
+  })
+})
+
+describe('una nota del día', () => {
+  it('el texto es el detalle; el título solo dice qué es', () => {
+    const nota = aNote({ notes: 'Tarde irritable, solo quería estar en brazos.' })
+    expect(recordTitle(nota)).toBe('Nota')
+    expect(recordDetail(nota)).toBe('Tarde irritable, solo quería estar en brazos.')
+    expect(recordIcon(nota)).toBe('📝')
+  })
+
+  it('destacada se ve desde el icono', () => {
+    // Al repasar la cronología se busca justo eso, sin leer el texto.
+    const hito = aNote({ starred: true })
+    expect(recordIcon(hito)).toBe('⭐')
+    expect(recordTitle(hito)).toBe('Nota destacada')
   })
 })

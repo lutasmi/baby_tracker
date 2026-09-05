@@ -226,12 +226,18 @@ export function Dashboard({ user, onLogout }: { user: User; onLogout: () => void
                 haya, y por eso se ve siempre, con su fecha. */}
             <WeightCard data={data} today={today} />
 
-            <div class="nav-pair">
+            {/* Los tres destinos. El diario está aquí y no en la cuadrícula de
+                arriba porque una nota no se escribe con una mano y en tres
+                segundos: se escribe cuando el día ya ha pasado. */}
+            <div class="nav-links">
               <button class="btn" onClick={() => navigate('#/cronologia')}>
-                📋 Cronología
+                <span class="icon">📋</span>Cronología
               </button>
               <button class="btn" onClick={() => navigate('#/evolucion')}>
-                📈 Evolución
+                <span class="icon">📈</span>Evolución
+              </button>
+              <button class="btn" onClick={() => navigate('#/diario')}>
+                <span class="icon">📝</span>Diario
               </button>
             </div>
 

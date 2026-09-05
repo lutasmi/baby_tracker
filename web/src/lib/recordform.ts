@@ -48,6 +48,9 @@ export interface FormState {
   medName: string
   amount: number
   unit: string
+  /** La nota del diario está destacada. */
+  starred: boolean
+  /** En casi todos los tipos es una coletilla; en una nota, el registro. */
   notes: string
 }
 
@@ -178,6 +181,7 @@ export function initialState(
     medName: '',
     amount: 0,
     unit: '',
+    starred: false,
     notes: '',
   }
 
@@ -209,6 +213,7 @@ export function initialState(
       }
       case 'bath':
       case 'weight':
+      case 'note':
         return base
     }
   }
@@ -237,6 +242,8 @@ export function initialState(
       return { ...state, grams: r.grams }
     case 'med':
       return { ...state, medId: r.medId, medName: r.medName, amount: r.amount, unit: r.unit }
+    case 'note':
+      return { ...state, starred: r.starred }
   }
 }
 
@@ -296,6 +303,9 @@ export function buildInput(id: string, type: RecordType, s: FormState): RecordIn
         amount: s.amount,
         unit: s.unit,
       }
+    // El texto viaja en `notes`, como en todos, pero aquí es el registro.
+    case 'note':
+      return { ...common, type: 'note', starred: s.starred }
   }
 }
 
@@ -345,5 +355,6 @@ export function validate(type: RecordType, s: FormState, now: string): string | 
 
   if (type === 'weight' && !s.grams) return 'Indica el peso en gramos.'
   if (type === 'med' && !s.medName) return 'Elige el medicamento.'
+  if (type === 'note' && !s.notes.trim()) return 'Escribe la nota.'
   return null
 }

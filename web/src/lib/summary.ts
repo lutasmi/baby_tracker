@@ -41,6 +41,10 @@ export function recordIcon(r: BabyRecord): string {
       return '⚖️'
     case 'med':
       return '💊'
+    // La estrella hace de icono cuando la nota está destacada: al repasar el
+    // diario se busca justo eso.
+    case 'note':
+      return r.starred ? '⭐' : '📝'
   }
 }
 
@@ -62,6 +66,10 @@ export function recordTitle(r: BabyRecord): string {
     // El nombre del medicamento es el título: es lo que se busca al repasar.
     case 'med':
       return r.medName || 'Medicación'
+    // El texto de la nota va en el detalle, como el resto de las notas: aquí
+    // solo hace falta decir qué es.
+    case 'note':
+      return r.starred ? 'Nota destacada' : 'Nota'
   }
 }
 

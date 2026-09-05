@@ -21,6 +21,7 @@ una columna a una pestaña.
 | `Banos` | Baños y aseos |
 | `Peso` | Pesadas |
 | `Medicacion` | Dosis que se le han dado |
+| `Notas` | Notas del día: lo que no cabe en ningún otro registro |
 | `Usuarios` | Quién puede entrar |
 | `Bebe` | Nacimiento y peso al nacer (una sola fila) |
 | `Medicamentos` | El catálogo: qué medicamentos hay, con su dosis y su pauta |
@@ -118,6 +119,21 @@ Una toma con dos tetadas y un biberón son tres filas:
 > decimales**: 0,6 ml de vitamina D redondeados a 1 ml serían casi el doble de
 > lo recetado. La unidad viaja con ella porque un 2 suelto no dice nada.
 
+**`Notas`** — `Destacada`
+
+> Es el tipo más pequeño que hay, y el único cuyo contenido **no está en una
+> columna propia**: el texto vive en `Notas`, la columna que ya comparten todos
+> los registros. La diferencia es que aquí no es opcional —una nota vacía no es
+> nada— y admite 2.000 caracteres en vez de 500, porque en los demás tipos la
+> nota es una coletilla y aquí es el registro entero.
+
+> `Destacada` marca lo que no se quiere perder entre lo demás: una primera vez,
+> un día que merece recordarse.
+
+> **Lleva su hora**, como cualquier registro, y por eso cae sola en el tramo que
+> le toca en los dos calendarios. Una "nota del día" sin hora habría obligado a
+> elegir de qué día hablamos, el natural o el de vida, y son cosas distintas.
+
 **`Bebe`** — `Fecha_Nacimiento`, `Hora_Nacimiento`, `Peso_Nacimiento_G`
 
 **`Medicamentos`** — `Nombre`, `Dosis`, `Unidad`, `Frecuencia`, `Desde`, `Hasta`
@@ -194,6 +210,10 @@ Tipos de campo disponibles:
 
 Cualquier campo puede llevar `required: true`.
 
+Y el tipo, además de `sheet`, `label` e `interval`, puede declarar
+`requireNotes: true` —el texto de la nota es el registro, sin él no hay nada— y
+`notesMax`, el tope de ese texto cuando 500 se queda corto.
+
 La toma es la excepción: se declara con `grouped: true` y no tiene `fields`,
 porque sus columnas y su conversión no son genéricas. Todo lo suyo está junto
 en `Logic.js`, en el bloque "La toma y sus elementos"
@@ -267,8 +287,9 @@ los sitios donde falta tratarlo.
 
 ## Rendimiento
 
-Cada petición (`getDay` y `getHistory`) lee las seis pestañas de registros, más
-`Usuarios`, `Bebe` y `Medicamentos`. `getDay` devuelve además los registros del día de vida en
+Cada petición (`getDay` y `getHistory`) lee las siete pestañas de registros, más
+`Usuarios`, `Bebe` y `Medicamentos`. `getNotes` es la excepción barata: lee una
+sola pestaña, la del diario, más el nacimiento y los usuarios. `getDay` devuelve además los registros del día de vida en
 curso, que casi siempre cae a caballo de dos días naturales: así la pantalla
 principal pinta su franja sin una segunda petición.
 Con el volumen de un bebé son unas décimas de segundo sobre los 1-3 s que ya

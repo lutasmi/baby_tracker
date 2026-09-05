@@ -1,6 +1,7 @@
 import type {
   BabyRecord,
   DayData,
+  Diary,
   History,
   Medication,
   RecordInput,
@@ -44,6 +45,8 @@ export interface Api {
   getDay(date: string): Promise<DayData>
   /** Totales por día de vida, del más reciente al más antiguo. */
   getHistory(days: number): Promise<History>
+  /** Las notas del diario, de la más reciente a la más antigua. */
+  getNotes(limit: number): Promise<Diary>
   createRecord(input: RecordInput): Promise<BabyRecord>
   updateRecord(input: RecordInput): Promise<BabyRecord>
   /** El tipo indica en qué pestaña está el registro. */

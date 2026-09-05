@@ -6,6 +6,19 @@ import type { BabyRecord, DayData } from './types'
 
 const dayCache = new Map<string, DayData>()
 
+/**
+ * Las notas del diario, aparte.
+ *
+ * El diario no se lee por días —salta los que no tienen nada escrito—, así que
+ * sus notas no llegan dentro de ningún `DayData`. Sin esto, abrir una nota
+ * desde el diario para corregirla no encontraría el registro.
+ */
+const noteCache = new Map<string, BabyRecord>()
+
+export function cacheNotes(notes: BabyRecord[]): void {
+  for (const n of notes) noteCache.set(n.id, n)
+}
+
 export function cacheDay(d: DayData): void {
   dayCache.set(d.date, d)
 }
@@ -15,6 +28,8 @@ export function getCachedDay(date: string): DayData | null {
 }
 
 export function findCachedRecord(id: string): BabyRecord | null {
+  const note = noteCache.get(id)
+  if (note) return note
   for (const day of dayCache.values()) {
     for (const r of day.records) {
       if (r.id === id) return r
@@ -39,6 +54,7 @@ export function userName(email: string | null): string {
 
 export function clearDayCache(): void {
   dayCache.clear()
+  noteCache.clear()
   inFlight.clear()
 }
 

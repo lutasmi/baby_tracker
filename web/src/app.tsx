@@ -7,6 +7,7 @@ import { clearDayCache } from './store'
 import { showToast, subscribeToast, type Toast } from './toast'
 import type { RecordType } from './types'
 import { Dashboard } from './views/Dashboard'
+import { DiaryView } from './views/Diary'
 import { HistoryView, METRIC_ROUTES } from './views/History'
 import { MedicationsView } from './views/Medications'
 import { EditRecord, NewRecord } from './views/RecordForm'
@@ -77,6 +78,7 @@ const FORM_TYPES: Record<string, RecordType> = {
   bano: 'bath',
   peso: 'weight',
   medicacion: 'med',
+  nota: 'note',
 }
 
 function Screen({
@@ -97,6 +99,9 @@ function Screen({
   }
   if (route.startsWith('#/cronologia')) {
     return <Timeline date={route.split('/')[2]} />
+  }
+  if (route.startsWith('#/diario')) {
+    return <DiaryView />
   }
   if (route.startsWith('#/evolucion')) {
     return <HistoryView metric={METRIC_ROUTES[route.split('/')[2] ?? '']} />

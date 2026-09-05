@@ -49,7 +49,15 @@ const bath = (p = {}) => ({
 describe('declaración de tipos', () => {
   it('cada tipo tiene su propia pestaña', () => {
     const sheets = L.recordTypeNames().map((t) => L.RECORD_TYPES[t].sheet)
-    expect(sheets).toEqual(['Sueno', 'Tomas', 'Panales', 'Banos', 'Peso', 'Medicacion'])
+    expect(sheets).toEqual([
+      'Sueno',
+      'Tomas',
+      'Panales',
+      'Banos',
+      'Peso',
+      'Medicacion',
+      'Notas',
+    ])
     expect(new Set(sheets).size).toBe(sheets.length)
   })
 
@@ -513,6 +521,87 @@ describe('catálogo de medicación', () => {
     })
     expect(parsed.deleted).toBe(true)
     expect(parsed.medication).toMatchObject({ from: '2026-08-01', to: null })
+  })
+})
+
+
+describe('normalizeAndValidate · nota del día', () => {
+  const note = (p = {}) => ({
+    id: 'uuid-7',
+    type: 'note',
+    start: '2026-08-07 14:40',
+    starred: false,
+    notes: 'Tarde irritable, solo quería estar en brazos.',
+    ...p,
+  })
+
+  it('guarda el texto y la estrella', () => {
+    expect(L.normalizeAndValidate(note({ starred: true }), NOW)).toMatchObject({
+      notes: 'Tarde irritable, solo quería estar en brazos.',
+      starred: true,
+    })
+  })
+
+  it('sin texto no hay nota', () => {
+    // En el resto de tipos la nota es opcional; aquí es el registro entero.
+    expect(() => L.normalizeAndValidate(note({ notes: '   ' }), NOW)).toThrow(/no puede estar vacía/)
+    expect(() => L.normalizeAndValidate(note({ notes: null }), NOW)).toThrow(/no puede estar vacía/)
+  })
+
+  it('admite un texto largo, mucho más que la coletilla de otro registro', () => {
+    const largo = 'a'.repeat(3000)
+    expect(L.normalizeAndValidate(note({ notes: largo }), NOW).notes).toHaveLength(2000)
+    // Los demás tipos siguen con su tope corto.
+    const panal = { id: 'p', type: 'diaper', start: '2026-08-07 14:00', pee: true, notes: largo }
+    expect(L.normalizeAndValidate(panal, NOW).notes).toHaveLength(L.NOTES_MAX)
+  })
+
+  it('es un registro puntual con una sola columna propia', () => {
+    const cols = L.columnsFor('note')
+    expect(cols).toEqual([
+      'ID',
+      'Fecha',
+      'Hora',
+      'Destacada',
+      'Notas',
+      ...L.AUDIT_COLUMNS,
+    ])
+  })
+
+  it('va y vuelve entre registro y fila', () => {
+    const record = {
+      ...L.normalizeAndValidate(note({ starred: true }), NOW),
+      createdBy: 'ana@example.com',
+      createdAt: NOW,
+      updatedBy: null,
+      updatedAt: null,
+    }
+    const row = L.recordToRow(record, false)
+    expect(row).toMatchObject({
+      Hora: '2026-08-07 14:40',
+      Destacada: 'TRUE',
+      Notas: 'Tarde irritable, solo quería estar en brazos.',
+    })
+    expect(L.rowToRecord('note', row).record).toMatchObject({
+      starred: true,
+      notes: 'Tarde irritable, solo quería estar en brazos.',
+    })
+  })
+
+  it('lee una nota escrita a mano, con la estrella marcada con una x', () => {
+    const row = {
+      ID: 'a-mano',
+      Fecha: '07/08/2026',
+      Hora: '21:40',
+      Destacada: 'x',
+      Notas: 'Primera vez que se ríe a carcajadas.',
+      Eliminado: '',
+    }
+    expect(L.rowToRecord('note', row).record).toMatchObject({
+      start: '2026-08-07 21:40',
+      starred: true,
+      notes: 'Primera vez que se ríe a carcajadas.',
+    })
   })
 })
 
