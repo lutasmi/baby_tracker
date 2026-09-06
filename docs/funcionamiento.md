@@ -186,9 +186,30 @@ actual. Las tetadas no se proponen: sus horas serían inventadas.
 
 ### Sueño
 
-Tipo (siesta o nocturno), hora de inicio y hora de fin, con la opción "sigue
-durmiendo" para dejarlo abierto. Un sueño nuevo se propone empezando una hora
-antes de ahora; al marcar "sigue durmiendo", el inicio pasa a ser ahora.
+**Lo primero es elegir qué se está registrando**: uno que ya terminó ("ya
+despertó") o uno que acaba de empezar ("sigue durmiendo"). De esa elección
+dependen las horas que se proponen y los campos de debajo. Después, el tipo
+—siesta o nocturno— y las horas.
+
+Las horas propuestas van con el modo:
+
+| Modo | Se propone |
+|---|---|
+| Ya despertó | De hace una hora a ahora: una siesta que se anota cuando ya ha pasado |
+| Sigue durmiendo | Ahora: se acaba de dormir |
+
+**Lo que se escribe no se toca nunca.** Cambiar de modo repropone las horas
+solo mientras sigan siendo las que puso la aplicación; en cuanto se corrige
+una, deja de moverse. Antes el botón "sigue durmiendo" ponía el inicio a la
+hora actual siempre, y borraba sin avisar la hora que se acabara de escribir.
+
+Al volver de "sigue durmiendo" a "ya despertó", el fin nunca se queda por
+detrás del inicio: si no, el formulario quedaba en un estado que no se podía
+guardar.
+
+Y si ya hay **otro sueño sin cerrar**, elegir "sigue durmiendo" lo avisa ahí
+mismo, con un enlace para ir a verlo, en lugar de dejar que falle al guardar:
+solo puede haber uno a la vez.
 
 ### Pañal
 

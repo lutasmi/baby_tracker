@@ -9,6 +9,9 @@ import {
   buildInput,
   chosenMedication,
   endAfterStart,
+  setSleepEnd,
+  setSleepStart,
+  toggleSleepOpen,
   feedSummary,
   feedTimes,
   initialState,
@@ -624,5 +627,88 @@ describe('nota del día', () => {
   it('la hora no puede estar en el futuro', () => {
     const s = estado({ notes: 'Algo.', start: '2026-08-07 18:00' })
     expect(validate('note', s, NOW)).toMatch(/futuro/)
+  })
+})
+
+describe('cambiar entre "ya despertó" y "sigue durmiendo"', () => {
+  const ABRE = '2026-08-07 22:30'
+  const LUEGO = '2026-08-07 22:32'
+  const nuevo = () => initialState('sleep', null, null, ABRE)
+
+  it('se abre proponiendo una siesta que ya terminó', () => {
+    expect(nuevo()).toMatchObject({
+      sleepOpen: false,
+      start: '2026-08-07 21:30',
+      end: ABRE,
+      timesTouched: false,
+    })
+  })
+
+  it('marcar "sigue durmiendo" propone que se acaba de dormir', () => {
+    const patch = toggleSleepOpen(nuevo(), true, LUEGO, true)
+    expect(patch).toMatchObject({ sleepOpen: true, start: LUEGO })
+  })
+
+  it('y volver a "ya despertó" vuelve a proponer la siesta terminada', () => {
+    let s = nuevo()
+    s = { ...s, ...toggleSleepOpen(s, true, LUEGO, true) }
+    expect(toggleSleepOpen(s, false, LUEGO, true)).toMatchObject({
+      sleepOpen: false,
+      start: '2026-08-07 21:32',
+      end: LUEGO,
+    })
+  })
+
+  // Lo que llevaba a tener que corregir el registro después: se escribía la
+  // hora buena y el botón la borraba sin decir nada.
+  it('lo que se ha escrito no se toca nunca', () => {
+    const escrito = { ...nuevo(), ...setSleepStart(nuevo(), '2026-08-07 22:15') }
+    expect(escrito.timesTouched).toBe(true)
+
+    const patch = toggleSleepOpen(escrito, true, LUEGO, true)
+    expect(patch).toEqual({ sleepOpen: true })
+    expect({ ...escrito, ...patch }.start).toBe('2026-08-07 22:15')
+  })
+
+  it('tampoco al mover solo la hora de despertar', () => {
+    const escrito = { ...nuevo(), ...setSleepEnd(nuevo(), '2026-08-07 22:20') }
+    const patch = toggleSleepOpen(escrito, true, LUEGO, true)
+    expect(patch).toEqual({ sleepOpen: true })
+  })
+
+  it('editando uno ya guardado no le toca las horas', () => {
+    // Las de un registro que existe son lo que pasó de verdad.
+    const s = { ...nuevo(), start: '2026-08-07 20:00', end: '2026-08-07 21:00' }
+    expect(toggleSleepOpen(s, true, LUEGO, false)).toEqual({ sleepOpen: true })
+  })
+
+  it('volver a "ya despertó" nunca deja el fin por detrás del inicio', () => {
+    // Con las horas escritas a mano no se repropone nada, así que el fin
+    // podría haberse quedado antes que el inicio: eso no se podía guardar.
+    const s = {
+      ...nuevo(),
+      timesTouched: true,
+      sleepOpen: true,
+      start: '2026-08-07 22:32',
+      end: '2026-08-07 22:30',
+    }
+    const patch = toggleSleepOpen(s, false, LUEGO, true)
+    expect(patch.end! > s.start).toBe(true)
+    expect(validate('sleep', { ...s, ...patch }, '2026-08-07 22:35')).toBeNull()
+  })
+
+  it('ida y vuelta acaba siempre en algo guardable', () => {
+    for (const tocadas of [false, true]) {
+      let s = { ...nuevo(), timesTouched: tocadas }
+      s = { ...s, ...toggleSleepOpen(s, true, LUEGO, true) }
+      s = { ...s, ...toggleSleepOpen(s, false, '2026-08-07 22:33', true) }
+      expect(validate('sleep', s, '2026-08-07 22:33')).toBeNull()
+    }
+  })
+
+  it('mover el inicio arrastra el fin solo si se quedaría detrás', () => {
+    const s = nuevo()
+    expect(setSleepStart(s, '2026-08-07 21:00').end).toBe(s.end) // sigue valiendo
+    expect(setSleepStart(s, '2026-08-07 23:00').end).toBe('2026-08-07 23:01')
   })
 })

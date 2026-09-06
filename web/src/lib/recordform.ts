@@ -28,6 +28,13 @@ export interface FormState {
   end: string
   /** Sueño sin cerrar: el cronómetro sigue corriendo. */
   sleepOpen: boolean
+  /**
+   * Las horas ya no son las que propuso la aplicación: alguien las ha tocado.
+   *
+   * Con esto, cambiar de "ya despertó" a "sigue durmiendo" puede reproponer
+   * la hora sin pisar nunca lo que se acaba de escribir.
+   */
+  timesTouched: boolean
   sleepKind: SleepKind
   bathKind: BathKind
   bathDurationMin: number
@@ -67,6 +74,24 @@ const FUTURE_MARGIN_MIN = 5
  */
 const MIN_DURATION_MIN = 1
 
+/**
+ * Cuánto hacia atrás se propone el inicio de un sueño ya terminado.
+ *
+ * Es una siesta típica, y solo una propuesta: se anota cuando ya ha pasado, y
+ * de ahí se corrige. Con "sigue durmiendo" no aplica, porque entonces el sueño
+ * acaba de empezar.
+ */
+const SLEEP_BACK_MIN = 60
+
+/**
+ * Las horas que se proponen para un sueño nuevo, según lo que se esté
+ * registrando: uno que ya terminó, o uno que acaba de empezar.
+ */
+export function sleepProposal(now: string, open: boolean): { start: string; end: string } {
+  if (open) return { start: now, end: now }
+  return { start: addMinutes(now, -SLEEP_BACK_MIN), end: now }
+}
+
 // --- Elementos de la toma ----------------------------------------------------
 
 /** Una tetada nueva: empieza ahora y dura, de momento, un minuto. */
@@ -103,6 +128,43 @@ export function withStart(item: FeedItem, start: string): FeedItem {
 /** El fin de un sueño al mover su inicio: nunca puede quedarse detrás. */
 export function endAfterStart(start: string, end: string): string {
   return end > start ? end : addMinutes(start, MIN_DURATION_MIN)
+}
+
+/**
+ * Cambiar entre "ya despertó" y "sigue durmiendo".
+ *
+ * Vive aquí, y no en la vista, porque es de lo que más se equivoca en
+ * silencio: al pulsar un botón se mueven solas dos horas que el usuario no
+ * está mirando.
+ *
+ * La regla es una sola: **lo que ha escrito una persona no se toca nunca**.
+ * Lo que cambia con el botón es la propuesta de la aplicación, y solo mientras
+ * siga siendo suya. Un registro que ya existe cuenta como escrito: sus horas
+ * son lo que pasó de verdad.
+ */
+export function toggleSleepOpen(
+  s: FormState,
+  open: boolean,
+  now: string,
+  isNew: boolean
+): Partial<FormState> {
+  const mias = isNew && !s.timesTouched
+  if (mias) return { sleepOpen: open, ...sleepProposal(now, open) }
+
+  // Sin reproponer, al volver a "ya despertó" el fin puede haberse quedado
+  // detrás del inicio: eso dejaba el formulario en un estado que no se podía
+  // guardar, con el fin a mano como única salida.
+  return open ? { sleepOpen: true } : { sleepOpen: false, end: endAfterStart(s.start, s.end) }
+}
+
+/** Mover la hora de inicio de un sueño: el fin la sigue cuando toca. */
+export function setSleepStart(s: FormState, start: string): Partial<FormState> {
+  return { start, end: endAfterStart(start, s.end), timesTouched: true }
+}
+
+/** Mover la hora de fin de un sueño. */
+export function setSleepEnd(_s: FormState, end: string): Partial<FormState> {
+  return { end, timesTouched: true }
 }
 
 /** Un biberón nuevo: puntual, a esta hora, con la cantidad de costumbre. */
@@ -167,6 +229,7 @@ export function initialState(
     start: now,
     end: now,
     sleepOpen: false,
+    timesTouched: false,
     sleepKind: guessSleepKind(now),
     bathKind: 'completo',
     bathDurationMin: 0,
@@ -188,8 +251,8 @@ export function initialState(
   if (!existing) {
     switch (type) {
       case 'sleep': {
-        const start = addMinutes(now, -60)
-        return { ...base, start, end: now, sleepKind: guessSleepKind(start) }
+        const { start, end } = sleepProposal(now, false)
+        return { ...base, start, end, sleepKind: guessSleepKind(start) }
       }
       case 'feed': {
         // Se abre con los biberones de la toma anterior, que es casi siempre lo
