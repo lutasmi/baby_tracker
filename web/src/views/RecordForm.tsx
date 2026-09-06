@@ -3,7 +3,7 @@ import { getApi } from '../api'
 import { ApiError } from '../api/types'
 import { MedicationFields } from '../components/MedicationFields'
 import { AmountField, DecimalField, MomentField, ScreenTitle, Seg, Toggle } from '../components/ui'
-import { handleAuthError, navigateReplace, useDay, useNow } from '../hooks'
+import { handleAuthError, navigate, navigateReplace, useDay, useNow } from '../hooks'
 import { addMinutes, dateOf, diffMinutes, formatDuration, nowMadrid, timeOf } from '../lib/dates'
 import {
   activeOn,
@@ -16,13 +16,15 @@ import {
   breastItems,
   buildInput,
   chosenMedication,
-  endAfterStart,
   feedSummary,
   feedTimes,
   initialState,
   newBottleItem,
   newBreastItem,
   nextSide,
+  setSleepEnd,
+  setSleepStart,
+  toggleSleepOpen,
   validate,
   withStart,
   type FormState,
@@ -42,6 +44,7 @@ import type {
   Medication,
   RecordType,
   SleepKind,
+  SleepRecord,
 } from '../types'
 
 const NEW_TITLES: Record<RecordType, string> = {
@@ -164,7 +167,19 @@ function RecordForm({ type, existing }: { type: RecordType; existing: BabyRecord
             void save()
           }}
         >
-          {type === 'sleep' && <SleepFields s={s} set={set} now={now} isNew={!existing} />}
+          {type === 'sleep' && (
+            <SleepFields
+              s={s}
+              set={set}
+              now={now}
+              isNew={!existing}
+              // Solo puede haber un sueño abierto. Si ya hay otro, más vale
+              // decirlo aquí que dejar que lo rechace el servidor al guardar.
+              otherOpenSleep={
+                data?.openSleep && data.openSleep.id !== idRef.current ? data.openSleep : null
+              }
+            />
+          )}
           {type === 'feed' && (
             <FeedFields
               s={s}
@@ -233,10 +248,42 @@ type FieldProps = {
   now: string
 }
 
-function SleepFields({ s, set, now, isNew }: FieldProps & { isNew: boolean }) {
+function SleepFields({
+  s,
+  set,
+  now,
+  isNew,
+  otherOpenSleep,
+}: FieldProps & { isNew: boolean; otherOpenSleep: SleepRecord | null }) {
   const duration = s.sleepOpen ? null : diffMinutes(s.start, s.end)
   return (
     <>
+      {/* Lo primero, qué se está registrando: de eso dependen las horas que se
+          proponen y los campos de debajo. Cuando esta elección iba después de
+          la hora de inicio, pulsarla pisaba lo que se acababa de escribir. */}
+      <Seg
+        options={[
+          { value: 'done', label: 'Ya despertó' },
+          { value: 'open', label: 'Sigue durmiendo' },
+        ]}
+        value={s.sleepOpen ? 'open' : 'done'}
+        onChange={(v) => set(toggleSleepOpen(s, v === 'open', now, isNew))}
+      />
+
+      {s.sleepOpen && otherOpenSleep && (
+        <div class="banner banner-warn">
+          Ya hay un sueño sin cerrar desde las {timeOf(otherOpenSleep.start)}. Solo puede haber
+          uno a la vez.
+          <button
+            type="button"
+            class="banner-retry"
+            onClick={() => navigate(`#/editar/${encodeURIComponent(otherOpenSleep.id)}`)}
+          >
+            Verlo
+          </button>
+        </div>
+      )}
+
       <Seg<SleepKind>
         options={[
           { value: 'siesta', label: '😴 Siesta' },
@@ -245,24 +292,14 @@ function SleepFields({ s, set, now, isNew }: FieldProps & { isNew: boolean }) {
         value={s.sleepKind}
         onChange={(sleepKind) => set({ sleepKind })}
       />
+
       <MomentField
         label="Se durmió"
         value={s.start}
         now={now}
-        onChange={(start) => set({ start, end: endAfterStart(start, s.end) })}
+        onChange={(start) => set(setSleepStart(s, start))}
       />
-      <Seg
-        options={[
-          { value: 'done', label: 'Ya despertó' },
-          { value: 'open', label: 'Sigue durmiendo' },
-        ]}
-        value={s.sleepOpen ? 'open' : 'done'}
-        onChange={(v) =>
-          // Empezar un cronómetro es decir "se acaba de dormir": la hora de
-          // inicio pasa a ser ahora en lugar de la propuesta hacia atrás.
-          set(v === 'open' ? { sleepOpen: true, ...(isNew ? { start: now } : {}) } : { sleepOpen: false })
-        }
-      />
+
       {s.sleepOpen ? (
         <p class="field-hint">
           Se guardará sin hora de fin. Puedes cerrarlo más tarde desde la pantalla principal o
@@ -270,7 +307,12 @@ function SleepFields({ s, set, now, isNew }: FieldProps & { isNew: boolean }) {
         </p>
       ) : (
         <>
-          <MomentField label="Se despertó" value={s.end} now={now} onChange={(end) => set({ end })} />
+          <MomentField
+            label="Se despertó"
+            value={s.end}
+            now={now}
+            onChange={(end) => set(setSleepEnd(s, end))}
+          />
           {duration != null && duration > 0 && <DurationLine minutes={duration} />}
         </>
       )}

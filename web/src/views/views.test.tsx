@@ -993,3 +993,32 @@ describe('Notas del día', () => {
     expect(html.match(/class="action-btn/g)).toHaveLength(6)
   })
 })
+
+describe('Formulario de sueño', () => {
+  it('primero pregunta qué se registra y luego las horas', () => {
+    // El orden importa: cuando la elección iba debajo de la hora de inicio,
+    // pulsarla borraba la hora que se acababa de escribir.
+    cacheDay(day())
+    const html = render(<NewRecord type="sleep" />)
+    expect(html.indexOf('Sigue durmiendo')).toBeLessThan(html.indexOf('Se durmió'))
+    expect(html.indexOf('Sigue durmiendo')).toBeLessThan(html.indexOf('Siesta'))
+  })
+
+  it('se abre proponiendo una siesta que ya terminó', () => {
+    cacheDay(day())
+    const html = render(<NewRecord type="sleep" />)
+    // "Ya despertó" viene elegido, y con él sus dos horas.
+    expect(html).toContain('<button type="button" class="on">Ya despertó</button>')
+    expect(html).toContain('Se despertó')
+  })
+
+  it('editando uno sin cerrar no pide la hora de fin', () => {
+    const abierto = aSleep({ id: 'suenyo-abierto', start: `${TODAY} 10:00`, end: null })
+    cacheDay(day({ records: [abierto], openSleep: abierto }))
+    const html = render(<EditRecord id="suenyo-abierto" />)
+    expect(html).toContain('<button type="button" class="on">Sigue durmiendo</button>')
+    expect(html).not.toContain('Se despertó')
+    // Y no se avisa de sí mismo como si fuera otro sueño abierto.
+    expect(html).not.toContain('Ya hay un sueño sin cerrar')
+  })
+})
